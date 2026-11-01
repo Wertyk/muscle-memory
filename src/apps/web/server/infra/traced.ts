@@ -1,5 +1,5 @@
 import type { ActionRunContext } from "@agent-native/core/action";
-import { readAppState } from "@agent-native/core/application-state";
+import { readAppStateForCurrentTab } from "@agent-native/core/application-state";
 
 export interface CapturedAction {
   actionName: string;
@@ -10,45 +10,90 @@ export interface CapturedAction {
   startedAt: number;
   durationMs: number;
 }
-
+export interface TraceRecording {
+  append(step: CapturedAction): Promise<void>;
+  incomplete(reason: string): Promise<void>;
+  reject?(): Promise<void>;
+  navigation?: unknown;
+}
 export interface TraceCapture {
-  // Resolve once at entry: stopping or starting a recording during a call must
-  // not move that call into a different demonstration (or a different user).
-  recording(context?: ActionRunContext): Promise<{
-    append(step: CapturedAction): Promise<void>;
-  } | null>;
+  // Resolve and reserve once at entry, never move an in-flight call to another demo.
+  recording(
+    context: ActionRunContext | undefined,
+    action: { actionName: string; input: unknown },
+  ): Promise<TraceRecording | null>;
   navigation?: () => Promise<unknown>;
   now?: () => number;
 }
 
-/** Wrap a defineAction `run`, inside framework validation/audit. */
+/** Best effort reporting must never turn a successful shop effect into a retry. */
+async function incomplete(recording: TraceRecording, reason: string) {
+  try {
+    await recording.incomplete(reason);
+  } catch {
+    /* Durable pending reservation prevents a false complete trace on stop. */
+  }
+}
+
 export function traced<Input, Output>(
   actionName: string,
   run: (input: Input, context?: ActionRunContext) => Promise<Output>,
   capture: TraceCapture,
-): (input: Input, context?: ActionRunContext) => Promise<Output> {
-  return async (input, context) => {
-    const recording = await capture.recording(context);
+) {
+  return async (input: Input, context?: ActionRunContext): Promise<Output> => {
+    const recording = await capture.recording(context, { actionName, input });
     if (!recording) return run(input, context);
-
     const now = capture.now ?? Date.now;
     const startedAt = now();
-    const snapshot = structuredClone(input);
-    const navigation = structuredClone(
-      await (capture.navigation ?? (() => readAppState("navigation")))(),
-    );
-    const output = await run(input, context);
-    // Failures are not executable demonstration steps. A persistence failure
-    // propagates; callers must not silently claim that recording succeeded.
-    await recording.append({
-      actionName,
-      input: snapshot,
-      output: structuredClone(output),
-      caller: context?.caller ?? null,
-      navigation,
-      startedAt,
-      durationMs: Math.max(0, now() - startedAt),
-    });
+    let snapshot: unknown;
+    let navigation: unknown;
+    try {
+      snapshot = structuredClone(input);
+      navigation = structuredClone(
+        recording.navigation !== undefined
+          ? recording.navigation
+          : await (
+              capture.navigation ??
+              (() => readAppStateForCurrentTab("navigation"))
+            )(),
+      );
+    } catch {
+      await incomplete(
+        recording,
+        `Could not snapshot the ${actionName} step. This action is not captured.`,
+      );
+      return run(input, context);
+    }
+    let output: Output;
+    try {
+      output = await run(input, context);
+    } catch (cause) {
+      try {
+        await recording.reject?.();
+      } catch {
+        await incomplete(
+          recording,
+          `Could not clear the rejected ${actionName} capture. The action failed and was not recorded as a successful step.`,
+        );
+      }
+      throw cause;
+    }
+    try {
+      await recording.append({
+        actionName,
+        input: snapshot,
+        output: structuredClone(output),
+        caller: context?.caller ?? null,
+        navigation,
+        startedAt,
+        durationMs: Math.max(0, now() - startedAt),
+      });
+    } catch {
+      await incomplete(
+        recording,
+        `Could not save the captured ${actionName} step. The shop action succeeded; do not repeat it.`,
+      );
+    }
     return output;
   };
 }

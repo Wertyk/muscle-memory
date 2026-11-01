@@ -1,9 +1,9 @@
 import type {
   Customer, Order, Product, Refund, Reply, Request, RequestType, Shipment,
 } from "@muscle-memory/shop-domain";
-import type { HandoffContext, Recipe, RecipeVersion, RequestMatch, Run } from "@muscle-memory/recipe-engine";
+import type { Demonstration, DemonstrationStep, HandoffContext, Recipe, RecipeVersion, RequestMatch, Run } from "@muscle-memory/recipe-engine";
 import { sql } from "drizzle-orm";
-import { foreignKey, index, integer, jsonb, pgTable, text, uniqueIndex, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { bigint, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, uniqueIndex, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 export const customers = pgTable("customers", {
   id: varchar("id", { length: 31 }).$type<Customer["id"]>().primaryKey(),
@@ -124,3 +124,30 @@ export const recipeHandoffs = pgTable("recipe_handoffs", {
   // Pending work for the later UI; both targets retain the original context.
   disposition: text("disposition", { enum: ["with_agent", "with_human"] }).notNull(),
 }, (table) => [index("recipe_handoffs_request_idx").on(table.requestId)]);
+
+// Intentionally independent of shop FKs: demonstrations retain historical snapshots after reseeding.
+export const demonstrations = pgTable("demonstrations", {
+  id: varchar("id", { length: 31 }).primaryKey(),
+  ownerEmail: text("owner_email").notNull(),
+  workspaceId: text("workspace_id").notNull(),
+  sessionId: text("session_id").notNull(),
+  subjectId: text("subject_id").notNull(),
+  startedAt: bigint("started_at", { mode: "number" }).notNull(),
+  status: text("status").$type<Demonstration["status"]>().notNull(),
+  checkpoint: jsonb("checkpoint")
+    .$type<Omit<Demonstration, "steps">>()
+    .notNull(),
+});
+export const demoSteps = pgTable(
+  "demo_steps",
+  {
+    ownerEmail: text("owner_email").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    demonstrationId: varchar("demonstration_id", { length: 31 })
+      .notNull()
+      .references(() => demonstrations.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    snapshot: jsonb("snapshot").$type<DemonstrationStep>().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.demonstrationId, table.sequence] })],
+);

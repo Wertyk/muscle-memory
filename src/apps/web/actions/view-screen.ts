@@ -3,7 +3,10 @@ import { readAppStateForCurrentTab } from "@agent-native/core/application-state"
 import { REQUEST_STATUSES, REQUEST_TYPES } from "@muscle-memory/shop-domain";
 import { z } from "zod";
 
-import { getShopUseCases } from "../server/composition.js";
+import {
+  getShopUseCases,
+  getCurrentDemonstration,
+} from "../server/composition.js";
 import { shopId, shopResult } from "../server/shop-action-contracts.js";
 
 export default defineAction({
@@ -12,7 +15,7 @@ export default defineAction({
   schema: z.object({}),
   http: false,
   readOnly: true,
-  run: async () => {
+  run: async (_input, context) => {
     const navigation = await readAppStateForCurrentTab("navigation");
     const selection = await readAppStateForCurrentTab("selection");
     const screen: Record<string, unknown> = {};
@@ -29,6 +32,15 @@ export default defineAction({
         }),
       );
       screen.request = request;
+      const demonstration = await getCurrentDemonstration(request.id, context);
+      screen.demonstration = demonstration
+        ? {
+            id: demonstration.id,
+            status: demonstration.status,
+            stepCount: demonstration.steps.length,
+            incompleteReason: demonstration.incompleteReason,
+          }
+        : null;
       screen.activity = await shopResult(
         useCases.getRequestActivity.execute({ requestId: request.id }),
       );

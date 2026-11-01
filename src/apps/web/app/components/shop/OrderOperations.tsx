@@ -280,7 +280,9 @@ export function OrderOperations({
   const [pending, setPending] = useState(false);
   return (
     <>
-      <DropdownMenu>
+      {/* Dialog alone owns the modal pointer lock; overlapping modal menu and
+          dialog lifetimes can leave body pointer-events:none after closing. */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm">
             {t("shop.orderActions")}

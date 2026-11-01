@@ -1,4 +1,8 @@
-import { useDbSync } from "@agent-native/core/client/hooks";
+import { callAction, useDbSync } from "@agent-native/core/client/hooks";
+import type {
+  Demonstration,
+  DemonstrationStep,
+} from "@muscle-memory/recipe-engine";
 import {
   GetRequestActivity,
   type Reply,
@@ -17,6 +21,7 @@ import enUS from "@/i18n/en-US";
 import { createShopDemoData } from "../../../server/db/shop-demo-data";
 import { InboxPage } from "./InboxPage";
 import { RequestPage } from "./RequestPage";
+import { stepArgument } from "./TeachBar";
 
 const agent = vi.hoisted(() => ({ send: vi.fn() }));
 vi.mock("@agent-native/core/client/agent-chat", () => ({
@@ -56,6 +61,8 @@ let emptyInbox: boolean;
 let savedReplies: Reply[];
 let savedRefunds: Refund[];
 let savedReplacements: Order[];
+let demonstration: Demonstration | null;
+let captureFailure: boolean;
 let calls: { name: string; input: Record<string, unknown>; method: string }[];
 
 async function settle(assertion: () => void) {
@@ -83,6 +90,93 @@ async function click(target: HTMLElement) {
   await act(async () => {
     target.click();
   });
+}
+// Exercise the pointer-down path used by Radix mouse triggers; click() alone
+// does not open a DropdownMenu and happy-dom does not enforce CSS hit testing.
+async function pointerClick(target: HTMLElement) {
+  await act(async () => {
+    const pointer = {
+      bubbles: true,
+      pointerId: 1,
+      pointerType: "mouse",
+      isPrimary: true,
+      button: 0,
+    };
+    target.dispatchEvent(
+      new PointerEvent("pointerdown", { ...pointer, buttons: 1 }),
+    );
+    target.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, button: 0, buttons: 1 }),
+    );
+    target.dispatchEvent(
+      new PointerEvent("pointerup", { ...pointer, buttons: 0 }),
+    );
+    target.dispatchEvent(
+      new MouseEvent("mouseup", { bubbles: true, button: 0 }),
+    );
+    target.click();
+  });
+}
+function expectPagePointerInput() {
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  expect(document.body.style.pointerEvents).not.toBe("none");
+  expect(getComputedStyle(document.body).pointerEvents).not.toBe("none");
+}
+const menuDialogs = [
+  {
+    label: "Issue refund",
+    action: "issue-refund",
+    fill: async () => {
+      await fill('input[name="amount"]', "140.00");
+      await fill('textarea[name="reason"]', "50% of chipped platter price");
+    },
+  },
+  {
+    label: "Create replacement",
+    action: "create-replacement-order",
+    fill: async () => {},
+  },
+  {
+    label: "Change shipping address",
+    action: "update-shipping-address",
+    fill: async () => {
+      await fill('input[name="line1"]', "14 Studio Lane");
+    },
+  },
+  {
+    label: "Generate return label",
+    action: "generate-return-label",
+    fill: async () => {},
+  },
+  {
+    label: "Escalate request",
+    action: "escalate",
+    fill: async () => {
+      await fill('textarea[name="reason"]', "Human review required");
+    },
+  },
+] as const;
+async function openDialogWithMouse(label: string) {
+  await pointerClick(
+    label === "Escalate request"
+      ? element('button[aria-label="Change request status"]')
+      : byText("Order actions"),
+  );
+  await settle(() =>
+    expect(document.querySelector('[role="menu"]')).not.toBeNull(),
+  );
+  // Only the modal dialog may own the body pointer lock during the handoff.
+  // Checking the actual style catches the root cause even without CSS hit testing.
+  expect(document.body.style.pointerEvents).not.toBe("none");
+  await pointerClick(byText(label, '[role="menuitem"]'));
+  await settle(() =>
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull(),
+  );
+  expect(document.body.style.pointerEvents).toBe("none");
+  expect(getComputedStyle(element('[role="dialog"]')).pointerEvents).toBe(
+    "auto",
+  );
 }
 async function openMenu(label: string) {
   await act(async () => {
@@ -167,6 +261,8 @@ beforeEach(() => {
   savedRefunds = [];
   savedReplacements = [];
   calls = [];
+  demonstration = null;
+  captureFailure = false;
   agent.send.mockReset();
   client = new QueryClient({
     defaultOptions: {
@@ -203,11 +299,113 @@ beforeEach(() => {
           },
           { status: 409 },
         );
+      function result(output: unknown): Response {
+        if (
+          demonstration?.status === "recording" &&
+          [
+            "get-request",
+            "get-order",
+            "get-customer",
+            "get-shipment-status",
+            "get-request-activity",
+            "list-requests",
+            "send-reply",
+            "issue-refund",
+            "tag-request",
+            "set-request-status",
+          ].includes(name)
+        ) {
+          if (captureFailure && method === "POST")
+            demonstration = {
+              ...demonstration,
+              status: "incomplete",
+              incompleteReason:
+                "Could not save captured step. The shop action succeeded; do not repeat it.",
+            };
+          // This request-page fixture has one input for each GET action. The
+          // engine/PGlite tests exercise canonical inputs and concurrent reads.
+          else if (
+            method !== "GET" ||
+            !demonstration.steps.some((step) => step.action === name)
+          ) {
+            const sequence = demonstration.nextSequence;
+            demonstration = {
+              ...demonstration,
+              nextSequence: sequence + 1,
+              steps: [
+                ...demonstration.steps,
+                {
+                  id: `step_${sequence}`,
+                  sequence,
+                  action: name,
+                  input,
+                  output: output as never,
+                  navigation: { view: "request", requestId: request.id },
+                  startedAt: Date.now(),
+                  durationMs: 4,
+                  caller: "frontend",
+                },
+              ],
+            };
+          }
+        }
+        return Response.json(output);
+      }
       switch (name) {
+        case "get-demonstration":
+          return result(demonstration);
+        case "start-demonstration": {
+          if (demonstration?.status === "recording")
+            return Response.json(
+              { error: "A demonstration is already recording" },
+              { status: 409 },
+            );
+          demonstration = {
+            id: "demo_ui",
+            scope: {
+              userId: "operator@example.test",
+              workspaceId: "shop",
+              sessionId: "test",
+            },
+            subjectId: request.id,
+            references: {},
+            trigger: {
+              ...(request.content.source === "structured"
+                ? request.content.fields
+                : input.fields),
+              requestId: request.id,
+              customerId: request.customerId,
+              subject: request.subject,
+            },
+            status: "recording",
+            startedAt: Date.now(),
+            stoppedAt: null,
+            nextSequence: 1,
+            pending: [],
+            incompleteReason: null,
+            steps: [],
+          };
+          return result(demonstration);
+        }
+        case "stop-demonstration":
+        case "cancel-demonstration": {
+          if (demonstration)
+            demonstration = {
+              ...demonstration,
+              status:
+                name === "cancel-demonstration"
+                  ? "cancelled"
+                  : demonstration.status === "incomplete"
+                    ? "incomplete"
+                    : "completed",
+              stoppedAt: Date.now(),
+            };
+          return result(demonstration);
+        }
         case "get-request":
-          return Response.json(request);
+          return result(request);
         case "get-request-activity": {
-          const result = await new GetRequestActivity({
+          const activity = await new GetRequestActivity({
             getRequestActivityRecords: async () => ({
               request,
               order: request.orderId ? order : null,
@@ -217,27 +415,29 @@ beforeEach(() => {
               replacements: savedReplacements,
             }),
           }).execute({ requestId: request.id });
-          return Response.json(result.ok ? result.value : []);
+          return result(activity.ok ? activity.value : []);
         }
         case "get-order":
-          return Response.json(order);
+          return result(order);
         case "get-customer":
-          return Response.json(
+          return result(
             fixtures.customers.find((item) => item.id === input.customerId),
           );
         case "get-shipment-status":
-          return Response.json({
+          return result({
             orderStatus: order.status,
             shipment:
               fixtures.shipments.find((item) => item.orderId === order.id) ??
               null,
           });
         case "list-requests":
-          return Response.json(
+          return result(
             emptyInbox
               ? []
               : fixtures.requests.filter(
                   (item) =>
+                    (!input.customerId ||
+                      item.customerId === input.customerId) &&
                     (!input.status || item.status === input.status) &&
                     (!input.type ||
                       (item.content.source === "structured"
@@ -251,10 +451,10 @@ beforeEach(() => {
             status: input.status,
             updatedAt: "2026-11-02T14:00:00Z",
           };
-          return Response.json(request);
+          return result(request);
         case "tag-request":
           request = { ...request, tags: [...request.tags, input.tag] };
-          return Response.json(request);
+          return result(request);
         case "escalate":
           request = {
             ...request,
@@ -264,7 +464,7 @@ beforeEach(() => {
               escalatedAt: "2026-11-02T14:00:00Z",
             },
           };
-          return Response.json(request);
+          return result(request);
         case "send-reply": {
           const reply = {
             ...fixtures.replies[0]!,
@@ -273,7 +473,7 @@ beforeEach(() => {
             body: input.template,
           };
           savedReplies.push(reply);
-          return Response.json(reply);
+          return result(reply);
         }
         case "issue-refund": {
           const refund = {
@@ -284,16 +484,16 @@ beforeEach(() => {
             reason: input.reason,
           };
           savedRefunds.push(refund);
-          return Response.json(refund);
+          return result(refund);
         }
         case "create-replacement-order": {
           const replacement: Order = { ...order, id: "ord_replacement" };
           savedReplacements.push(replacement);
-          return Response.json(replacement);
+          return result(replacement);
         }
         case "update-shipping-address":
           order = { ...order, shippingAddress: input.address };
-          return Response.json(order);
+          return result(order);
         case "generate-return-label": {
           const label = {
             id: "lbl_test",
@@ -302,10 +502,10 @@ beforeEach(() => {
             fromAddress: order.shippingAddress,
           } as const;
           order = { ...order, returnLabel: label };
-          return Response.json(label);
+          return result(label);
         }
         default:
-          return Response.json({});
+          return result({});
       }
     }),
   );
@@ -321,6 +521,383 @@ afterEach(async () => {
 });
 
 describe("shop workspace with real framework action hooks and an offline action transport", () => {
+  it.each(
+    menuDialogs.flatMap((dialog) =>
+      ["submit", "cancel", "rejected submit"].map((exit) => ({
+        ...dialog,
+        exit,
+      })),
+    ),
+  )(
+    "releases page pointer input after $label: $exit (TASK-8 regression)",
+    async ({ label, action, fill: prepare, exit }) => {
+      await mount();
+      await pointerClick(byText("Teach"));
+      await settle(() => expect(demonstration?.status).toBe("recording"));
+      await openDialogWithMouse(label);
+      if (exit !== "cancel") {
+        await prepare();
+        if (exit === "rejected submit") failure = action;
+        await submit(label);
+        if (exit === "rejected submit") {
+          await settle(() =>
+            expect(
+              document.querySelector('[role="dialog"] [role="alert"]')
+                ?.textContent,
+            ).toContain("Shop policy rejected"),
+          );
+          expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+          expect(
+            getComputedStyle(element('[role="dialog"]')).pointerEvents,
+          ).toBe("auto");
+          await pointerClick(byText("Cancel"));
+        }
+      } else await pointerClick(byText("Cancel"));
+      await settle(expectPagePointerInput);
+      expect(writes(action)).toHaveLength(exit === "cancel" ? 0 : 1);
+      failure = undefined;
+      await pointerClick(byText("Stop & save"));
+      await settle(() => expect(demonstration?.status).toBe("completed"));
+      expect(writes("stop-demonstration")).toHaveLength(1);
+      expectPagePointerInput();
+    },
+  );
+
+  it("continues refund → reply → tag → Stop with mouse input after closing the refund dialog", async () => {
+    await mount();
+    await pointerClick(byText("Teach"));
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+    await openDialogWithMouse("Issue refund");
+    await menuDialogs[0].fill();
+    await submit("Issue refund");
+    await settle(expectPagePointerInput);
+    await fill(
+      'textarea[name="template"]',
+      "We refunded half of the chipped platter’s price.",
+    );
+    await submit("Save reply");
+    await settle(() => expect(savedReplies).toHaveLength(1));
+    expectPagePointerInput();
+    await pointerClick(byText("Add tag"));
+    await fill('input[name="tag"]', "damage-handled");
+    await submit("Add tag");
+    await settle(expectPagePointerInput);
+    await pointerClick(byText("Stop & save"));
+    await settle(() => expect(demonstration?.status).toBe("completed"));
+    expect(writes("issue-refund")[0]?.input.amount).toEqual({
+      amountMinor: 14000,
+      currency: "USD",
+    });
+    expect(
+      demonstration!.steps
+        .filter((step) =>
+          ["issue-refund", "send-reply", "tag-request"].includes(step.action),
+        )
+        .map((step) => step.action),
+    ).toEqual(["issue-refund", "send-reply", "tag-request"]);
+    expectPagePointerInput();
+  });
+
+  it("summarizes actual refund amounts, rendered replies, addresses and replacement quantities in human terms", () => {
+    const step: DemonstrationStep = {
+      id: "step_1",
+      sequence: 1,
+      action: "issue-refund",
+      input: { orderId: "ord_1001", reason: "Damage" },
+      output: { amount: { amountMinor: 1250, currency: "USD" } },
+      navigation: {},
+      caller: "frontend",
+      startedAt: 1,
+      durationMs: 2,
+    };
+    expect(stepArgument(step)).toBe("$12.50 · ord_1001");
+    expect(
+      stepArgument({
+        ...step,
+        action: "send-reply",
+        input: { template: "Hello {{name}}", variables: { name: "Maya" } },
+        output: { body: "Hello Maya" },
+      }),
+    ).toBe("Hello Maya");
+    expect(
+      stepArgument({
+        ...step,
+        action: "update-shipping-address",
+        input: {
+          orderId: "ord_1001",
+          address: { line1: "14 Studio Lane", city: "Alder Glen" },
+        },
+      }),
+    ).toBe("14 Studio Lane, Alder Glen");
+    expect(
+      stepArgument({
+        ...step,
+        action: "create-replacement-order",
+        output: {
+          items: [{ name: "Chalk Mug", productId: "prd_0001", quantity: 2 }],
+        },
+      }),
+    ).toBe("2 × Chalk Mug");
+  });
+
+  it("teaches through shared actions, displays real arguments live, stops and reloads the saved trace", async () => {
+    await mount();
+    await click(byText("Teach"));
+    await settle(() =>
+      expect(
+        container.querySelector(".shop-teach-bar")?.getAttribute("data-state"),
+      ).toBe("recording"),
+    );
+    await fill(
+      'textarea[name="template"]',
+      "We have refunded half the chipped platter’s price.",
+    );
+    await submit("Save reply");
+    await settle(() =>
+      expect(
+        container.querySelector(".shop-teach-strip")?.textContent,
+      ).toContain("Save reply"),
+    );
+    await click(byText("Add tag"));
+    await fill('input[name="tag"]', "teach-proof");
+    await submit("Add tag");
+    await settle(() =>
+      expect(
+        container.querySelector(".shop-teach-strip")?.textContent,
+      ).toContain("teach-proof"),
+    );
+    await settle(() =>
+      expect(container.querySelector(".shop-teach-count")?.textContent).toBe(
+        "2 actions · 5 lookups",
+      ),
+    );
+    expect(container.querySelectorAll(".shop-teach-strip li")).toHaveLength(2);
+    expect(container.querySelectorAll(".shop-teach-lookup")).toHaveLength(5);
+    const platter = order.items.find(
+      (item) =>
+        request.content.source === "structured" &&
+        request.content.fields.type === "damaged_item" &&
+        item.productId === request.content.fields.productId,
+    )!;
+    const halfPriceMinor = Math.round(platter.unitPrice.amountMinor * 0.5);
+    await chooseOperation("Issue refund");
+    await fill('input[name="amount"]', (halfPriceMinor / 100).toFixed(2));
+    await fill('textarea[name="reason"]', "50% of chipped platter price");
+    await submit("Issue refund");
+    await settle(() =>
+      expect(container.querySelector(".shop-teach-count")?.textContent).toBe(
+        "3 actions · 5 lookups",
+      ),
+    );
+    expect(writes("issue-refund")[0]?.input).toEqual({
+      orderId: order.id,
+      reason: "50% of chipped platter price",
+      amount: { amountMinor: halfPriceMinor, currency: order.paid.currency },
+    });
+    expect(container.querySelector(".shop-teach-strip")?.textContent).toContain(
+      `$${(halfPriceMinor / 100).toFixed(2)}`,
+    );
+    expect(
+      [...container.querySelectorAll(".shop-teach-step-number")].map(
+        (e) => e.textContent,
+      ),
+    ).toEqual(["1", "2", "3"]);
+    expect(
+      [...container.querySelectorAll(".shop-teach-step-action")].map(
+        (e) => e.textContent,
+      ),
+    ).toEqual(["Save reply", "Add tag", "Issue refund"]);
+    await click(byText("Inspect captured trace", "summary"));
+    const inspected = JSON.parse(
+      container.querySelector(".shop-teach-inspect pre")!.textContent!,
+    );
+    expect(inspected.steps).toEqual(
+      JSON.parse(JSON.stringify(demonstration!.steps)),
+    );
+    expect(inspected.steps).toHaveLength(8);
+    await click(byText("Stop & save"));
+    await settle(() =>
+      expect(container.querySelector(".shop-teach-bar")?.textContent).toContain(
+        "Demonstration saved",
+      ),
+    );
+    expect(
+      demonstration?.steps.some(
+        (s) => s.action === "tag-request" && s.input.tag === "teach-proof",
+      ),
+    ).toBe(true);
+    expect(demonstration?.steps.some((s) => s.action === "issue-refund")).toBe(
+      true,
+    );
+    expect(writes("start-demonstration")).toHaveLength(1);
+    expect(writes("stop-demonstration")).toHaveLength(1);
+    await act(async () => {
+      root.render(null);
+    });
+    client.clear();
+    await mount();
+    await settle(() =>
+      expect(container.querySelector(".shop-teach-bar")?.textContent).toContain(
+        "Demonstration saved",
+      ),
+    );
+    expect(container.querySelector(".shop-teach-strip")?.textContent).toContain(
+      "teach-proof",
+    );
+  });
+
+  it("updates secondary lookups from shared sync without adding primary cards or refetching shop queries", async () => {
+    const streams: Array<{
+      onmessage: ((message: { data: string }) => void) | null;
+    }> = [];
+    class FakeEventSource {
+      static CLOSED = 2;
+      readyState = 1;
+      onopen: (() => void) | null = null;
+      onmessage: ((message: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor() {
+        streams.push(this);
+        queueMicrotask(() => this.onopen?.());
+      }
+      addEventListener() {}
+      close() {
+        this.readyState = 2;
+      }
+    }
+    vi.stubGlobal("EventSource", FakeEventSource);
+    await mount();
+    await click(byText("Teach"));
+    await settle(() => expect(streams.length).toBeGreaterThan(0));
+    await settle(() => expect(demonstration!.steps.length).toBe(5));
+    await act(async () => {
+      await callAction(
+        "list-requests",
+        { customerId: request.customerId, type: "damaged_item" },
+        { method: "GET" },
+      );
+    });
+    const captured = demonstration!.steps.length;
+    const shopReads = () =>
+      calls.filter((c) =>
+        [
+          "get-request",
+          "get-order",
+          "get-customer",
+          "get-shipment-status",
+          "get-request-activity",
+        ].includes(c.name),
+      ).length;
+    const before = shopReads();
+    await act(async () => {
+      streams[streams.length - 1]!.onmessage?.({
+        data: JSON.stringify({
+          source: "action",
+          type: "updated",
+          key: "get-demonstration",
+          resourceType: "demonstrations",
+          version: Date.now(),
+        }),
+      });
+    });
+    await settle(() =>
+      expect(container.querySelectorAll(".shop-teach-lookup").length).toBe(
+        captured,
+      ),
+    );
+    expect(shopReads()).toBe(before);
+    expect(container.querySelectorAll(".shop-teach-strip li")).toHaveLength(0);
+    expect(container.querySelector(".shop-teach-count")?.textContent).toBe(
+      "0 actions · 6 lookups",
+    );
+  });
+
+  it("confirms free-text request details through labeled fields before teaching", async () => {
+    request = {
+      ...request,
+      content: {
+        source: "free_text",
+        type: "damaged_item",
+        text: "One piece arrived chipped.",
+      },
+    };
+    await mount();
+    await click(byText("Teach"));
+    await settle(() =>
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull(),
+    );
+    await fill('textarea[name="description"]', "One piece arrived chipped.");
+    await submit("Confirm the request fields");
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+    expect(writes("start-demonstration")[0]?.input).toEqual({
+      requestId: request.id,
+      fields: {
+        type: "damaged_item",
+        orderId: request.orderId,
+        productId: order.items[0]!.productId,
+        quantity: 1,
+        description: "One piece arrived chipped.",
+      },
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("acknowledges starting immediately and prevents duplicate Teach submits", async () => {
+    await mount();
+    let release!: () => void;
+    holdWrite = () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    const teach = byText("Teach");
+    await click(teach);
+    expect(
+      container.querySelector(".shop-teach-bar")?.getAttribute("aria-busy"),
+    ).toBe("true");
+    await click(teach);
+    expect(writes("start-demonstration")).toHaveLength(1);
+    holdWrite = undefined;
+    await act(async () => {
+      release();
+    });
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+  });
+
+  it("discards a recording and starts another without losing saved shop effects", async () => {
+    await mount();
+    await click(byText("Teach"));
+    await settle(() =>
+      expect(
+        container.querySelector('[aria-label="Discard recording"]'),
+      ).not.toBeNull(),
+    );
+    await click(element('[aria-label="Discard recording"]'));
+    await settle(() => expect(demonstration?.status).toBe("cancelled"));
+    await click(byText("Teach"));
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+    expect(writes("start-demonstration")).toHaveLength(2);
+  });
+
+  it("shows a capture failure without inviting a repeat of the successful shop action", async () => {
+    await mount();
+    await click(byText("Teach"));
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+    captureFailure = true;
+    await fill('textarea[name="template"]', "Saved despite capture failure.");
+    await submit("Save reply");
+    await settle(() =>
+      expect(container.querySelector(".shop-teach-bar")?.textContent).toContain(
+        "Recording incomplete",
+      ),
+    );
+    expect(container.textContent).toContain("Reply saved");
+    expect(savedReplies).toHaveLength(1);
+    expect(writes("send-reply")).toHaveLength(1);
+    expect(container.querySelector(".shop-teach-error")?.textContent).toContain(
+      "do not repeat",
+    );
+  });
+
   it("handles a request manually: saves reply, tags and resolves, refreshing the visible status", async () => {
     await mount();
     expect(container.textContent).toContain(request.subject);
@@ -329,9 +906,7 @@ describe("shop workspace with real framework action hooks and an offline action 
     expect(
       container.querySelector(".shop-original-message")?.textContent,
     ).toContain(order.items[0]!.name);
-    expect(
-      container.querySelector('[data-teach-slot="reserved"] button'),
-    ).toBeNull();
+    expect(byText("Teach")).toBeDefined();
     await fill(
       'textarea[name="template"]',
       "We have refunded the chipped piece. Thank you for letting us know.",

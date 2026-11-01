@@ -172,3 +172,38 @@ an unmatched wholesale inquiry give the required 3/1/1 split. The fixtures' dama
 recipe supports the first order line, handing off other product selections.
 
 Inbox chips and demo button are Phase 2 after TASK-8; no UI files are changed here.
+
+
+## Demonstration capture (TASK-9)
+
+Teach shares `buildRequestTrigger` with MatchRequest; no additional envelope, request
+snapshot or source field is inserted. Free-text context uses saved intake fields
+(with trusted requestId/customerId/subject removed before strict field validation)
+or operator-confirmed fields through ValidateRequestFields. No model runs in Teach.
+The generic Demonstrations use-cases and TraceStore port live in recipe-engine;
+ShopDemonstrations translates shop snapshots in infrastructure and composition wires
+all adapters. `demonstrations` headers and ordered `demo_steps` persist atomically in
+short, non-retrying transactions under a database table lock (PGlite/PostgreSQL).
+No lock/transaction surrounds a shop operation. The deliberately coarse lock suits
+the demo workload; invocation slots reserve ordering before asynchronous completion.
+
+traced() returns the successful shop result even when append or incomplete marking
+fails. Append failure normally persists a sanitized incomplete reason immediately;
+a total store outage can also prevent that update, but the prior durable pending
+reservation ensures a later Stop is incomplete. There is no shop callback retry.
+Late results remain pinned to their original demonstration; cancelled traces discard
+them, and results after Stop cannot turn an incomplete trace back into completed.
+Raw persistence/provider errors are never returned in capture-failure reasons.
+
+
+Reviewer round 1: demonstration read identity is the action name plus structural
+JSON equality (object key order ignored; arrays/types preserved). The engine skips
+already-saved reads at reservation and deduplicates concurrent completions, keeping
+the earliest invocation’s input/output/navigation/timing. TraceStore saves reconcile
+step rows atomically so a slower first read replaces an earlier-finishing duplicate
+without leaving an extra row. No schema migration is required. Mutations are never
+deduplicated; refetches still execute normally and return current shop state.
+The shared shop lookup classification is verified against action readOnly metadata.
+The Teach bar numbers mutations and shows compact lookup chips and separate counts;
+Inspect and the retrieval action retain the full ordered trace. Historical traces
+are not rewritten.

@@ -95,7 +95,8 @@ export function RequestControls({
           {status.isPending ? <PendingMark /> : <IconCheck />}
           {t(request.status === "resolved" ? "shop.resolved" : "shop.resolve")}
         </Button>
-        <DropdownMenu>
+        {/* Escalate opens a modal Dialog; the menu must not retain a body pointer lock. */}
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"

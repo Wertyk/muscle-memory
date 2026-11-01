@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { ActionRunContext } from "@agent-native/core/action";
-import { MatchRequest, RunRecipe, type RunRecipeDependencies, type TextExtractor } from "@muscle-memory/recipe-engine";
+import { Demonstrations, MatchRequest, RunRecipe, type RunRecipeDependencies, type TextExtractor } from "@muscle-memory/recipe-engine";
 import {
   CreateRequest, ValidateRequestFields, CreateReplacementOrder, Escalate, GenerateReturnLabel, GetCustomer, GetOrder,
   GetRequest, GetRequestActivity, GetShipmentStatus, ID_PREFIXES, IssueRefund, ListRequests, SendReply,
@@ -8,7 +8,10 @@ import {
 } from "@muscle-memory/shop-domain";
 import { getDb, type ShopDb } from "./db/index.js";
 import { DrizzleShopRepository } from "./infra/shop-repository.js";
-import type { TraceCapture } from "./infra/traced.js";
+import { DrizzleTraceStore } from "./infra/trace-store.js";
+import { ShopDemonstrations } from "./infra/shop-demonstrations.js";
+import { createShopTraceCapture } from "./infra/shop-trace-capture.js";
+import { demonstrationScope } from "./infra/teach-session.js";
 import { CompleteTextExtractor } from "./infra/complete-text-extraction.js";
 import { DrizzleAgentHandoff } from "./infra/agent-handoff.js";
 import { RecipeActionInvoker } from "./infra/recipe-action-invoker.js";
@@ -21,8 +24,26 @@ import { ShopRequestExtractor } from "./infra/shop-request-extractor.js";
 import { DemoIntake } from "./infra/demo-intake.js";
 import { shopResult } from "./shop-action-contracts.js";
 
-/** TASK-9 supplies recording/session policy here without changing shop actions. */
-export const shopTraceCapture: TraceCapture = { recording: async () => null };
+export function createTeachUseCases(db: ShopDb) {
+  const demonstrations = new Demonstrations(
+    new DrizzleTraceStore(db),
+    { now: Date.now },
+    () => `demo_${randomBytes(8).toString("hex")}`,
+  );
+  const shop = new DrizzleShopRepository(db);
+  return new ShopDemonstrations(
+    demonstrations,
+    db,
+    shop,
+    new ValidateRequestFields(shop),
+  );
+}
+export function getTeachUseCases() {
+  return createTeachUseCases(getDb());
+}
+export const shopTraceCapture = createShopTraceCapture(
+  () => getTeachUseCases().demonstrations,
+);
 
 export function createShopUseCases(deps: ShopDependencies) {
   return {
@@ -107,4 +128,14 @@ export function createRequestIntake(db: ShopDb, options: Parameters<typeof creat
 
 export function getRequestIntake(context?: ActionRunContext) {
   return createRequestIntake(getDb(), { context: context ?? { caller: "automation" } });
+}
+
+export function getCurrentDemonstration(
+  requestId: string,
+  context?: ActionRunContext,
+) {
+  const scope = demonstrationScope(context);
+  return scope
+    ? getTeachUseCases().demonstrations.current(scope, requestId)
+    : Promise.resolve(null);
 }

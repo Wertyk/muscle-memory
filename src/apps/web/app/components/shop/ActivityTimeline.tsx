@@ -85,6 +85,7 @@ export function ActivityTimeline({ requestId }: { requestId: string }) {
   const query = useActionQuery<readonly RequestActivity[]>(
     "get-request-activity",
     { requestId },
+    { resources: ["shop"] },
   );
   return (
     <section

@@ -1,7 +1,8 @@
 import { defineAction } from "@agent-native/core/action";
 import { z } from "zod";
 
-import { getShopUseCases } from "../server/composition.js";
+import { getShopUseCases, shopTraceCapture } from "../server/composition.js";
+import { traced } from "../server/infra/traced.js";
 import {
   requestActivitySchema,
   shopErrors,
@@ -19,6 +20,10 @@ export default defineAction({
   readOnly: true,
   http: { method: "GET" },
   errors: shopErrors,
-  run: async (input) =>
-    shopResult(getShopUseCases().getRequestActivity.execute(input)),
+  run: traced(
+    "get-request-activity",
+    async (input) =>
+      shopResult(getShopUseCases().getRequestActivity.execute(input)),
+    shopTraceCapture,
+  ),
 });

@@ -15,6 +15,7 @@ import escalate from "../actions/escalate.js";
 import createReplacementOrder from "../actions/create-replacement-order.js";
 import updateShippingAddress from "../actions/update-shipping-address.js";
 import generateReturnLabel from "../actions/generate-return-label.js";
+import { isShopLookup } from "../shared/shop-action-kinds.js";
 import * as composition from "./composition.js";
 import { createShopDemoData } from "./db/shop-demo-data.js";
 import type { CapturedAction } from "./infra/traced.js";
@@ -62,6 +63,9 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
 
 describe("shop action controllers", () => {
+  it.each(cases)("$name capture classification matches actual readOnly metadata", ({ name, action }) => {
+    expect(isShopLookup(name)).toBe(action.readOnly === true);
+  });
   it.each(cases)("$name forwards input to exactly its use-case and unwraps the result", async ({ action, key, input, output }) => {
     expect(await action.run(input as never, context)).toEqual(output);
     expect(useCases[key].execute).toHaveBeenCalledExactlyOnceWith(input);
@@ -73,9 +77,9 @@ describe("shop action controllers", () => {
     expect(action.outputSchema).toBeDefined();
   });
 
-  it.each(cases.filter(({ action }) => !action.readOnly))("$name captures validated input/output with the injected decorator", async ({ action, input, name }) => {
+  it.each(cases)("$name captures validated input/output with the injected decorator", async ({ action, input, name }) => {
     const steps: CapturedAction[] = [];
-    vi.spyOn(composition.shopTraceCapture, "recording").mockResolvedValue({ append: async (step) => { steps.push(step); } });
+    vi.spyOn(composition.shopTraceCapture, "recording").mockResolvedValue({ incomplete: async () => {}, append: async (step) => { steps.push(step); } });
     composition.shopTraceCapture.navigation = async () => ({ view: "request", requestId: request.id });
     try {
       const output = await action.run(input as never, context);
@@ -85,10 +89,10 @@ describe("shop action controllers", () => {
   });
 
   it("leaves capture inactive in the shipped composition", async () => {
-    expect(await composition.shopTraceCapture.recording(context)).toBeNull();
+    expect(await composition.shopTraceCapture.recording(context, { actionName: "tag-request", input: { requestId: request.id, tag: "done" } })).toBeNull();
     const capture = vi.spyOn(composition.shopTraceCapture, "recording");
     await tagRequest.run({ requestId: request.id, tag: "done" }, context);
-    expect(capture).toHaveBeenCalledExactlyOnceWith(context);
+    expect(capture).toHaveBeenCalledExactlyOnceWith(context, { actionName: "tag-request", input: { requestId: request.id, tag: "done" } });
   });
 
   it("maps missing entities into typed failures instead of successful error objects", async () => {
@@ -106,7 +110,7 @@ describe("shop action controllers", () => {
   ];
   it.each(policyErrors)("preserves $code and excludes rejected calls from tracing", async (error) => {
     const append = vi.fn();
-    vi.spyOn(composition.shopTraceCapture, "recording").mockResolvedValue({ append });
+    vi.spyOn(composition.shopTraceCapture, "recording").mockResolvedValue({ append, incomplete: async () => {} });
     composition.shopTraceCapture.navigation = async () => null;
     vi.mocked(useCases.issueRefund.execute).mockResolvedValue(failure(error));
     try {

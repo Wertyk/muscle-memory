@@ -33,6 +33,7 @@ import {
   threadIdFromPath,
 } from "@/lib/chat-paths";
 import { TAB_ID } from "@/lib/tab-id";
+import { isLiveShopPath } from "@/lib/shop-workspace";
 
 import { i18nCatalog } from "./i18n";
 
@@ -94,10 +95,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 function DbSyncSetup() {
   const qc = useQueryClient();
+  const { pathname } = useLocation();
   useNavigationState();
   useDbSync({
     queryClient: qc,
     ignoreSource: TAB_ID,
+    ...(isLiveShopPath(pathname)
+      ? { realtime: { reason: "Incoming support requests and recipe approvals can change while this private shop view is open" } }
+      : {}),
+    pauseWhenHidden: true,
   });
   return null;
 }

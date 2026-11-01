@@ -39,9 +39,10 @@ import stop from "../actions/stop-demonstration.js";
 import tag from "../actions/tag-request.js";
 import * as composition from "./composition.js";
 import { getDb, type ShopDb } from "./db/index.js";
-import { demonstrations, requestProcessing } from "./db/schema.js";
+import { demonstrations, demoSteps, recipes, recipeVersions, requestProcessing } from "./db/schema.js";
 import { createShopDemoData, DEMO_NOW } from "./db/shop-demo-data.js";
-import { seedShop } from "./infra/shop-demo-store.js";
+import { resetShop, seedShop } from "./infra/shop-demo-store.js";
+import { damagedItemFixture } from "./fixtures/intake-recipes.js";
 import { DrizzleShopRepository } from "./infra/shop-repository.js";
 import migrate from "./plugins/db.js";
 
@@ -89,11 +90,37 @@ describe("Teach with real actions and PGlite", () => {
     db = getDb();
   }, 30_000);
   beforeEach(async () => {
-    await db.delete(demonstrations);
-    await db.delete(requestProcessing);
-    await seedShop(db);
+    await seedShop(db, { all: true });
     await session(() => navigation());
   });
+
+  it.each(["seed", "reset"] as const)("%s after Teach clears headers and captured steps while retaining active recipes", async command =>
+    session(async () => {
+      const catalog = composition.createRequestIntake(db).catalog;
+      await catalog.saveVersion(damagedItemFixture);
+      await catalog.save({ id: damagedItemFixture.recipeId, name: damagedItemFixture.name, status: "active", activeVersionId: damagedItemFixture.id });
+      const expectedCatalog = await db.select().from(recipes).orderBy(recipes.id);
+      const expectedVersions = await db.select().from(recipeVersions).orderBy(recipeVersions.id);
+      const demo = await start.run({ requestId: request.id }, context);
+      await getRequest.run({ requestId: request.id }, context);
+      await tag.run({ requestId: request.id, tag: "rehearsal" }, context);
+      const saved = await stop.run({ demonstrationId: demo.id }, context);
+      expect(saved.status).toBe("completed");
+      expect(saved.steps.map(step => step.action)).toEqual(["get-request", "tag-request"]);
+      expect(await db.select().from(demoSteps)).toHaveLength(2);
+      if (command === "seed") await seedShop(db);
+      else await resetShop(db);
+      expect(await db.select().from(demonstrations)).toEqual([]);
+      expect(await db.select().from(demoSteps)).toEqual([]);
+      expect(await get.run({ demonstrationId: demo.id }, context)).toBeNull();
+      expect(await db.select().from(recipes).orderBy(recipes.id)).toEqual(expectedCatalog);
+      expect(await db.select().from(recipeVersions).orderBy(recipeVersions.id)).toEqual(expectedVersions);
+      if (command === "reset") await seedShop(db);
+      const next = await start.run({ requestId: request.id }, context);
+      expect(next.id).not.toBe(demo.id);
+      expect(next.status).toBe("recording");
+      await stop.run({ demonstrationId: next.id }, context);
+    }));
   afterAll(async () => {
     await closeDbExec();
     vi.unstubAllEnvs();

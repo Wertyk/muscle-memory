@@ -357,7 +357,7 @@
 .shop-inbox-columns,
 .shop-inbox-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 7rem 6.5rem;
+  grid-template-columns: minmax(0, 1fr) 11rem 6.5rem;
   align-items: center;
   gap: 1.5rem;
 }
@@ -445,6 +445,19 @@
   --chip-bg: var(--shop-resolved-surface);
 }
 .shop-status[data-status="escalated"] {
+  --chip-text: var(--shop-escalated);
+  --chip-bg: var(--shop-escalated-surface);
+}
+.shop-processing[data-processing="awaiting_approval"] {
+  --chip-text: var(--shop-pending);
+  --chip-bg: var(--shop-pending-surface);
+}
+.shop-processing[data-processing="auto_handled"],
+.shop-processing[data-processing="done"] {
+  --chip-text: var(--shop-resolved);
+  --chip-bg: var(--shop-resolved-surface);
+}
+.shop-processing[data-processing="with_agent"] {
   --chip-text: var(--shop-escalated);
   --chip-bg: var(--shop-escalated-surface);
 }

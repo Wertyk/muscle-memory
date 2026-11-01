@@ -62,7 +62,12 @@ exceptions propagate to the infrastructure boundary.
 Implement `ShopRepository` and inject it into the use-case constructors.
 Read-only use-cases accept the repository directly; mutations accept an object
 with `shop`, and the `clock`/`ids` ports where needed. `Clock.now()` returns an
-ISO timestamp, and `IdGenerator.next(kind)` returns a unique short identifier.
+ISO timestamp, and `IdGenerator.next(kind)` returns a unique short identifier for
+refunds, replies, and labels. New requests and orders (including replacements)
+use `ShopTransaction.nextSequentialId(kind)` inside their creation transaction.
+Allocate and insert under the same shop write lock before allocating another ID;
+continue existing numeric suffixes with a minimum of four digits and retain the
+31-character validation. Existing alphanumeric IDs remain valid.
 
 `transaction()` must provide atomic, serializable execution relative to other
 mutations, including shipment changes. Commit an `ok` result; roll back an
@@ -76,6 +81,12 @@ Creation methods must enforce unique IDs; save methods update existing records.
 customer, exact tag); category works for both request sources and excludes
 unclassified free text when filtering by type. No shipment is represented by
 `null`, distinct from a missing order, which returns `NOT_FOUND`.
+
+`ClassifyRequest` persists a supported type on unclassified free text through a
+shop transaction. It preserves the original text, source, order link and operator
+state. Same-type redelivery is idempotent; structured requests and conflicting
+classifications are rejected. The intake adapter supplies only validated extracted
+types and can retry this write from its durable match checkpoint without a model call.
 
 No framework, DB, network, LLM, or environment dependencies belong here.
 Actions and tracing decorators, database adapters, event emission, and external

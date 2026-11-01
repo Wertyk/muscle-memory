@@ -2,11 +2,12 @@ import { defineActionErrors } from "@agent-native/core/action";
 import { z } from "zod";
 import { shopId } from "./shop-action-contracts.js";
 import { runIdSchema } from "./recipe-action-contracts.js";
+import { PROCESSING_STATES } from "../shared/request-processing.js";
 
 export const intakeErrors = defineActionErrors("INTAKE_FAILED");
 export const requestProcessingSchema = z.object({
   requestId: shopId("request"), runId: runIdSchema,
-  state: z.enum(["auto_handled", "awaiting_approval", "with_agent", "done"]).nullable(),
+  state: z.enum(PROCESSING_STATES).nullable(),
   matchReason: z.enum(["matched", "no_match", "extraction_failed", "ambiguous", "matching_failed"]).nullable(),
   tokens: z.object({ input: z.number().int().nonnegative(), output: z.number().int().nonnegative() }),
 });

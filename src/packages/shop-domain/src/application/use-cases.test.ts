@@ -188,7 +188,7 @@ describe("CreateReplacementOrder", () => {
     const deps = setup();
     deps.shop.orders.set(order.id, mixedOrder);
     const replacement = value(await new CreateReplacementOrder(deps).execute({ orderId: order.id }));
-    expect(replacement).toEqual({ ...mixedOrder, id: "ord_101", status: "unshipped", paid: { amountMinor: 0, currency: "USD" }, createdAt: deps.clock.now(), deliveredAt: null, replacementForOrderId: order.id });
+    expect(replacement).toEqual({ ...mixedOrder, id: "ord_1043", status: "unshipped", paid: { amountMinor: 0, currency: "USD" }, createdAt: deps.clock.now(), deliveredAt: null, replacementForOrderId: order.id });
     expect(await deps.shop.getOrder(replacement.id)).toEqual(replacement);
     expect(await deps.shop.getOrder(order.id)).toEqual(mixedOrder);
     expect(await new IssueRefund(deps).execute({ orderId: replacement.id, amount: { amountMinor: 1, currency: "USD" }, reason: "Damage" })).toMatchObject({ error: { code: "REFUND_EXCEEDS_BALANCE" } });
@@ -198,7 +198,7 @@ describe("CreateReplacementOrder", () => {
     deps.shop.orders.set(order.id, mixedOrder);
     const replacement = value(await new CreateReplacementOrder(deps).execute({ orderId: order.id, items: [{ productId: "prd_0001", quantity: 1 }] }));
     expect(replacement).toEqual({
-      ...mixedOrder, id: "ord_101", status: "unshipped", paid: { amountMinor: 0, currency: "USD" },
+      ...mixedOrder, id: "ord_1043", status: "unshipped", paid: { amountMinor: 0, currency: "USD" },
       items: [{ productId: "prd_0001", name: "Sand mug", quantity: 1, unitPrice: { amountMinor: 4_000, currency: "USD" } }],
       total: { amountMinor: 4_000, currency: "USD" }, createdAt: deps.clock.now(), deliveredAt: null, replacementForOrderId: order.id,
     });
@@ -307,6 +307,7 @@ describe("mutation failures", () => {
   it("rejects long/incorrect generated IDs before persisting records", async () => {
     const deps = setup();
     const invalid = { ...deps, ids: { next: () => "00000000-0000-0000-0000-000000000000" } };
+    deps.shop.nextSequentialId = async () => "00000000-0000-0000-0000-000000000000";
     for (const result of [
       await new IssueRefund(invalid).execute({ orderId: order.id, reason: "Damage" }),
       await new SendReply(invalid).execute({ requestId: request.id, template: "Hi", variables: {} }),

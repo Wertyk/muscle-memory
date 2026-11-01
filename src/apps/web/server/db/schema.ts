@@ -125,7 +125,8 @@ export const recipeHandoffs = pgTable("recipe_handoffs", {
   disposition: text("disposition", { enum: ["with_agent", "with_human"] }).notNull(),
 }, (table) => [index("recipe_handoffs_request_idx").on(table.requestId)]);
 
-// Intentionally independent of shop FKs: demonstrations retain historical snapshots after reseeding.
+// Request association is logical (subjectId); rehearsal reset explicitly clears
+// demonstrations and their child steps through shopResetDependents.
 export const demonstrations = pgTable("demonstrations", {
   id: varchar("id", { length: 31 }).primaryKey(),
   ownerEmail: text("owner_email").notNull(),

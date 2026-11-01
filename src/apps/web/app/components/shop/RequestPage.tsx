@@ -26,6 +26,7 @@ import type { SavedResult } from "./ActionForm";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { OrderOperations } from "./OrderOperations";
 import { ReplyForm, RequestControls, TagForm } from "./RequestControls";
+import { RequestProcessingBanner } from "./RequestProcessingBanner";
 import { TeachBar } from "./TeachBar";
 import {
   QueryError,
@@ -300,6 +301,7 @@ export function RequestPage({ requestId }: { requestId: string }) {
           <RequestControls request={request} onSaved={setSaved} />
         </div>
       </header>
+      <RequestProcessingBanner requestId={requestId} />
       <TeachBar key={request.id} request={request} order={order.data} />
       <div role="status" aria-live="polite">
         {saved && (

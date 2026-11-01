@@ -3,16 +3,8 @@ import type { RequestId } from "@muscle-memory/shop-domain";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { ShopDb } from "../db/index.js";
 import { recipeRuns, requestProcessing, requests } from "../db/schema.js";
-
-export type ProcessingState = "auto_handled" | "awaiting_approval" | "with_agent" | "done";
-export interface RequestProcessing {
-  readonly requestId: RequestId;
-  readonly runId: string;
-  /** Null only while processing is in flight or interrupted before run creation. */
-  readonly state: ProcessingState | null;
-  readonly matchReason: MatchReason | null;
-  readonly tokens: TokenUsage;
-}
+import type { ProcessingState, RequestProcessing } from "../../shared/request-processing.js";
+export type { ProcessingState, RequestProcessing } from "../../shared/request-processing.js";
 
 /** A projection of durable checkpoints, so approval resumes and manual resolution
  * cannot leave a duplicated status column stale. Does not execute or extract. */

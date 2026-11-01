@@ -1,6 +1,6 @@
 import type {
   CustomerId, Order, OrderId, ProductId, Refund, Reply, Request, RequestFilter,
-  RequestId, Result, ShopRecords, ShopRepository, RequestActivityRecords,
+  RequestId, Result, ShopRecords, ShopRepository, ShopTransaction, RequestActivityRecords,
 } from "@muscle-memory/shop-domain";
 import { and, arrayContains, asc, eq, sql } from "drizzle-orm";
 import type { ShopDb } from "../db/index.js";
@@ -96,6 +96,24 @@ class DrizzleShopRecords implements ShopRecords {
   }
 }
 
+/** Constructed only after lockShopWrites, so MAX + insert is serialized across
+ * PostgreSQL workers too. Legacy nonnumeric IDs remain valid and untouched. */
+class DrizzleShopTransaction extends DrizzleShopRecords implements ShopTransaction {
+  async nextSequentialId(kind: "request" | "order"): Promise<string> {
+    const table = kind === "request" ? requests : orders;
+    const prefix = kind === "request" ? "req" : "ord";
+    const pattern = `^${prefix}_[0-9]+$`;
+    const floor = kind === "request" ? 0 : 1000;
+    const [row] = await this.db.select({
+      next: sql<string>`(coalesce(max(CASE WHEN ${table.id} ~ ${pattern}
+        THEN substring(${table.id} from 5)::numeric END), ${floor}) + 1)::text`,
+    }).from(table);
+    if (!row) throw new Error("Could not allocate a shop ID");
+    // Keep arbitrary-precision arithmetic in SQL and never truncate at 9999.
+    return `${prefix}_${row.next.padStart(4, "0")}`;
+  }
+}
+
 export class DrizzleShopRepository extends DrizzleShopRecords implements ShopRepository {
   constructor(private readonly database: ShopDb) { super(database); }
 
@@ -115,11 +133,11 @@ export class DrizzleShopRepository extends DrizzleShopRecords implements ShopRep
     }, { isolationLevel: "repeatable read", accessMode: "read only" });
   }
 
-  async transaction<T>(work: (records: ShopRecords) => Promise<Result<T>>): Promise<Result<T>> {
+  async transaction<T>(work: (records: ShopTransaction) => Promise<Result<T>>): Promise<Result<T>> {
     try {
       return await this.database.transaction(async (tx) => {
         await lockShopWrites(tx);
-        const result = await work(new DrizzleShopRecords(tx));
+        const result = await work(new DrizzleShopTransaction(tx));
         if (!result.ok) throw new ResultRollback(result);
         return result;
       }, { isolationLevel: "read committed" });

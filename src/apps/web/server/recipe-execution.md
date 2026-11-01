@@ -114,6 +114,23 @@ new address for address changes). Primitive `addressName`, `addressLine1`, etc.
 are reassembled into `address` at this boundary. Unknown/incomplete fields or an
 order owned by another customer fail closed; no missing field is defaulted.
 
+After the validated extraction/match is durably checkpointed, intake calls the
+shop `ClassifyRequest` use-case to persist the extracted type on free text before
+executing a recipe or handoff. This updates the generated request category and its
+existing type filter, while preserving original message/source/order link and
+operator state. Valid classification is retained even without an active/matching
+recipe. Failed or incomplete extraction remains unclassified. Same-type writes are
+idempotent; a failed classification write can be retried from the saved checkpoint
+on explicit redelivery without another extraction call.
+
+New request/order IDs are allocated from the highest existing numeric suffix under
+the shop transaction's `SHARE ROW EXCLUSIVE` lock and inserted before releasing it.
+Requests continue at `req_0061`, orders/replacements at `ord_1062` after the seed.
+This uses no process-local counter or new migration. Rollback releases an uncommitted
+ID; seed/reset deliberately restarts from the current rows. Minimum width is four
+digits, growing past 9999 without truncation; the existing 31-character validation,
+primary keys and CHECK constraints remain. Legacy alphanumeric IDs are untouched.
+
 `recipes` is a deliberately small catalog with `id`, `name`, `status` (`draft` or
 `active`) and `activeVersionId`. `DrizzleRecipeCatalog.saveVersion` reuses the
 executor's immutable snapshot checks. `save` writes metadata; a composite FK ensures
@@ -171,8 +188,52 @@ free-text shipment reply, a damage refund above USD 100 paused for approval, and
 an unmatched wholesale inquiry give the required 3/1/1 split. The fixtures' damage
 recipe supports the first order line, handing off other product selections.
 
-Inbox chips and demo button are Phase 2 after TASK-8; no UI files are changed here.
+## Intake UI (TASK-15 Phase 2)
 
+The inbox joins `list-requests` with `list-request-processing`, displaying shop
+status and processing outcome separately. URL `processing` combines with the shop
+`status`/`type` filters; `view-screen` mirrors that projection for the agent. Null
+state displays Processing; seed requests without a row get no invented outcome.
+The Demo control calls `demo-intake`, disables overlapping submissions, and reads
+the resulting inbox through normal action-query invalidation. Failed batches also
+refresh the inbox because some effects may have been committed. No fixture recipe
+is installed by the UI.
+
+Only the private inbox and request routes opt into the framework's shared
+`useDbSync` SSE/poll transport for remote arrivals and recipe progress. Local
+mutations and agent writes use the normal action-observer invalidation path.
+
+`RequestProcessingBanner` is an additive request component. It reads
+`get-recipe-run` to show the exact awaiting step/action and resolved money input.
+Approve/Reject call `resume-recipe-run` with the saved run/step IDs; neither calls
+the shop mutation directly. Failed responses trigger checkpoint readback before
+another decision; stale run read errors disable the controls. A with-agent banner
+opens the existing sidebar via `sendToAgentChat`, supplying bounded request/run
+IDs so the agent reads the saved handoff context without copying full records.
+Queued handoffs are explicitly labelled as queued, rather than running turns.
+
+## Rehearsal reset and reseed
+
+`pnpm -C src seed:shop` and `reset:shop` clear shop-linked operational data before
+deleting requests, in one transaction with the shop cleanup and optional seed
+inserts. The ordered `shopResetDependents` registry in
+`infra/shop-reset-dependents.ts` is the extension point for new child tables,
+including the registered TASK-9 demonstration steps and demonstrations. Register
+children before parents; missing tables are skipped for older/shop-only schemas. The CLI applies
+the full app migration plugin first. No CASCADE/TRUNCATE or schema edits are used.
+
+Default cleanup removes all demonstration steps and headers, request-processing
+checkpoints, handoffs linked to requests or selected runs, and runs identified by those associations or by a
+request-shaped `trigger.requestId`/`trigger.id` (including stale/ad hoc triggers).
+Generic runs and their unrelated handoffs survive. The catalog and all immutable
+versions survive, so a subsequent intake can reuse the same active recipes.
+
+Use `pnpm -C src seed:shop --all` for a pristine seeded rehearsal, or
+`pnpm -C src reset:shop --all` for an empty one. This explicitly also removes all
+recipe runs/handoffs, recipes and versions, including generic runs. Framework rows
+and migration bookkeeping are retained. Cleanup and new inserts roll back together
+if any step fails. Use maintenance commands between executions; resetting durable
+rows does not cancel an already executing worker.
 
 ## Demonstration capture (TASK-9)
 

@@ -4,9 +4,11 @@ import { REQUEST_STATUSES, REQUEST_TYPES } from "@muscle-memory/shop-domain";
 import { z } from "zod";
 
 import {
+  getRequestIntake,
   getShopUseCases,
   getCurrentDemonstration,
 } from "../server/composition.js";
+import { PROCESSING_STATES } from "../shared/request-processing.js";
 import { shopId, shopResult } from "../server/shop-action-contracts.js";
 
 export default defineAction({
@@ -32,6 +34,7 @@ export default defineAction({
         }),
       );
       screen.request = request;
+      screen.processing = (await getRequestIntake().processing.list([request.id]))[0] ?? null;
       const demonstration = await getCurrentDemonstration(request.id, context);
       screen.demonstration = demonstration
         ? {
@@ -70,10 +73,17 @@ export default defineAction({
         ...(status ? { status } : {}),
         ...(type ? { type } : {}),
       };
-      screen.activeFilters = filter;
-      screen.requests = await shopResult(
+      const processing = PROCESSING_STATES.find(
+        (value) => value === (params.success ? params.data.processing : undefined),
+      );
+      const rows = await getRequestIntake().processing.list();
+      screen.activeFilters = { ...filter, ...(processing ? { processing } : {}) };
+      const requests = await shopResult(
         getShopUseCases().listRequests.execute(filter),
       );
+      const visible = requests.filter((request) => !processing || rows.some((row) => row.requestId === request.id && row.state === processing));
+      screen.requests = visible;
+      screen.processing = rows.filter((row) => visible.some((request) => request.id === row.requestId));
     }
     return Object.keys(screen).length
       ? screen

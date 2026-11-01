@@ -50,6 +50,10 @@ beforeEach(() => {
     listRequests: { execute: vi.fn(async () => success([request])) },
   } as unknown as typeof useCases;
   vi.spyOn(composition, "getShopUseCases").mockReturnValue(useCases);
+  vi.spyOn(composition, "getCurrentDemonstration").mockResolvedValue(null);
+  vi.spyOn(composition, "getRequestIntake").mockReturnValue({
+    processing: { list: vi.fn(async () => []) },
+  } as unknown as ReturnType<typeof composition.getRequestIntake>);
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -57,6 +61,31 @@ afterEach(() => {
 });
 
 describe("agent workspace context", () => {
+  it("exposes processing and Teach context together for the current request", async () => {
+    state.navigation = { view: "request", requestId: request.id };
+    const context = { caller: "frontend" as const, userEmail: "operator@example.test" };
+    const processing = { requestId: request.id, runId: "run_pending", state: "awaiting_approval" as const, matchReason: "matched" as const, tokens: { input: 0, output: 0 } };
+    vi.mocked(composition.getRequestIntake().processing.list).mockResolvedValue([processing]);
+    vi.mocked(composition.getCurrentDemonstration).mockResolvedValue({
+      id: "demo_context", subjectId: request.id, scope: { userId: context.userEmail, workspaceId: "shop", sessionId: "tab" },
+      references: {}, trigger: {}, status: "recording", startedAt: 1, stoppedAt: null, incompleteReason: null, nextSequence: 1, pending: [], steps: [],
+    });
+    expect(await viewScreen.run({}, context)).toMatchObject({
+      request, processing, demonstration: { id: "demo_context", status: "recording", stepCount: 0, incompleteReason: null },
+    });
+    expect(composition.getCurrentDemonstration).toHaveBeenCalledWith(request.id, context);
+  });
+  it("mirrors the processing filter and fresh processing records visible in the inbox", async () => {
+    state.navigation = { view: "inbox", path: "/inbox" };
+    state.__url__ = { searchParams: { status: "open", processing: "with_agent" } };
+    const row = { requestId: request.id, runId: "run_test", state: "with_agent" as const, matchReason: "no_match" as const, tokens: { input: 0, output: 0 } };
+    vi.mocked(composition.getRequestIntake().processing.list).mockResolvedValue([row]);
+    expect(await viewScreen.run({}, { caller: "tool" })).toMatchObject({
+      activeFilters: { status: "open", processing: "with_agent" }, requests: [request], processing: [row],
+    });
+    state.__url__.searchParams = { processing: "done" };
+    expect(await viewScreen.run({}, { caller: "tool" })).toMatchObject({ requests: [], processing: [] });
+  });
   it("reads fresh selected-request details through the existing shop use-cases", async () => {
     state.navigation = {
       view: "request",

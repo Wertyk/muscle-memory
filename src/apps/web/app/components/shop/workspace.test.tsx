@@ -1,8 +1,6 @@
 import { callAction, useDbSync } from "@agent-native/core/client/hooks";
-import type {
-  Demonstration,
-  DemonstrationStep,
-} from "@muscle-memory/recipe-engine";
+import type { Run, Demonstration, DemonstrationStep } from "@muscle-memory/recipe-engine";
+import { PROCESSING_STATES, type RequestProcessing } from "@shared/request-processing";
 import {
   GetRequestActivity,
   type Reply,
@@ -19,6 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import enUS from "@/i18n/en-US";
 
 import { createShopDemoData } from "../../../server/db/shop-demo-data";
+import { damagedItemFixture } from "../../../server/fixtures/intake-recipes";
+import { isLiveShopPath } from "@/lib/shop-workspace";
 import { InboxPage } from "./InboxPage";
 import { RequestPage } from "./RequestPage";
 import { stepArgument } from "./TeachBar";
@@ -64,6 +64,23 @@ let savedReplacements: Order[];
 let demonstration: Demonstration | null;
 let captureFailure: boolean;
 let calls: { name: string; input: Record<string, unknown>; method: string }[];
+let processing: RequestProcessing[];
+let incoming: typeof fixtures.requests;
+let recipeRun: Run;
+let remoteSync = false;
+
+function processingRow(state: RequestProcessing["state"], requestId = request.id): RequestProcessing {
+  return { requestId, runId: "run_ui", state, matchReason: "matched", tokens: { input: 0, output: 0 } };
+}
+function awaitingRun(): Run {
+  return {
+    id: "run_ui", recipe: damagedItemFixture, trigger: { requestId: request.id }, mode: "execute", status: "awaiting_approval",
+    createdAt: 1, updatedAt: 1, pendingStepIds: ["refund"], approvedStepIds: [], awaitingApprovalStepId: "refund", tokens: { input: 0, output: 0 }, failure: null, handoff: null,
+    steps: [{ stepId: "refund", kind: "action", action: "issue-refund", effect: "mutation", attempt: 1, status: "awaiting_approval", approvalRequired: true,
+      input: { orderId: order.id, amount: { amountMinor: 12500, currency: "USD" }, reason: "Damage" }, output: null,
+      startedAt: 1, finishedAt: null, durationMs: 0, tokens: { input: 0, output: 0 }, error: null, blockedBy: [] }],
+  };
+}
 
 async function settle(assertion: () => void) {
   await vi.waitFor(async () => {
@@ -226,7 +243,7 @@ async function mount(page: "request" | "inbox" = "request", path = "/inbox") {
 }
 
 function LocalAgentSync() {
-  useDbSync({ queryClient: client });
+  useDbSync({ queryClient: client, ...(remoteSync ? { realtime: { reason: "Incoming requests change while the inbox is open" } } : {}) });
   return null;
 }
 async function render(page: "request" | "inbox", path = "/inbox") {
@@ -261,6 +278,10 @@ beforeEach(() => {
   savedRefunds = [];
   savedReplacements = [];
   calls = [];
+  processing = [];
+  incoming = [];
+  recipeRun = awaitingRun();
+  remoteSync = false;
   demonstration = null;
   captureFailure = false;
   agent.send.mockReset();
@@ -434,7 +455,7 @@ beforeEach(() => {
           return result(
             emptyInbox
               ? []
-              : fixtures.requests.filter(
+              : [...fixtures.requests, ...incoming].filter(
                   (item) =>
                     (!input.customerId ||
                       item.customerId === input.customerId) &&
@@ -445,6 +466,18 @@ beforeEach(() => {
                         : item.content.type) === input.type),
                 ),
           );
+        case "list-request-processing":
+          return Response.json(processing);
+        case "get-recipe-run":
+          return Response.json(recipeRun);
+        case "resume-recipe-run":
+          recipeRun = { ...recipeRun, status: input.approval.decision === "approve" ? "completed" : "aborted", awaitingApprovalStepId: null };
+          processing = [processingRow("done")];
+          return Response.json(recipeRun);
+        case "demo-intake":
+          incoming = Array.from({ length: 5 }, (_, index) => ({ ...request, id: `req_new${index}` as const, subject: `Incoming demo ${index}` }));
+          processing = incoming.map((item) => processingRow("with_agent", item.id));
+          return Response.json(incoming);
         case "set-request-status":
           request = {
             ...request,
@@ -521,6 +554,160 @@ afterEach(async () => {
 });
 
 describe("shop workspace with real framework action hooks and an offline action transport", () => {
+  it("keeps the approval banner available while Teach starts and saves on the same request", async () => {
+    processing = [processingRow("awaiting_approval")];
+    await mount();
+    await settle(() => expect(container.textContent).toContain("Step refund · issue-refund"));
+    expect(byText("Approve")).toBeDefined();
+    await click(byText("Teach"));
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+    expect(container.querySelector('[data-processing="awaiting_approval"]')).not.toBeNull();
+    await click(byText("Stop & save"));
+    await settle(() => expect(demonstration?.status).toBe("completed"));
+    expect(container.textContent).toContain("Step refund · issue-refund");
+    expect(byText("Approve")).toBeDefined();
+    expect(writes("resume-recipe-run")).toHaveLength(0);
+  });
+  it("shows every processing outcome alongside shop status, with none invented for seed requests", async () => {
+    processing = PROCESSING_STATES.map((state, index) => processingRow(state, fixtures.requests[index]!.id));
+    processing.push(processingRow(null, fixtures.requests[4]!.id));
+    await mount("inbox");
+    await settle(() => expect(container.querySelectorAll("[data-processing]")).toHaveLength(5));
+    for (const state of PROCESSING_STATES) {
+      const chip = element(`[data-processing="${state}"]`);
+      expect(chip.closest("li")?.querySelector("[data-status]")).not.toBeNull();
+    }
+    expect(container.querySelectorAll(".shop-inbox-row").length).toBeGreaterThan(5);
+    expect(container.textContent).toContain("Processing…");
+  });
+
+  it("combines the processing URL filter with shop filters and updates membership after agent changes", async () => {
+    processing = [processingRow("awaiting_approval")];
+    const type = request.content.source === "structured" ? request.content.fields.type : request.content.type;
+    await mount("inbox", `/inbox?processing=awaiting_approval&status=${request.status}&type=${type}`);
+    await settle(() => expect(container.querySelectorAll(".shop-inbox-row")).toHaveLength(1));
+    expect(calls.find((call) => call.name === "list-requests")?.input).toEqual({ status: request.status, type });
+    processing = [processingRow("done")];
+    await act(async () => window.dispatchEvent(new CustomEvent("agent-native:tool-done", { detail: { tool: "resume-recipe-run", completedSideEffect: true } })));
+    await settle(() => expect(container.querySelectorAll(".shop-inbox-row")).toHaveLength(0));
+    await click(byText("Clear filters"));
+    await settle(() => expect(container.querySelector('[data-processing="done"]')).not.toBeNull());
+  });
+
+  it("injects a real demo action, blocks duplicate submissions and shows arriving requests without reload", async () => {
+    await mount("inbox");
+    let release!: () => void;
+    holdWrite = () => new Promise<void>((resolve) => { release = resolve; });
+    const button = byText("Demo · Simulate incoming requests");
+    await click(button);
+    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(button.textContent).toContain("Processing incoming");
+    await click(button);
+    expect(writes("demo-intake")).toHaveLength(1);
+    await act(async () => { holdWrite = undefined; release(); });
+    await settle(() => expect(container.textContent).toContain("Incoming demo 4"));
+    expect(writes("demo-intake")[0]?.input).toEqual({});
+    expect(container.textContent).toContain("5 requests added");
+    expect(container.querySelectorAll('[data-processing="with_agent"]')).toHaveLength(5);
+  });
+
+  it("reports demo failure with partial-batch guidance and rereads saved requests", async () => {
+    await mount("inbox");
+    failure = "demo-intake";
+    incoming = [{ ...request, id: "req_partial", subject: "Saved before error" }];
+    await click(byText("Demo · Simulate incoming requests"));
+    await settle(() => expect(container.textContent).toContain("Some requests may already be saved"));
+    await settle(() => expect(container.textContent).toContain("Saved before error"));
+    expect(writes("demo-intake")).toHaveLength(1);
+  });
+
+  it("opens a queued handoff in the shared sidebar with saved run IDs and bounded context", async () => {
+    processing = [processingRow("with_agent")];
+    recipeRun = { ...recipeRun, status: "handed_off", awaitingApprovalStepId: null, handoff: {
+      status: "delivered", error: null, context: { idempotencyKey: "run_ui:handoff", runId: "run_ui", recipeVersionId: damagedItemFixture.id,
+        trigger: { privateOriginal: "Do not copy this into the chat context" }, stepId: "handoff", to: "agent", reason: "step", note: "No matching recipe; review the wholesale inquiry", steps: [], outputs: {} },
+    } };
+    await mount();
+    await settle(() => expect(container.textContent).toContain("Handoff queued for agent review"));
+    await click(byText("Open handoff in agent"));
+    expect(agent.send).toHaveBeenCalledWith(expect.objectContaining({ submit: true, openSidebar: true, message: expect.stringContaining("get-recipe-run") }));
+    const context = agent.send.mock.calls[0]![0].context;
+    expect(JSON.parse(context)).toMatchObject({ requestId: request.id, runId: "run_ui", handoffStepId: "handoff" });
+    expect(context).not.toContain("privateOriginal");
+    expect(writes()).toHaveLength(0);
+  });
+
+  it.each(["approve", "reject"] as const)("shows the saved step and amount and sends exact %s decision, refreshing the banner", async (decision) => {
+    processing = [processingRow("awaiting_approval")];
+    await mount();
+    await settle(() => expect(container.textContent).toContain("Step refund · issue-refund"));
+    expect(container.textContent).toContain("125.00");
+    let release!: () => void;
+    holdWrite = () => new Promise<void>((resolve) => { release = resolve; });
+    await click(byText(decision === "approve" ? "Approve" : "Reject"));
+    expect(byText("Reject").hasAttribute("disabled")).toBe(true);
+    await click(byText("Reject"));
+    expect(writes("resume-recipe-run")).toHaveLength(1);
+    await act(async () => { holdWrite = undefined; release(); });
+    await settle(() => expect(container.querySelector('[aria-label="Request processing"]')).toBeNull());
+    expect(writes("resume-recipe-run")[0]?.input).toEqual({ runId: "run_ui", approval: { stepId: "refund", decision } });
+    expect(writes("issue-refund")).toHaveLength(0);
+  });
+
+  it("keeps approval errors visible, rereads the checkpoint and disables decisions on failed refresh", async () => {
+    processing = [processingRow("awaiting_approval")];
+    await mount();
+    await settle(() => expect(container.textContent).toContain("Step refund"));
+    failure = "resume-recipe-run";
+    await click(byText("Approve"));
+    await settle(() => expect(container.textContent).toContain("Review its state before deciding again"));
+    failure = "get-recipe-run";
+    await act(async () => { await client.invalidateQueries({ queryKey: ["action"] }); });
+    await settle(() => expect(byText("Approve").hasAttribute("disabled")).toBe(true));
+    expect(writes("resume-recipe-run")).toHaveLength(1);
+  });
+
+  it("reports a processing read failure without claiming a filtered inbox is empty", async () => {
+    failure = "list-request-processing";
+    await mount("inbox", "/inbox?processing=with_agent");
+    await settle(() => expect(container.querySelector('[role="alert"]')).not.toBeNull());
+    expect(container.textContent).not.toContain("No requests match");
+  });
+
+  it("limits live sync to shop work routes", () => {
+    expect(isLiveShopPath("/inbox")).toBe(true);
+    expect(isLiveShopPath("/requests/req_0001")).toBe(true);
+    for (const path of ["/", "/sign-in", "/chat", "/settings", "/inbox/public", "/requests"]) expect(isLiveShopPath(path)).toBe(false);
+  });
+
+  it("receives external arrivals and processing changes through the framework's shared SSE transport", async () => {
+    const sources: FakeEventSource[] = [];
+    class FakeEventSource {
+      static CLOSED = 2;
+      readyState = 1;
+      onopen: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      constructor() { sources.push(this); }
+      close() {}
+      addEventListener() {}
+    }
+    vi.stubGlobal("EventSource", FakeEventSource);
+    remoteSync = true;
+    await mount("inbox");
+    await settle(() => expect(sources[0]?.onmessage).toBeTypeOf("function"));
+    const source = sources[0]!;
+    incoming = [{ ...request, id: "req_remote", subject: "External arrival" }];
+    processing = [processingRow("awaiting_approval", "req_remote")];
+    await act(async () => source?.onmessage?.({ data: JSON.stringify({ version: 1, events: [{ source: "action", version: 1 }] }) }));
+    await settle(() => expect(container.textContent).toContain("External arrival"));
+    expect(container.querySelector('[data-processing="awaiting_approval"]')).not.toBeNull();
+    processing = [processingRow("done", "req_remote")];
+    await act(async () => source?.onmessage?.({ data: JSON.stringify({ version: 2, events: [{ source: "action", version: 2 }] }) }));
+    await settle(() => expect(container.querySelector('[data-processing="done"]')).not.toBeNull());
+    expect(writes()).toHaveLength(0);
+  });
+
   it.each(
     menuDialogs.flatMap((dialog) =>
       ["submit", "cancel", "rejected submit"].map((exit) => ({

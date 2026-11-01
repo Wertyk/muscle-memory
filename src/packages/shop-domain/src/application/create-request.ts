@@ -67,7 +67,7 @@ export class CreateRequest {
         const valid = await new ValidateRequestFields(shop).execute({ customerId: value.customerId, fields: value.content.fields });
         if (!valid.ok) return valid;
       }
-      const requestId = parseShopId("request", this.deps.ids.next("request"));
+      const requestId = parseShopId("request", await shop.nextSequentialId("request"));
       if (!requestId.ok) return requestId;
       const timestamp = this.deps.clock.now();
       if (!Number.isFinite(Date.parse(timestamp))) return invalidInput("clock", "Expected a valid timestamp");

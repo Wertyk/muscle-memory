@@ -61,8 +61,25 @@ and `resume-recipe-run` to approve/reject its exact awaiting step; intake never 
 and `done` from durable run/shop records, including later approval/resolution changes.
 Null state means intake is still in flight or was interrupted before run creation.
 After creating/injecting requests, verify their IDs in both `list-requests` and
-`list-request-processing`; do not infer the outcome from the demo script. Phase 1
-does not install fixture recipes or add inbox chips/a demo button.
+`list-request-processing`; do not infer the outcome from the demo script. The
+inbox Demo control calls `demo-intake`; it does not install fixture recipes.
+Repeated batches create real requests/effects; a failed batch can be partly saved.
+Processing chips are additive to shop status; the `processing` URL filter combines
+with `status`/`type`. Seeded requests have no processing chip. `view-screen` includes
+the filtered records and processing projection. The request banner reads
+`get-recipe-run` for the exact awaiting step and resolved amount; Approve/Reject
+call `resume-recipe-run`. Open handoff in agent submits a request/run-ID prompt to
+the shared sidebar; read saved context before continuing, preserving completed effects.
+
+New request/order IDs continue the seed's numeric series (`req_0061`, `ord_1062`),
+including replacement orders. Allocation and insertion use the same serialized shop
+transaction; existing IDs are unchanged. Other entity IDs may remain random.
+Successful free-text extraction persists its type through `ClassifyRequest`, even
+when no recipe matches. Original message/source/order link and operator changes are
+preserved. Type filters work after reload; failed/incomplete extraction stays
+unclassified. Redelivery reuses the saved match to retry classification without
+another model call. Scripted intake uses natural customer text without disclosure
+words; the UI control remains explicitly labelled as a demo tool.
 
 Opt-in live proof: `pnpm smoke:shop-actions`. It seeds an isolated temporary
 PGlite with `pnpm -C src seed:shop`, checks CLI/frontend parity, then calls the
@@ -77,11 +94,27 @@ Only sanitized assertions/metadata are saved to `scripts/shop-actions-evidence.j
 
 ## Request workspace
 
-`/inbox` calls `list-requests` with status/type URL filters and `get-customer` for customer names. `/requests/:requestId` calls `get-request`, `get-customer`, `get-order`, `get-shipment-status` and `get-request-activity`. The reply composer calls `send-reply` (plain text or literal template plus optional JSON variables); Add tag calls `tag-request`; Resolve/status menu calls `set-request-status`; Escalate calls `escalate` with a reason. Order actions call `issue-refund`, `create-replacement-order`, `update-shipping-address` and `generate-return-label`. The server validates all policies. Framework action queries refresh after both frontend mutations and the current user's agent writes; no background polling is needed.
+`/inbox` calls `list-requests` with status/type URL filters and `get-customer` for customer names. `/requests/:requestId` calls `get-request`, `get-customer`, `get-order`, `get-shipment-status` and `get-request-activity`. The reply composer calls `send-reply` (plain text or literal template plus optional JSON variables); Add tag calls `tag-request`; Resolve/status menu calls `set-request-status`; Escalate calls `escalate` with a reason. Order actions call `issue-refund`, `create-replacement-order`, `update-shipping-address` and `generate-return-label`. The server validates all policies. Framework action queries refresh after frontend mutations and the current user's agent writes. Only `/inbox` and `/requests/:requestId` opt into shared `useDbSync` for external arrivals and recipe changes; hidden tabs pause and idle polling backs off. Other routes keep background sync off.
 
 Handle with agent stages a bounded request-specific prompt in the contextual sidebar using `sendToAgentChat`; the operator sends it there and can steer the same conversation. Replies are demo records, not externally delivered email. Activity is read through the same read-only `get-request-activity` action the agent uses; replies, refunds, replacements and labels remain visible after reload. Existing request snapshots are labeled Recorded request state, not invented change history. The Teach bar records the current request through the shared demonstration actions below.
 
 Seed content and relative time offsets are deterministic. `pnpm -C src seed:shop` anchors timestamps to the current seeding minute; set `SHOP_DEMO_ANCHOR` to an ISO timestamp for a fixed rehearsal/test anchor (also floored to the minute). The generator accepts an explicit anchor for offline fixtures.
+
+For another rehearsal, `pnpm -C src seed:shop` atomically removes prior shop-linked
+intake checkpoints, handoffs, recipe runs and demonstrations/steps before restoring
+the shop seed. Recipe catalog entries and immutable versions survive, so active recipes remain usable.
+`pnpm -C src reset:shop` performs the same cleanup and leaves the shop empty.
+Add `--all` to either command for a pristine rehearsal: all recipe runs/handoffs,
+catalog entries and versions are removed too. `seed:shop --all` restores only the
+shop seed; it never installs fixture recipes. Framework data and migration records
+survive every mode. Run these maintenance commands between executions; they do not
+cancel an in-flight worker.
+
+TASK-9 demonstrations/steps are registered alongside intake data. Register additional
+shop-dependent tables
+in `server/infra/shop-reset-dependents.ts`, before their parents in DELETE order.
+That registry controls cleanup and locking for both commands; do not add separate
+seed-only teardown code. Missing optional tables are skipped on shop-only schemas.
 
 ## Building a domain app
 
@@ -126,7 +159,8 @@ The bar observes framework action queries and opts into the shared sync transpor
 only while recording, because read-only shop calls also write captured steps.
 Those notifications target the demonstrations resource; shop query observers declare
 the shop resource to prevent refetch/capture loops. No feature polling loop exists.
-Demonstrations are historical snapshots and survive shop reseeding.
+Demonstrations retain historical snapshots until an explicit rehearsal reset/reseed,
+which removes their headers and steps together with other shop operational data.
 
 Offline tests cover the capture-failure refund regression and the Teach controls.
 Opt-in HTTP proof: `pnpm exec tsx scripts/teach-mode-smoke.ts` from apps/web. It

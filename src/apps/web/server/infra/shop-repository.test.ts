@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { closeDbExec, getDbExec, withMigrationRuntime } from "@agent-native/core/db";
 import {
-  CreateReplacementOrder, Escalate, GenerateReturnLabel, GetShipmentStatus, GetRequestActivity,
+  CreateRequest, CreateReplacementOrder, Escalate, GenerateReturnLabel, GetShipmentStatus, GetRequestActivity,
   ID_PREFIXES, IssueRefund, REQUEST_TYPES, SendReply, SetRequestStatus, TagRequest,
   UpdateShippingAddress, invalidInput, parseShopId, requestType, success,
   type IdGenerator, type Order, type Refund, type Result,
@@ -64,6 +64,66 @@ describe("shop persistence on local PGlite", () => {
       replies: await db.select().from(tables.replies).orderBy(asc(tables.replies.id)),
     };
   }
+
+  it("allocates sequential request and replacement IDs after the seed under competing repository transactions", async () => {
+    const operations = Array.from({ length: 8 }, () => {
+      const independent = { ...deps(), shop: new DrizzleShopRepository(db) };
+      return [
+        new CreateRequest(independent).execute({ customerId: customer.id, subject: "Delivery update", content: { source: "free_text", text: "Could you check my order?" } }),
+        new CreateReplacementOrder(independent).execute({ orderId: order.id }),
+      ] as const;
+    });
+    const createdRequests = (await Promise.all(operations.map(pair => pair[0]))).map(value);
+    const replacements = (await Promise.all(operations.map(pair => pair[1]))).map(value);
+    expect(createdRequests.map(row => row.id).sort()).toEqual(Array.from({ length: 8 }, (_, index) => `req_${String(61 + index).padStart(4, "0")}`));
+    expect(replacements.map(row => row.id).sort()).toEqual(Array.from({ length: 8 }, (_, index) => `ord_${1062 + index}`));
+    expect(new Set([...createdRequests, ...replacements].map(row => row.id)).size).toBe(16);
+    // A new instance derives its next IDs from committed rows, with no local counter.
+    const fresh = { ...deps(), shop: new DrizzleShopRepository(db) };
+    expect(value(await new CreateRequest(fresh).execute({ customerId: customer.id, subject: "Another question", content: { source: "free_text", text: "Hello" } })).id).toBe("req_0069");
+    expect(value(await new CreateReplacementOrder(fresh).execute({ orderId: order.id })).id).toBe("ord_1070");
+  });
+
+  it("rolls allocation back with the insert and preserves legacy IDs and numeric growth after 9999", async () => {
+    const before = await snapshot();
+    const rolledBack = await shop.transaction(async records => {
+      const requestId = value(parseShopId("request", await records.nextSequentialId("request")));
+      await records.createRequest({ ...request, id: requestId });
+      const orderId = value(parseShopId("order", await records.nextSequentialId("order")));
+      await records.createOrder({ ...order, id: orderId });
+      return invalidInput("request", "Abort both inserts");
+    });
+    expect(rolledBack.ok).toBe(false);
+    expect(await snapshot()).toEqual(before);
+    await shop.transaction(async records => {
+      expect(await records.nextSequentialId("request")).toBe("req_0061");
+      expect(await records.nextSequentialId("order")).toBe("ord_1062");
+      return success(null);
+    });
+    await shop.createRequest({ ...request, id: "req_f46f14c03ac7b179" });
+    await shop.createOrder({ ...order, id: "ord_abcdef0123456789" });
+    await shop.transaction(async records => {
+      expect(await records.nextSequentialId("request")).toBe("req_0061");
+      expect(await records.nextSequentialId("order")).toBe("ord_1062");
+      return success(null);
+    });
+    await shop.createRequest({ ...request, id: "req_9999" });
+    await shop.createOrder({ ...order, id: "ord_9999" });
+    const created = value(await new CreateRequest(deps()).execute({ customerId: customer.id, subject: "A new question", content: { source: "free_text", text: "Hello" } }));
+    expect(created.id).toBe("req_10000");
+    expect(value(await new CreateReplacementOrder(deps()).execute({ orderId: order.id })).id).toBe("ord_10000");
+    expect((await shop.getRequest("req_f46f14c03ac7b179"))?.id).toBe("req_f46f14c03ac7b179");
+    expect((await shop.getOrder("ord_abcdef0123456789"))?.id).toBe("ord_abcdef0123456789");
+  });
+
+  it("keeps the 31-character bound when the numeric namespace is exhausted", async () => {
+    await shop.createRequest({ ...request, id: `req_${"9".repeat(27)}` });
+    await shop.createOrder({ ...order, id: `ord_${"9".repeat(27)}` });
+    const before = await snapshot();
+    expect(await new CreateRequest(deps()).execute({ customerId: customer.id, subject: "Question", content: { source: "free_text", text: "Hi" } })).toMatchObject({ ok: false, error: { field: "id" } });
+    expect(await new CreateReplacementOrder(deps()).execute({ orderId: order.id })).toMatchObject({ ok: false, error: { field: "id" } });
+    expect(await snapshot()).toEqual(before);
+  });
 
   it("runs the named migration once and preserves existing data on reruns", async () => {
     const before = await snapshot();
@@ -202,6 +262,8 @@ describe("shop persistence on local PGlite", () => {
     await expect(shop.createReply(present(fixtures.replies[0]))).rejects.toThrow();
     await expect(shop.createOrder({ ...order, id: "ord_new", customerId: "cus_missing" })).rejects.toThrow();
     await expect(shop.createOrder({ ...order, id: `ord_${"x".repeat(32)}` })).rejects.toThrow();
+    await expect(shop.createRequest({ ...request, id: `req_${"x".repeat(32)}` })).rejects.toThrow();
+    await expect(shop.createRequest({ ...request, id: "req_bad-id" })).rejects.toThrow();
     await expect(shop.saveOrder({ ...order, id: "ord_missing" })).rejects.toThrow("missing order");
     await expect(shop.saveRequest({ ...request, id: "req_missing" })).rejects.toThrow("missing request");
     expect(await shop.getOrder("ord_missing")).toBeNull();

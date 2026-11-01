@@ -173,7 +173,7 @@ export class CreateReplacementOrder {
       if (!original.ok) return original;
       const contents = replacementContents(original.value, input.items);
       if (!contents.ok) return contents;
-      const id = nextId(this.deps.ids, "order");
+      const id = parseShopId("order", await shop.nextSequentialId("order"));
       if (!id.ok) return id;
       const createdAt = now(this.deps.clock);
       if (!createdAt.ok) return createdAt;

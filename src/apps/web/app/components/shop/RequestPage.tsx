@@ -27,6 +27,7 @@ import type { SavedResult } from "./ActionForm";
 import { ActivityTimeline } from "./ActivityTimeline";
 import { OrderOperations } from "./OrderOperations";
 import { ReplyForm, RequestControls, TagForm } from "./RequestControls";
+import { RequestProcessingBanner } from "./RequestProcessingBanner";
 import {
   QueryError,
   ShopMasthead,
@@ -292,6 +293,7 @@ export function RequestPage({ requestId }: { requestId: string }) {
           <RequestControls request={request} onSaved={setSaved} />
         </div>
       </header>
+      <RequestProcessingBanner requestId={requestId} />
       <div className="shop-teach-slot" data-teach-slot="reserved">
         <IconPlayerRecord className="size-4" aria-hidden="true" />
         <span className="font-medium">{t("shop.teach")}</span>

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CreateRequest, ValidateRequestFields, type CreateRequestInput } from "./create-request.js";
 import { setup, customer, order, request, address } from "../../test/fakes.js";
 
@@ -8,7 +8,7 @@ describe("shop request intake", () => {
   it("creates a detached open structured request, linked to its customer's order", async () => {
     const deps = setup();
     const result = await new CreateRequest(deps).execute(input());
-    expect(result).toMatchObject({ ok: true, value: { id: "req_101", customerId: customer.id, orderId: order.id, status: "open", tags: [], escalation: null } });
+    expect(result).toMatchObject({ ok: true, value: { id: "req_0008", customerId: customer.id, orderId: order.id, status: "open", tags: [], escalation: null } });
     expect(deps.shop.requests.size).toBe(2);
   });
   it("keeps free text unclassified until extraction", async () => {
@@ -38,8 +38,24 @@ describe("shop request intake", () => {
     const create = new CreateRequest(deps);
     expect((await create.execute({ customerId: "cus_missing", subject: "Hi", content: { source: "free_text", text: "Hi" } })).ok).toBe(false);
     expect((await create.execute({ ...input(), content: { source: "structured", fields: { type: "address_change", orderId: order.id, address } } })).ok).toBe(true);
-    const collision = new CreateRequest({ ...deps, ids: { next: () => request.id } });
-    await expect(collision.execute(input())).rejects.toThrow("Duplicate request ID");
+    vi.spyOn(deps.shop, "nextSequentialId").mockResolvedValue(request.id);
+    await expect(create.execute(input())).rejects.toThrow("Duplicate request ID");
     expect(deps.shop.requests.size).toBe(2);
+  });
+  it("allocates readable IDs in the transaction without using the random ID port", async () => {
+    const deps = setup();
+    const next = vi.spyOn(deps.ids, "next");
+    const create = new CreateRequest(deps);
+    const results = await Promise.all(Array.from({ length: 6 }, () => create.execute(input())));
+    expect(results.map(result => result.ok ? result.value.id : null)).toEqual([
+      "req_0008", "req_0009", "req_0010", "req_0011", "req_0012", "req_0013",
+    ]);
+    expect(next).not.toHaveBeenCalled();
+  });
+  it.each(["ord_1001", `req_${"9".repeat(28)}`])("rejects an invalid allocated request ID %s", async (id) => {
+    const deps = setup();
+    vi.spyOn(deps.shop, "nextSequentialId").mockResolvedValue(id);
+    expect(await new CreateRequest(deps).execute(input())).toMatchObject({ ok: false, error: { code: "INVALID_INPUT", field: "id" } });
+    expect(deps.shop.requests.size).toBe(1);
   });
 });

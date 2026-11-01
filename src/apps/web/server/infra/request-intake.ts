@@ -2,7 +2,7 @@ import {
   buildRequestTrigger, parseRecipeVersion, type JsonObject, type MatchReason, type MatchRequest, type RequestMatch,
   type RunRecipe, type RunRepository,
 } from "@muscle-memory/recipe-engine";
-import type { CreateRequestInput, Request, RequestId } from "@muscle-memory/shop-domain";
+import { REQUEST_TYPES, type CreateRequestInput, type Request, type RequestId, type RequestType } from "@muscle-memory/shop-domain";
 import { eq } from "drizzle-orm";
 import type { ShopDb } from "../db/index.js";
 import { requestProcessing } from "../db/schema.js";
@@ -17,6 +17,7 @@ const fallback = parseRecipeVersion({
 
 interface IntakeDependencies {
   readonly create: (input: CreateRequestInput) => Promise<Request>;
+  readonly classify: (requestId: RequestId, type: RequestType) => Promise<Request>;
   readonly get: (id: RequestId) => Promise<Request | null>;
   readonly matcher: (request: Request) => MatchRequest;
   readonly executor: (runId: string) => { readonly runRecipe: RunRecipe; readonly runs: RunRepository };
@@ -65,6 +66,12 @@ export class RequestIntake {
       }
       assertRunLockActive();
       await this.db.update(requestProcessing).set({ match }).where(eq(requestProcessing.requestId, requestId));
+      const type = REQUEST_TYPES.find((value) => value === match.trigger.type);
+      if (request.content.source === "free_text" && match.reason !== "extraction_failed" && type) {
+        // Match is durable first. A crash here can retry classification from the
+        // checkpoint, including no-match/ambiguous cases, without another model call.
+        await this.deps.classify(requestId, type);
+      }
       const executor = this.deps.executor(runId);
       const existing = await executor.runs.get(runId);
       if (existing) {

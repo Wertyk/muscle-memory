@@ -2,6 +2,9 @@ export const INBOX_PATH = "/inbox";
 export const requestPath = (id: string) =>
   `/requests/${encodeURIComponent(id)}`;
 
+export const isLiveShopPath = (path: string) =>
+  path === INBOX_PATH || Boolean(requestIdFromPath(path));
+
 export function requestIdFromPath(path: string): string | undefined {
   const encoded = path.match(/^\/requests\/([^/]+)\/?$/)?.[1];
   if (!encoded) return undefined;

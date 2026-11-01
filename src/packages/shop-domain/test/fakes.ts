@@ -3,7 +3,7 @@ import {
   type Order, type OrderId, type Product, type ProductId, type Refund, type Reply,
   type Request, type RequestFilter, type RequestId, type Result, type Shipment,
 } from "../src/domain/index.js";
-import type { Clock, IdGenerator, ShopRecords, ShopRepository } from "../src/application/ports.js";
+import type { Clock, IdGenerator, ShopRepository, ShopTransaction } from "../src/application/ports.js";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -31,6 +31,14 @@ export class InMemoryShop implements ShopRepository {
   refunds: Refund[] = [];
   replies: Reply[] = [];
   private pending: Promise<unknown> = Promise.resolve();
+
+  async nextSequentialId(kind: "request" | "order"): Promise<string> {
+    const prefix = ID_PREFIXES[kind];
+    const ids = kind === "request" ? [...this.requests.keys()] : [...this.orders.keys()];
+    const numeric = ids.filter(id => new RegExp(`^${prefix}_[0-9]+$`).test(id));
+    const maximum = numeric.reduce((max, id) => Math.max(max, Number(id.slice(4))), kind === "request" ? 0 : 1000);
+    return `${prefix}_${String(maximum + 1).padStart(4, "0")}`;
+  }
 
   async listRequests(filter: RequestFilter): Promise<readonly Request[]> {
     return clone([...this.requests.values()].filter((request) =>
@@ -77,7 +85,7 @@ export class InMemoryShop implements ShopRepository {
     this.replies.push(clone(reply));
   }
 
-  transaction<T>(work: (records: ShopRecords) => Promise<Result<T>>): Promise<Result<T>> {
+  transaction<T>(work: (records: ShopTransaction) => Promise<Result<T>>): Promise<Result<T>> {
     const operation = this.pending.then(async () => {
       const orders = new Map(clone([...this.orders]));
       const requests = new Map(clone([...this.requests]));

@@ -3,7 +3,8 @@ import { readAppStateForCurrentTab } from "@agent-native/core/application-state"
 import { REQUEST_STATUSES, REQUEST_TYPES } from "@muscle-memory/shop-domain";
 import { z } from "zod";
 
-import { getShopUseCases } from "../server/composition.js";
+import { getRequestIntake, getShopUseCases } from "../server/composition.js";
+import { PROCESSING_STATES } from "../shared/request-processing.js";
 import { shopId, shopResult } from "../server/shop-action-contracts.js";
 
 export default defineAction({
@@ -29,6 +30,7 @@ export default defineAction({
         }),
       );
       screen.request = request;
+      screen.processing = (await getRequestIntake().processing.list([request.id]))[0] ?? null;
       screen.activity = await shopResult(
         useCases.getRequestActivity.execute({ requestId: request.id }),
       );
@@ -58,10 +60,17 @@ export default defineAction({
         ...(status ? { status } : {}),
         ...(type ? { type } : {}),
       };
-      screen.activeFilters = filter;
-      screen.requests = await shopResult(
+      const processing = PROCESSING_STATES.find(
+        (value) => value === (params.success ? params.data.processing : undefined),
+      );
+      const rows = await getRequestIntake().processing.list();
+      screen.activeFilters = { ...filter, ...(processing ? { processing } : {}) };
+      const requests = await shopResult(
         getShopUseCases().listRequests.execute(filter),
       );
+      const visible = requests.filter((request) => !processing || rows.some((row) => row.requestId === request.id && row.state === processing));
+      screen.requests = visible;
+      screen.processing = rows.filter((row) => visible.some((request) => request.id === row.requestId));
     }
     return Object.keys(screen).length
       ? screen

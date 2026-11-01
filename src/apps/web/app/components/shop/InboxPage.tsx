@@ -9,6 +9,7 @@ import {
 } from "@muscle-memory/shop-domain";
 import { IconArrowUpRight, IconFilter } from "@tabler/icons-react";
 import { Link, useSearchParams } from "react-router";
+import { PROCESSING_STATES, type RequestProcessing } from "@shared/request-processing";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ageText, dateText, requestPath } from "@/lib/shop-workspace";
+import { DemoIntakeControl } from "./DemoIntakeControl";
+import { ProcessingChip } from "./ProcessingChip";
 
 import {
   EmptyState,
@@ -56,6 +59,10 @@ export function InboxPage() {
     (value) => value === params.get("status"),
   );
   const type = REQUEST_TYPES.find((value) => value === params.get("type"));
+  const processing = PROCESSING_STATES.find((value) => value === params.get("processing"));
+  const processingQuery = useActionQuery<readonly RequestProcessing[]>(
+    "list-request-processing", {}, { placeholderData: (previous) => previous },
+  );
   const query = useActionQuery<readonly Request[]>(
     "list-requests",
     {
@@ -72,7 +79,7 @@ export function InboxPage() {
       return next;
     });
   }
-  if (query.isPending) return <WorkspaceLoading />;
+  if (query.isPending || (processing && processingQuery.isPending)) return <WorkspaceLoading />;
   if (query.isError && !query.data)
     return (
       <div className="shop-page">
@@ -80,7 +87,10 @@ export function InboxPage() {
         <QueryError error={query.error} retry={() => void query.refetch()} />
       </div>
     );
-  const requests = [...(query.data ?? [])].sort(
+  const processingById = new Map((processingQuery.data ?? []).map((row) => [row.requestId, row]));
+  const requests = [...(query.data ?? [])].filter(
+    (request) => !processing || processingById.get(request.id)?.state === processing,
+  ).sort(
     (a, b) =>
       Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
       a.id.localeCompare(b.id),
@@ -94,7 +104,7 @@ export function InboxPage() {
           className="flex items-center gap-2 text-sm tabular-nums text-muted-foreground"
           aria-live="polite"
         >
-          {query.isFetching && (
+          {(query.isFetching || processingQuery.isFetching) && (
             <>
               <PendingMark />
               <span className="sr-only">{t("shop.updating")}</span>
@@ -103,6 +113,7 @@ export function InboxPage() {
           {t("shop.requestCount", { count: requests.length })}
         </span>
       </header>
+      <DemoIntakeControl />
       <div className="shop-filters">
         <IconFilter
           className="hidden size-4 text-muted-foreground sm:block"
@@ -146,7 +157,18 @@ export function InboxPage() {
             ))}
           </SelectContent>
         </Select>
-        {(status || type) && (
+        <Select value={processing ?? "all"} onValueChange={(value) => filter("processing", value)}>
+          <SelectTrigger aria-label={t("shop.processingFilter")} className="w-full sm:w-52">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("shop.allProcessing")}</SelectItem>
+            {PROCESSING_STATES.map((value) => (
+              <SelectItem key={value} value={value}>{t(`shop.processingStates.${value}`)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(status || type || processing) && (
           <Button size="sm" variant="ghost" onClick={() => setParams({})}>
             {t("shop.clearFilters")}
           </Button>
@@ -159,20 +181,24 @@ export function InboxPage() {
           retry={() => void query.refetch()}
         />
       )}
+      {processingQuery.isError && (
+        <QueryError error={processingQuery.error} stale={Boolean(processingQuery.data)} retry={() => void processingQuery.refetch()} />
+      )}
+      {processingQuery.isPending && <p role="status" className="mb-4 text-xs text-muted-foreground">{t("shop.loadingProcessing")}</p>}
       {requests.length === 0 ? (
-        <EmptyState
+        !(processing && processingQuery.isError) && <EmptyState
           title={t(
-            status || type ? "shop.noRequestsFiltered" : "shop.noRequests",
+            status || type || processing ? "shop.noRequestsFiltered" : "shop.noRequests",
           )}
         >
-          {!(status || type) && (
+          {!(status || type || processing) && (
             <p className="mt-2 text-sm text-muted-foreground">
               {t("shop.noRequestsHint")}
             </p>
           )}
         </EmptyState>
       ) : (
-        <div className="shop-inbox-list" aria-busy={query.isFetching}>
+        <div className="shop-inbox-list" aria-busy={query.isFetching || processingQuery.isFetching}>
           <div className="shop-inbox-columns" aria-hidden="true">
             <span>{t("shop.request")}</span>
             <span>{t("shop.status")}</span>
@@ -210,7 +236,10 @@ export function InboxPage() {
                     )}
                   </div>
                 </div>
-                <StatusChip status={request.status} />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <StatusChip status={request.status} />
+                  {processingById.has(request.id) && <ProcessingChip state={processingById.get(request.id)!.state} />}
+                </div>
                 <time
                   className="shop-inbox-age"
                   dateTime={request.createdAt}

@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { ActionRunContext } from "@agent-native/core/action";
 import { MatchRequest, RunRecipe, type RunRecipeDependencies, type TextExtractor } from "@muscle-memory/recipe-engine";
 import {
-  CreateRequest, ValidateRequestFields, CreateReplacementOrder, Escalate, GenerateReturnLabel, GetCustomer, GetOrder,
+  ClassifyRequest, CreateRequest, ValidateRequestFields, CreateReplacementOrder, Escalate, GenerateReturnLabel, GetCustomer, GetOrder,
   GetRequest, GetRequestActivity, GetShipmentStatus, ID_PREFIXES, IssueRefund, ListRequests, SendReply,
   SetRequestStatus, TagRequest, UpdateShippingAddress, type ShopDependencies,
 } from "@muscle-memory/shop-domain";
@@ -27,6 +27,7 @@ export const shopTraceCapture: TraceCapture = { recording: async () => null };
 export function createShopUseCases(deps: ShopDependencies) {
   return {
     createRequest: new CreateRequest(deps),
+    classifyRequest: new ClassifyRequest(deps),
     validateRequestFields: new ValidateRequestFields(deps.shop),
     listRequests: new ListRequests(deps.shop),
     getRequest: new GetRequest(deps.shop),
@@ -94,6 +95,7 @@ export function createRequestIntake(db: ShopDb, options: Parameters<typeof creat
   const extractor = options.extractor ?? new CompleteTextExtractor();
   const intake = new RequestIntake(db, {
     create: (input) => shopResult(shop.createRequest.execute(input)),
+    classify: (requestId, type) => shopResult(shop.classifyRequest.execute({ requestId, type })),
     get: (id) => new DrizzleShopRepository(db).getRequest(id),
     matcher: (request) => new MatchRequest({
       recipes: catalog,

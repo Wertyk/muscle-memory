@@ -28,6 +28,12 @@ export interface ShopRecords {
   createReply(reply: Reply): Promise<void>;
 }
 
+export interface ShopTransaction extends ShopRecords {
+  /** Next readable ID under the shop write lock. Insert before allocating again;
+   * allocation and insert must commit or roll back in this same transaction. */
+  nextSequentialId(kind: "request" | "order"): Promise<string>;
+}
+
 export interface ShopRepository extends ShopRecords {
   getRequestActivityRecords(requestId: RequestId): Promise<RequestActivityRecords | null>;
   /**
@@ -35,7 +41,7 @@ export interface ShopRepository extends ShopRecords {
    * Commit only an ok result; roll back an error result or exception. Unique IDs
    * must be enforced by create methods. Never retry callbacks with side effects.
    */
-  transaction<T>(work: (records: ShopRecords) => Promise<Result<T>>): Promise<Result<T>>;
+  transaction<T>(work: (records: ShopTransaction) => Promise<Result<T>>): Promise<Result<T>>;
 }
 
 export interface RequestActivityRecords {

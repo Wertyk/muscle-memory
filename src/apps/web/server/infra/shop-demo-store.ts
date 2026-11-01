@@ -1,12 +1,12 @@
 import type { ShopDb } from "../db/index.js";
 import { customers, orders, products, refunds, replies, requests, shipments } from "../db/schema.js";
 import { createShopDemoData } from "../db/shop-demo-data.js";
-import { lockShopWrites } from "./shop-repository.js";
+import { clearShopDependents, type ShopResetOptions } from "./shop-reset-dependents.js";
 
 type Transaction = Parameters<Parameters<ShopDb["transaction"]>[0]>[0];
 
 async function clearShop(tx: Transaction): Promise<void> {
-  // Child-first deletes preserve FK constraints and leave non-shop tables alone.
+  // Operational dependents have already been removed in this same transaction.
   await tx.delete(replies);
   await tx.delete(refunds);
   await tx.delete(requests);
@@ -16,18 +16,19 @@ async function clearShop(tx: Transaction): Promise<void> {
   await tx.delete(customers);
 }
 
-export async function resetShop(db: ShopDb): Promise<void> {
+export async function resetShop(db: ShopDb, options: ShopResetOptions = {}): Promise<void> {
   await db.transaction(async (tx) => {
-    await lockShopWrites(tx);
+    await clearShopDependents(tx, options);
     await clearShop(tx);
   });
 }
 
-/** Replace all shop data atomically; migrations, framework and engine data survive. */
-export async function seedShop(db: ShopDb): Promise<Record<string, number>> {
+/** Replace shop+associated operational data atomically; recipes survive unless all.
+ * Framework data and migration bookkeeping always survive. */
+export async function seedShop(db: ShopDb, options: ShopResetOptions = {}): Promise<Record<string, number>> {
   const data = createShopDemoData();
   await db.transaction(async (tx) => {
-    await lockShopWrites(tx);
+    await clearShopDependents(tx, options);
     await clearShop(tx);
     await tx.insert(customers).values(data.customers);
     await tx.insert(products).values(data.products);

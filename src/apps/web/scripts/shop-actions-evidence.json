@@ -1,0 +1,39 @@
+{
+  "executedAt": "2026-11-01T21:54:10.031Z",
+  "model": "deepseek-v4-pro:0813",
+  "engine": "ai-sdk:openai",
+  "seedCommand": "pnpm -C src seed:shop",
+  "database": "isolated temporary PGlite with deterministic demo seed",
+  "chat": {
+    "endpoint": "/_agent-native/agent-chat",
+    "requestId": "req_0002",
+    "orderId": "ord_1002",
+    "completedTools": [
+      "get-request",
+      "get-order",
+      "get-shipment-status",
+      "send-reply",
+      "set-request-status"
+    ],
+    "elapsedMs": 6746,
+    "onlyShopTools": true
+  },
+  "persisted": {
+    "requestStatus": "resolved",
+    "replyCount": 1,
+    "recipientMatched": true,
+    "carrierMatched": true,
+    "trackingMatched": true,
+    "shipmentStatusIncluded": true,
+    "frontendRefundAmountMinor": 10001
+  },
+  "parity": {
+    "read": "get-shipment-status",
+    "write": "tag-request",
+    "samePrintedResult": true,
+    "writeVisibleInFrontend": true,
+    "transport": "callAction client helper over authenticated HTTP + pnpm action",
+    "frontendRefundAboveLimit": true
+  },
+  "limitation": "Frontend transport is exercised with the real client helper in Happy DOM; the request workspace UI belongs to TASK-8."
+}

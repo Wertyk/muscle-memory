@@ -18,6 +18,7 @@
     "benchmark:llm": "node --env-file=.env --import tsx ../../scripts/llm/llm-benchmark.ts",
     "smoke:extraction": "node --env-file=.env --import tsx ../../scripts/llm/extraction-smoke.ts",
     "smoke:mechanisms": "node --env-file=.env --import tsx ../../scripts/mechanisms/smoke.ts",
+    "smoke:shop-actions": "node --env-file=.env --import tsx scripts/shop-actions-smoke.ts",
     "agent-native:doctor": "agent-native doctor",
     "lint": "oxlint --deny-warnings ."
   },

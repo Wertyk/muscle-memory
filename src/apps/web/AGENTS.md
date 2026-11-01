@@ -17,6 +17,42 @@ Use local docs only (no web research): `pnpm action docs-search --query "<topic>
 
 For custom branding, keep `server/plugins/agent-native-email-branding.ts` aligned: `app.name` appears in transactional email and optional `app.logoUrl` must be an absolute HTTPS URL.
 
+## Shop actions
+
+These actions are shared by frontend hooks, the chat agent, MCP and `pnpm action <name>`.
+Queries use GET and are explicitly read-only. Results are structured domain snapshots;
+policy failures throw typed action errors. Adapters are wired only in `server/composition.ts`.
+
+| Action | Input | Result / use |
+| --- | --- | --- |
+| `list-requests` | Optional `status`, `type`, `customerId`, `tag` | Matching requests; filters combine |
+| `get-request` | `requestId` | Original content, related IDs, status, tags and escalation |
+| `get-order` | `orderId` | Purchased items, payment, address and return label |
+| `get-customer` | `customerId` | Name, email and address book entry |
+| `get-shipment-status` | `orderId` | Order status and shipment (nullable), carrier, tracking and estimate |
+| `issue-refund` | `orderId`, `reason`, optional `amount: { amountMinor, currency }` | Refund; omitted amount refunds remaining payment |
+| `send-reply` | `requestId`, `template`, `variables` | Stored demo reply with rendered body; no external delivery |
+| `tag-request` | `requestId`, `tag` | Request with trimmed, deduplicated tag |
+| `set-request-status` | `requestId`, `status` | Updated request; use `escalate` for the first escalation |
+| `escalate` | `requestId`, `reason` | Escalated request with reason and timestamp |
+| `create-replacement-order` | `orderId`, optional `items: [{ productId, quantity }]` | Unshipped replacement; omit items for all original lines |
+| `update-shipping-address` | `orderId`, complete `address` | Updated order; permitted only before dispatch |
+| `generate-return-label` | `orderId` | Synthetic return label; repeats return the existing label |
+
+The chat plugin eagerly loads the five queries plus `send-reply`, `tag-request`
+and `set-request-status`; other operations remain discoverable with `tool-search`. For shipment requests,
+read the request/order/shipment, store an accurate reply, then resolve when handled.
+Money is in minor units. `issue-refund` uses the shop-domain auto-refund policy
+for agent approval; omitted amounts conservatively require approval too. Frontend
+calls use the framework's UI capability and are not blocked by this agent gate.
+Every shop mutation uses `traced()`; the injected capture stays inactive until
+TASK-9 adds recording/session policy.
+
+Opt-in live proof: `pnpm smoke:shop-actions`. It seeds an isolated temporary
+PGlite with `pnpm -C src seed:shop`, checks CLI/frontend parity, then calls the
+real local chat endpoint using the configured model and verifies persisted effects.
+Only sanitized assertions/metadata are saved to `scripts/shop-actions-evidence.json`.
+
 ## Application state
 
 - `navigation` describes the view and selected ids. Chat is `chat` at `/chat` and `/chat/<threadId>`; the Get started page is `home` at `/home`; `/` opens shared sign-in/signup.

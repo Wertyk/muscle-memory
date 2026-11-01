@@ -1,7 +1,8 @@
 import { parseRecipeVersion, type Run, type RunRepository } from "@muscle-memory/recipe-engine";
 import { and, eq, sql } from "drizzle-orm";
 import type { ShopDb } from "../db/index.js";
-import { recipeRuns, recipeVersions } from "../db/schema.js";
+import { recipeRuns } from "../db/schema.js";
+import { persistRecipeVersion } from "./recipe-catalog.js";
 import { assertRunLockActive, withRunLock } from "./run-lock.js";
 
 export class DrizzleRunRepository implements RunRepository {
@@ -13,11 +14,7 @@ export class DrizzleRunRepository implements RunRepository {
     const recipe = parseRecipeVersion(snapshot.recipe);
     // Version and initial intent commit together; no external callback is inside.
     await this.db.transaction(async (tx) => {
-      await tx.insert(recipeVersions).values({ id: recipe.id, recipeId: recipe.recipeId, version: recipe.version, snapshot: recipe }).onConflictDoNothing();
-      const [version] = await tx.select({ id: recipeVersions.id }).from(recipeVersions).where(and(
-        eq(recipeVersions.id, recipe.id), eq(recipeVersions.snapshot, recipe),
-      ));
-      if (!version) throw new Error("Recipe version identity or number already has a different snapshot.");
+      await persistRecipeVersion(tx as unknown as ShopDb, recipe);
       await tx.insert(recipeRuns).values({ id: snapshot.id, recipeVersionId: recipe.id, checkpoint: snapshot });
     });
   }

@@ -91,6 +91,32 @@ Framework invoker/extraction/handoff adapters, real actions, and DB persistence 
 **Phase 2**, after TASK-3 and TASK-6 merge. Phase 1 verifies the engine side of AC #1/#5 and
 AC #2–#4/#6–#8 with fakes. No `apps/web` integration is included here.
 
+## Request matching (TASK-15 Phase 1)
+
+`MatchRequest` takes an `ActiveRecipeSource` and a `RequestExtractor`. Call
+`execute({event, context, content})` with either `{source: "structured", fields}`
+or `{source: "free_text", text}` as content. Structured fields bypass extraction
+entirely. Free text gets exactly one extraction attempt, before evaluating all
+active versions' trigger conditions. The app's extractor adapter validates its
+own categories, required fields and record ownership; the engine has no shop imports.
+
+The result is a detached frozen `{recipe, trigger, tokens, reason}` snapshot.
+Fields are flattened into the trigger alongside trusted application `context`;
+context wins on key collisions. Only one matching version produces `matched`.
+The public `buildRequestTrigger(fields, context)` helper performs this same merge;
+demonstration capture/drafting should reuse it with the intake context
+`{requestId: request.id, customerId: request.customerId, subject: request.subject}`.
+`no_match`, `extraction_failed`, `ambiguous`, and `matching_failed` return a null
+recipe so the caller can hand off. Trigger event names must match exactly.
+Known usage survives invalid extracted fields (`fields: null`); thrown provider
+failures cannot report usage through this port. Matching never retries extraction,
+executes actions, approves gates or silently selects one of overlapping triggers.
+
+The web composition passes matches to `RunRecipe`, and unmatched requests to a
+small internal handoff recipe using the existing `AgentHandoff` port. The catalog
+stores mutable `Recipe` metadata (`id`, `name`, `draft|active`, `activeVersionId`)
+separately from immutable `RecipeVersion` snapshots.
+
 ## Backtesting (TASK-18 Phase 1)
 
 `BacktestRecipe` takes `cases` (`HistoricalCaseSource`), `actions` (`ActionInvoker`),

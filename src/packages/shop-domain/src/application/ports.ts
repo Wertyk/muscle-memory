@@ -15,6 +15,7 @@ export interface IdGenerator {
 export interface ShopRecords {
   listRequests(filter: RequestFilter): Promise<readonly Request[]>;
   getRequest(id: RequestId): Promise<Request | null>;
+  createRequest(request: Request): Promise<void>;
   saveRequest(request: Request): Promise<void>;
   getCustomer(id: CustomerId): Promise<Customer | null>;
   getProduct(id: ProductId): Promise<Product | null>;

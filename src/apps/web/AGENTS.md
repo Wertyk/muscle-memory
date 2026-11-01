@@ -26,6 +26,9 @@ policy failures throw typed action errors. Adapters are wired only in `server/co
 | Action | Input | Result / use |
 | --- | --- | --- |
 | `list-requests` | Optional `status`, `type`, `customerId`, `tag` | Matching requests; filters combine |
+| `create-request` | `customerId`, `subject`, `content` (`structured` + typed `fields`, or `free_text` + original `text`) | New request; waits for matching/execution/handoff before returning |
+| `demo-intake` | Empty object | Five new scripted requests through real intake; requires seeded shop data; repeated calls create more real effects |
+| `list-request-processing` | Optional `requestIds` (at most 1000) | Inbox state, run ID, match reason, extraction + execution tokens; read-only |
 | `get-request` | `requestId` | Original content, related IDs, status, tags and escalation |
 | `get-request-activity` | `requestId` | Persisted request/order activity, newest first: reply excerpts, refunds, replacements, return labels and recorded request state |
 | `get-order` | `orderId` | Purchased items, payment, address and return label |
@@ -48,6 +51,19 @@ for agent approval; omitted amounts conservatively require approval too. Fronten
 calls use the framework's UI capability and are not blocked by this agent gate.
 Every shop mutation uses `traced()`; the injected capture stays inactive until
 TASK-9 adds recording/session policy.
+
+Intake uses active catalog version pointers, not arbitrary saved versions. Structured
+fields match without extraction; free text gets one cheap extraction attempt and must
+supply complete shop fields. No match, incomplete extraction or overlapping triggers
+queue the existing durable AgentHandoff and escalate the request. `with_agent` means
+queued context, not a running chat turn. Use `get-recipe-run` to inspect the saved run
+and `resume-recipe-run` to approve/reject its exact awaiting step; intake never approves.
+`list-request-processing` derives `auto_handled`, `awaiting_approval`, `with_agent`,
+and `done` from durable run/shop records, including later approval/resolution changes.
+Null state means intake is still in flight or was interrupted before run creation.
+After creating/injecting requests, verify their IDs in both `list-requests` and
+`list-request-processing`; do not infer the outcome from the demo script. Phase 1
+does not install fixture recipes or add inbox chips/a demo button.
 
 Opt-in live proof: `pnpm smoke:shop-actions`. It seeds an isolated temporary
 PGlite with `pnpm -C src seed:shop`, checks CLI/frontend parity, then calls the

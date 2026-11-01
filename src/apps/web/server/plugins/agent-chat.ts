@@ -10,6 +10,7 @@ const INITIAL_TOOL_NAMES = [
   "view-screen",
   "navigate",
   "list-requests",
+  "list-request-processing",
   "get-request",
   "get-request-activity",
   "get-order",

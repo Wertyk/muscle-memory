@@ -50,6 +50,10 @@ class DrizzleShopRecords implements ShopRecords {
     if (!rows.length) throw new Error(`Cannot save missing request ${request.id}`);
   }
 
+  async createRequest(request: Request): Promise<void> {
+    await this.db.insert(requests).values(structuredClone(request));
+  }
+
   async getCustomer(id: CustomerId) {
     const [row] = await this.db.select().from(customers).where(eq(customers.id, id));
     return row ? structuredClone(row) : null;

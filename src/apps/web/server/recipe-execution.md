@@ -84,3 +84,91 @@ to `sendToAgentChat`, letting the agent read the saved context via actions.
 
 Dry-run writes only its immutable recipe snapshot and run checkpoints. Integration
 tests compare every shop table and handoff records before/after simulation.
+
+## Request intake (TASK-15 Phase 1)
+
+`create-request` accepts `customerId`, `subject`, and `content` with either
+`{source:"structured", fields: StructuredRequestFields}` or
+`{source:"free_text", text}`. The shop `CreateRequest` use-case validates the
+customer, order ownership and damaged-product/quantity association, inserts an open
+request, then the intake adapter emits `request.created` with `{requestId}` and
+**awaits `emitAsync`**. `RequestCreatedEvents` installs a single subscriber before
+emission on every cold process, checks its registration on reuse/hot reload, and
+uses request-local dependencies so concurrent callers do not share context. All
+app producers must emit through `RequestIntake.events.emit(id)`; raw framework
+emissions without the intake scope are rejected. There is no queued automation,
+cron dependency, background model loop or timer to wait for on serverless.
+
+The recipe-engine `MatchRequest` evaluates active immutable version triggers with
+zero model calls for structured content.
+The public `buildRequestTrigger(fields, context)` from `@muscle-memory/recipe-engine`
+is shared by matching and intake context construction. TASK-9/TASK-11 should use
+it with `{requestId: request.id, customerId: request.customerId, subject: request.subject}`
+to produce the identical flattened trigger; trusted context wins over fields.
+`ShopRequestExtractor` makes one call to
+the existing `TextExtractor` for free text, using `EXTRACT_MODEL`. `type` uses
+exactly `damaged_item`, `where_is_my_order`, `return`, `address_change`, or
+`wholesale_inquiry`. The result must contain the same required fields as the
+structured variant (including product/quantity/description for damage and complete
+new address for address changes). Primitive `addressName`, `addressLine1`, etc.
+are reassembled into `address` at this boundary. Unknown/incomplete fields or an
+order owned by another customer fail closed; no missing field is defaulted.
+
+`recipes` is a deliberately small catalog with `id`, `name`, `status` (`draft` or
+`active`) and `activeVersionId`. `DrizzleRecipeCatalog.saveVersion` reuses the
+executor's immutable snapshot checks. `save` writes metadata; a composite FK ensures
+an active version exists and belongs to that recipe. Drafts have a null pointer.
+An ad hoc run can still persist a version without adding it to the catalog.
+The catalog does not yet publish skills, draft recipes, expose editing/activation
+UI, or auto-install the test fixtures. Later tasks build those workflows on top.
+
+An intake lock, separate from the run lock, serializes repeated request events.
+`request_processing` reserves one run ID before matching, then checkpoints the
+complete matching result before execution. Repeated delivery reuses that result
+and resumes the same run; it never re-extracts, repeats completed mutations or
+approves a gate. A crash during matching routes to handoff on redelivery instead
+of repeating a possibly consumed extraction call. A matched version remains pinned
+even if the catalog changes before redelivery. Failed/no/ambiguous matches run the
+internal immutable `ver_intake_handoff` recipe through the existing executor and
+`AgentHandoff`, preserving the full original request through its request ID.
+
+Intake locks/checkpoints commit independently of executor/shop effects, following
+TASK-14's uncertainty policy. On PostgreSQL a request intake lock plus an executing
+run can require two lock connections in addition to data connections. This uses
+the same serverless-compatible transaction-scoped advisory locks; no live hosted
+PostgreSQL deployment was exercised by offline tests. Process death between request
+insert and event delivery is not an atomic outbox: the saved request remains,
+and explicit redelivery through the intake adapter is needed. Infrastructure
+failure propagates from `emitAsync`; do not blindly recreate the request/batch.
+Unknown usage from provider errors/process death cannot be recovered; known
+schema-invalid extraction usage is retained in matching checkpoints.
+
+`list-request-processing` is a read-only join of intake, run and shop checkpoints:
+
+| State | Meaning |
+| --- | --- |
+| `auto_handled` | Recipe completed without a manual approval; request not manually resolved |
+| `awaiting_approval` | Run is paused at its own approval gate |
+| `with_agent` | Run handed off or failed; inspect handoff delivery in `get-recipe-run` |
+| `done` | Request resolved, run explicitly rejected, or approved run completed |
+| null | Matching/execution is in flight or interrupted before a final run state |
+
+Seeded requests without intake have no processing row. The query accepts optional
+`requestIds` (at most 1000); it includes run IDs, match reasons and measured intake
+plus executor token counts. Reading never reprocesses requests. Status derives
+from durable source records, so `resume-recipe-run` and `set-request-status` need
+no extra synchronization write. Approval state takes precedence over resolution.
+
+`demo-intake` injects the five entries in `infra/demo-intake.ts` through the same
+`RequestIntake.create` pipeline. It requires TASK-6's seed and does not install
+recipes or fabricate statuses. It returns the saved requests, whose outcomes can
+be verified with `list-request-processing`. Repeated calls create more requests
+and real effects; outcomes depend on current recipes and remaining refund balance.
+The batch is sequential and each request is independently durable; a failure can
+leave a partial batch, which the action's error explicitly reports. Offline tests
+activate hand-written damage/shipment fixtures: two damage refunds (50%), one
+free-text shipment reply, a damage refund above USD 100 paused for approval, and
+an unmatched wholesale inquiry give the required 3/1/1 split. The fixtures' damage
+recipe supports the first order line, handing off other product selections.
+
+Inbox chips and demo button are Phase 2 after TASK-8; no UI files are changed here.

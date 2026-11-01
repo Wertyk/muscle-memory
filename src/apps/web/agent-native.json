@@ -12,7 +12,10 @@
       "shipments": "Synthetic single-shop delivery records. Writes serialize with the transactional ShopRepository.",
       "requests": "Synthetic support inbox for the single shared demo shop. Access through ShopRepository.",
       "refunds": "Synthetic single-shop refund history. Mutations use the transactional ShopRepository.",
-      "replies": "Stored synthetic demo replies, not external mail or member-owned messages. Access through ShopRepository."
+      "replies": "Stored synthetic demo replies, not external mail or member-owned messages. Access through ShopRepository.",
+      "recipe_versions": "Immutable recipes for the existing single shared synthetic demo shop; engine access through DrizzleRunRepository.",
+      "recipe_runs": "Durable engine checkpoints for the single shared synthetic demo shop; access through recipe run actions and DrizzleRunRepository.",
+      "recipe_handoffs": "Deduplicated escalation work for the single shared synthetic shop inbox; access through DrizzleAgentHandoff and recipe run actions."
     }
   }
 }

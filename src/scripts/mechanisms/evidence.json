@@ -1,0 +1,37 @@
+{
+  "executedAt": "2026-11-01T21:43:11.612Z",
+  "frameworkVersion": "0.222.2",
+  "model": "deepseek-v4-pro:0813",
+  "trace": {
+    "recorded": 1,
+    "afterRecordingOff": 1,
+    "caller": "frontend",
+    "navigation": "req_0007",
+    "transport": "DOM click -> callAction -> local HTTP"
+  },
+  "registry": {
+    "actionName": "task3-proof-mutate",
+    "auditActions": [
+      "task3-proof-invoke",
+      "task3-proof-mutate",
+      "task3-proof-control"
+    ]
+  },
+  "events": {
+    "handledBeforeResponse": 3
+  },
+  "chat": {
+    "endpoint": "/_agent-native/agent-chat",
+    "warmBeforePublication": true,
+    "restarted": false,
+    "completedTools": [
+      "resources",
+      "tool-search",
+      "task3-proof-card"
+    ],
+    "runtimeSkillNonceMatched": true,
+    "renderer": "muscle-memory.task3-proof",
+    "renderedVia": "public AgentKitActionWidget + registered React renderer"
+  },
+  "limitation": "Browser control host unavailable; DOM clicks use Happy DOM and card rendering uses React SSR with the real chat action result."
+}

@@ -24,6 +24,7 @@
     "shared/**/*",
     "scripts/**/*",
     "../../scripts/llm/**/*.ts",
+    "../../scripts/mechanisms/**/*.ts",
     "vite.config.ts",
     "react-router.config.ts",
     ".react-router/types/**/*",

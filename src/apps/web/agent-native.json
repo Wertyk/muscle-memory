@@ -4,6 +4,15 @@
     "firstRun": "off"
   },
   "doctor": {
-    "failOnBuild": false
+    "failOnBuild": false,
+    "dbToolScopingDenylist": {
+      "customers": "Synthetic contacts for the single shared demo shop; not workspace member identities. Access through ShopRepository.",
+      "products": "Shared synthetic demo catalog, independent of workspace membership. Access through ShopRepository.",
+      "orders": "Synthetic single-shop purchase snapshots shared by operators. Mutations use the transactional ShopRepository.",
+      "shipments": "Synthetic single-shop delivery records. Writes serialize with the transactional ShopRepository.",
+      "requests": "Synthetic support inbox for the single shared demo shop. Access through ShopRepository.",
+      "refunds": "Synthetic single-shop refund history. Mutations use the transactional ShopRepository.",
+      "replies": "Stored synthetic demo replies, not external mail or member-owned messages. Access through ShopRepository."
+    }
   }
 }

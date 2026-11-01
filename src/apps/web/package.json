@@ -5,6 +5,8 @@
   "description": "Muscle Memory Agent-Native Chat application.",
   "type": "module",
   "scripts": {
+    "seed:shop": "tsx scripts/shop-data.ts seed",
+    "reset:shop": "tsx scripts/shop-data.ts reset",
     "migrate:production": "tsx scripts/migrate-production.ts",
     "dev": "agent-native dev",
     "build": "agent-native build",

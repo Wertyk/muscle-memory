@@ -1,0 +1,25 @@
+{
+  "name": "muscle-memory",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=22.22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test && node --test scripts/architecture.test.mjs",
+    "lint": "oxlint --deny-warnings .",
+    "lint:arch": "depcruise --config dependency-cruiser.config.cjs packages apps/web/actions apps/web/server apps/web/app",
+    "dev": "pnpm --filter @muscle-memory/web dev",
+    "build": "pnpm -r build"
+  },
+  "devDependencies": {
+    "@swc/core": "1.16.21",
+    "@types/node": "26.6.6",
+    "dependency-cruiser": "18.7.0",
+    "oxlint": "1.90.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

@@ -1,0 +1,19 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  "@swc/core": true
+  "@vgpu/adapter-node": false
+  webgpu: false
+  esbuild: true
+  node-pty: true
+  ffmpeg-static: true
+  tesseract.js: true
+
+minimumReleaseAgeStrict: true
+
+packageExtensions:
+  node-pty@*:
+    dependencies:
+      node-gyp: latest

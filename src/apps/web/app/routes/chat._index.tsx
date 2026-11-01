@@ -1,5 +1,5 @@
 import ChatHomeRedirect from "@/components/chat/ChatHomeRedirect";
 
-export { meta } from "./home";
+export { chatMeta as meta } from "@/lib/chat-meta";
 
 export default ChatHomeRedirect;

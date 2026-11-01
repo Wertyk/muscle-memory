@@ -12,6 +12,7 @@ const INITIAL_TOOL_NAMES = [
   "list-requests",
   "list-request-processing",
   "get-request",
+  "get-request-activity",
   "get-order",
   "get-customer",
   "get-shipment-status",

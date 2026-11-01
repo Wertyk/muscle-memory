@@ -29,12 +29,22 @@ export interface ShopRecords {
 }
 
 export interface ShopRepository extends ShopRecords {
+  getRequestActivityRecords(requestId: RequestId): Promise<RequestActivityRecords | null>;
   /**
    * Atomic, serializable with competing writes (including shipment changes).
    * Commit only an ok result; roll back an error result or exception. Unique IDs
    * must be enforced by create methods. Never retry callbacks with side effects.
    */
   transaction<T>(work: (records: ShopRecords) => Promise<Result<T>>): Promise<Result<T>>;
+}
+
+export interface RequestActivityRecords {
+  readonly request: Request;
+  readonly order: Order | null;
+  readonly shipment: Shipment | null;
+  readonly replies: readonly Reply[];
+  readonly refunds: readonly Refund[];
+  readonly replacements: readonly Order[];
 }
 
 export interface ShopDependencies {

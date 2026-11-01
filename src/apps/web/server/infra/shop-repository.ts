@@ -1,6 +1,6 @@
 import type {
   CustomerId, Order, OrderId, ProductId, Refund, Reply, Request, RequestFilter,
-  RequestId, Result, ShopRecords, ShopRepository,
+  RequestId, Result, ShopRecords, ShopRepository, RequestActivityRecords,
 } from "@muscle-memory/shop-domain";
 import { and, arrayContains, asc, eq, sql } from "drizzle-orm";
 import type { ShopDb } from "../db/index.js";
@@ -98,6 +98,22 @@ class DrizzleShopRecords implements ShopRecords {
 
 export class DrizzleShopRepository extends DrizzleShopRecords implements ShopRepository {
   constructor(private readonly database: ShopDb) { super(database); }
+
+  async getRequestActivityRecords(requestId: RequestId): Promise<RequestActivityRecords | null> {
+    // One consistent read snapshot while an operator or agent may be writing.
+    return this.database.transaction(async (tx) => {
+      const records = new DrizzleShopRecords(tx);
+      const request = await records.getRequest(requestId);
+      if (!request) return null;
+      const order = request.orderId ? await records.getOrder(request.orderId) : null;
+      const requestReplies = await tx.select().from(replies).where(eq(replies.requestId, requestId)).orderBy(asc(replies.createdAt), asc(replies.id));
+      return structuredClone({ request, order, shipment: order ? await records.getShipmentForOrder(order.id) : null,
+        replies: requestReplies,
+        refunds: order ? await records.listRefundsForOrder(order.id) : [],
+        replacements: order ? await tx.select().from(orders).where(eq(orders.replacementForOrderId, order.id)).orderBy(asc(orders.createdAt), asc(orders.id)) : [],
+      });
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+  }
 
   async transaction<T>(work: (records: ShopRecords) => Promise<Result<T>>): Promise<Result<T>> {
     try {

@@ -7,6 +7,14 @@ import {
 
 export const DEMO_SEED = 20261102;
 export const DEMO_NOW = "2026-11-02T12:00:00.000Z";
+/** Stable content and offsets; the seed's clock is configurable for rehearsals. */
+export function shopDemoAnchor(anchor?: string): string {
+  // guard:allow-env-credential — TASK-8 reviewer authorized this non-secret rehearsal time anchor; it is not a credential.
+  const configured = anchor ?? process.env.SHOP_DEMO_ANCHOR;
+  const time = Date.parse(configured ?? new Date().toISOString());
+  if (!Number.isFinite(time)) throw new Error("SHOP_DEMO_ANCHOR must be a valid ISO timestamp.");
+  return new Date(Math.floor(time / 60_000) * 60_000).toISOString();
+}
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
@@ -123,8 +131,9 @@ function messageFor(type: RequestType, order: Order, customer: Customer, variant
   }
 }
 
-/** Authored fictional fixtures; fixed PRNG and dates never depend on wall time or an LLM. */
-export function createShopDemoData(): ShopDemoData {
+/** Authored fixtures are identical for a fixed anchor; only their time origin moves. */
+export function createShopDemoData(anchor = shopDemoAnchor()): ShopDemoData {
+  const now = shopDemoAnchor(anchor);
   let randomState = DEMO_SEED;
   const random = (limit: number) => {
     randomState = (Math.imul(randomState, 1664525) + 1013904223) >>> 0;
@@ -166,7 +175,7 @@ export function createShopDemoData(): ShopDemoData {
   }));
   const historicalTypes: RequestType[] = REQUEST_TYPES.flatMap((type) => Array<RequestType>(type === "damaged_item" ? 10 : 5).fill(type));
   const allTypes = [...Array.from({ length: 30 }, (_, i) => at(REQUEST_TYPES, i % 5)), ...historicalTypes];
-  const requestedAt = allTypes.map((_, i) => shifted(DEMO_NOW, i < 30
+  const requestedAt = allTypes.map((_, i) => shifted(now, i < 30
     ? -(15 + i * 139 + random(30)) * 60_000
     : -(5 + (i - 30) % 18) * DAY - random(12) * HOUR - random(60) * 60_000));
   const handledAt = requestedAt.map((timestamp, i) => i < 30 ? timestamp : shifted(timestamp, (45 + random(360)) * 60_000));

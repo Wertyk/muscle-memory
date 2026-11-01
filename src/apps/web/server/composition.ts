@@ -3,7 +3,7 @@ import type { ActionRunContext } from "@agent-native/core/action";
 import { MatchRequest, RunRecipe, type RunRecipeDependencies, type TextExtractor } from "@muscle-memory/recipe-engine";
 import {
   CreateRequest, ValidateRequestFields, CreateReplacementOrder, Escalate, GenerateReturnLabel, GetCustomer, GetOrder,
-  GetRequest, GetShipmentStatus, ID_PREFIXES, IssueRefund, ListRequests, SendReply,
+  GetRequest, GetRequestActivity, GetShipmentStatus, ID_PREFIXES, IssueRefund, ListRequests, SendReply,
   SetRequestStatus, TagRequest, UpdateShippingAddress, type ShopDependencies,
 } from "@muscle-memory/shop-domain";
 import { getDb, type ShopDb } from "./db/index.js";
@@ -30,6 +30,7 @@ export function createShopUseCases(deps: ShopDependencies) {
     validateRequestFields: new ValidateRequestFields(deps.shop),
     listRequests: new ListRequests(deps.shop),
     getRequest: new GetRequest(deps.shop),
+    getRequestActivity: new GetRequestActivity(deps.shop),
     getOrder: new GetOrder(deps.shop),
     getCustomer: new GetCustomer(deps.shop),
     getShipmentStatus: new GetShipmentStatus(deps.shop),

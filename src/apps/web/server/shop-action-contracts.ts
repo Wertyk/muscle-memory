@@ -71,6 +71,20 @@ export const replySchema = z.object({
   body: z.string(), createdAt: z.string(),
 });
 
+const activityEntry = z.object({ id: z.string(), at: z.string() });
+export const requestActivitySchema = z.discriminatedUnion("kind", [
+  activityEntry.extend({ kind: z.literal("request_received") }),
+  activityEntry.extend({ kind: z.literal("order_placed"), orderId: shopId("order") }),
+  activityEntry.extend({ kind: z.literal("dispatched"), carrier: z.string() }),
+  activityEntry.extend({ kind: z.literal("delivered") }),
+  activityEntry.extend({ kind: z.literal("reply"), bodyExcerpt: z.string() }),
+  activityEntry.extend({ kind: z.literal("refund"), amount: moneySchema, reason: z.string() }),
+  activityEntry.extend({ kind: z.literal("replacement"), orderId: shopId("order"), items: z.array(z.object({ name: z.string(), quantity: z.number().int().positive() })).readonly() }),
+  activityEntry.extend({ kind: z.literal("return_label"), labelId: shopId("returnLabel") }),
+  activityEntry.extend({ kind: z.literal("recorded_state"), status: requestStatusSchema, tags: z.array(z.string()).readonly() }),
+  activityEntry.extend({ kind: z.literal("escalation"), reason: z.string() }),
+]);
+
 export const shopErrors = defineActionErrors(
   "NOT_FOUND", "INVALID_INPUT", "CURRENCY_MISMATCH", "REFUND_EXCEEDS_BALANCE",
   "RETURN_WINDOW_EXPIRED", "ORDER_NOT_DELIVERED", "ORDER_CANCELLED",

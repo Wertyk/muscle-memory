@@ -16,14 +16,14 @@ import getRecipeRun from "../actions/get-recipe-run.js";
 import * as composition from "./composition.js";
 import { getDb, type ShopDb } from "./db/index.js";
 import * as tables from "./db/schema.js";
-import { createShopDemoData } from "./db/shop-demo-data.js";
+import { createShopDemoData, DEMO_NOW } from "./db/shop-demo-data.js";
 import migrateApp from "./plugins/db.js";
 import { seedShop } from "./infra/shop-demo-store.js";
 import { RegistryActionInvoker } from "./infra/registry-action-invoker.js";
 import { DrizzleRunRepository } from "./infra/run-repository.js";
 import { CompleteTextExtractor } from "./infra/complete-text-extraction.js";
 
-const data = createShopDemoData();
+const data = createShopDemoData(DEMO_NOW);
 const request = data.requests.find((r) => r.status === "open" && r.content.source === "structured" && r.content.fields.type === "damaged_item")!;
 const order = data.orders.find((o) => o.id === request.orderId)!;
 const trigger = { requestId: request.id, orderId: order.id, reason: "damaged_item" };
@@ -60,6 +60,7 @@ describe("recipe execution against REAL seeded shop actions on PGlite", () => {
   const create = () => composition.createRecipeUseCases(db, { context, registry, extractor: { extract }, ids: { next: () => `run_test${++sequence}` } });
 
   beforeAll(async () => {
+    vi.stubEnv("SHOP_DEMO_ANCHOR", DEMO_NOW);
     directory = await mkdtemp(path.join(tmpdir(), "muscle-memory-recipes-"));
     vi.stubEnv("DATABASE_URL", `pglite:${directory}`);
     await withMigrationRuntime(async () => { await migrateApp(undefined); });

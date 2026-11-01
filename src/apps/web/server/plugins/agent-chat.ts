@@ -11,6 +11,7 @@ const INITIAL_TOOL_NAMES = [
   "navigate",
   "list-requests",
   "get-request",
+  "get-request-activity",
   "get-order",
   "get-customer",
   "get-shipment-status",

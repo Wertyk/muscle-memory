@@ -7,8 +7,8 @@ export default defineAppConfig({
     name: PRODUCT_NAME,
     // The source template keeps a renamed app from inheriting first-party email branding.
     sourceTemplate: "chat",
-    // Keep the template's authenticated entry explicit after renaming the app.
-    homePath: "/home",
+    // Operators land on the shop's primary workflow after signing in.
+    homePath: "/inbox",
     // Optional: use your own absolute HTTPS logo URL in transactional emails.
     // logoUrl: "https://example.com/logo.png",
   },

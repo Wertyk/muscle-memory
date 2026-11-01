@@ -3,6 +3,7 @@ import { failure, success, type ShopError } from "@muscle-memory/shop-domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import listRequests from "../actions/list-requests.js";
 import getRequest from "../actions/get-request.js";
+import getRequestActivity from "../actions/get-request-activity.js";
 import getOrder from "../actions/get-order.js";
 import getCustomer from "../actions/get-customer.js";
 import getShipmentStatus from "../actions/get-shipment-status.js";
@@ -38,6 +39,7 @@ const cases: Array<{
 }> = [
   { name: "list-requests", action: listRequests, key: "listRequests", input: { status: "open", type: "damaged_item", customerId: customer.id, tag: "priority" }, output: [request] },
   { name: "get-request", action: getRequest, key: "getRequest", input: { requestId: request.id }, output: request },
+  { name: "get-request-activity", action: getRequestActivity, key: "getRequestActivity", input: { requestId: request.id }, output: [{ id: request.id, at: request.createdAt, kind: "request_received" }] },
   { name: "get-order", action: getOrder, key: "getOrder", input: { orderId: order.id }, output: order },
   { name: "get-customer", action: getCustomer, key: "getCustomer", input: { customerId: customer.id }, output: customer },
   { name: "get-shipment-status", action: getShipmentStatus, key: "getShipmentStatus", input: { orderId: order.id }, output: shipment },

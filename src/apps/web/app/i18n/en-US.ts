@@ -1,4 +1,7 @@
+import { shopMessages } from "./shop-en";
+
 const messages = {
+  shop: shopMessages,
   composer: {
     removeAttachment: "Remove {{name}}",
     removeReference: "Remove {{name}} reference",

@@ -31,18 +31,19 @@ export function AgentInspector({
   return (
     <AgentSidebar
       position="right"
+      defaultSidebarWidth={360}
       chatViewTransition
       chatViewTransitionHandoff={chatHomeHandoffPending}
       storageKey="chat"
       browserTabId={TAB_ID}
       openOnChatRunning={chatHomeHandoffActive}
       onFullscreenRequest={openAskAgentFullscreen}
-      emptyStateText={t("chat.inspectEmptyState")}
+      emptyStateText={t("shop.agentEmpty")}
       agentPageHref="/settings/agent"
       suggestions={[
-        t("chat.inspectSuggestionCapabilities"),
-        t("chat.inspectSuggestionHello"),
-        t("chat.inspectSuggestionAction"),
+        t("shop.agentSuggestionRequest"),
+        t("shop.agentSuggestionInbox"),
+        t("shop.agentSuggestionActions"),
       ]}
     >
       {children}

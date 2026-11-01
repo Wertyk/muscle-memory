@@ -10,7 +10,7 @@ import { inspect, promisify } from "node:util";
 import { Window } from "happy-dom";
 import type { RefundId } from "@muscle-memory/shop-domain";
 import { eq } from "drizzle-orm";
-import { createShopDemoData } from "../server/db/shop-demo-data.js";
+import { createShopDemoData, shopDemoAnchor } from "../server/db/shop-demo-data.js";
 
 const exec = promisify(execFile);
 const web = fileURLToPath(new URL("../", import.meta.url));
@@ -29,8 +29,9 @@ export async function runShopActionsSmoke() {
   const origin = "http://localhost:8097";
   assert(!await fetch(`${origin}/_agent-native/ping`).then(() => true, () => false), "Smoke port 8097 is occupied.");
   const directory = await mkdtemp(resolve(tmpdir(), "muscle-memory-task7-"));
+  const anchor = shopDemoAnchor();
   const env = {
-    ...process.env, DATABASE_URL: `pglite:${directory}/db`, NODE_ENV: "development",
+    ...process.env, SHOP_DEMO_ANCHOR: anchor, DATABASE_URL: `pglite:${directory}/db`, NODE_ENV: "development",
     BETTER_AUTH_SECRET: randomBytes(32).toString("hex"), BETTER_AUTH_URL: origin,
   };
   const cookies = new Map<string, string>();
@@ -61,7 +62,7 @@ export async function runShopActionsSmoke() {
     assert(cookies.size, "Fresh local database did not issue a development session.");
     console.log("Seeded isolated PGlite and authenticated local app ready.");
 
-    const fixtures = createShopDemoData();
+    const fixtures = createShopDemoData(anchor);
     const requestId = "req_0002";
     const request = fixtures.requests.find((item) => item.id === requestId)!;
     const order = fixtures.orders.find((item) => item.id === request.orderId)!;

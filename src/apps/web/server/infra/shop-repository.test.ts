@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { closeDbExec, getDbExec, withMigrationRuntime } from "@agent-native/core/db";
 import {
-  CreateReplacementOrder, Escalate, GenerateReturnLabel, GetShipmentStatus,
+  CreateReplacementOrder, Escalate, GenerateReturnLabel, GetShipmentStatus, GetRequestActivity,
   ID_PREFIXES, IssueRefund, REQUEST_TYPES, SendReply, SetRequestStatus, TagRequest,
   UpdateShippingAddress, invalidInput, parseShopId, requestType, success,
   type IdGenerator, type Order, type Refund, type Result,
@@ -30,7 +30,7 @@ describe("shop persistence on local PGlite", () => {
   let directory: string;
   let db: ShopDb;
   let shop: DrizzleShopRepository;
-  const fixtures = createShopDemoData();
+  const fixtures = createShopDemoData(DEMO_NOW);
   const order = present(fixtures.orders[0]);
   const request = present(fixtures.requests[0]);
   const customer = present(fixtures.customers[0]);
@@ -39,6 +39,7 @@ describe("shop persistence on local PGlite", () => {
   const deps = () => ({ shop, ids, clock: { now: () => DEMO_NOW } });
 
   beforeAll(async () => {
+    vi.stubEnv("SHOP_DEMO_ANCHOR", DEMO_NOW);
     directory = await mkdtemp(path.join(tmpdir(), "muscle-memory-shop-"));
     vi.stubEnv("DATABASE_URL", `pglite:${directory}`);
     await withMigrationRuntime(async () => { await migrateShop(undefined); });
@@ -109,6 +110,30 @@ describe("shop persistence on local PGlite", () => {
     expect(await shop.getCustomer(customer.id)).toEqual(customer);
     expect(await shop.getShipmentForOrder(order.id)).toEqual(fixtures.shipments[0]);
     expect(await shop.listRefundsForOrder(present(fixtures.refunds[0]).orderId)).toEqual([fixtures.refunds[0]]);
+  });
+
+  it("reads scoped activity from persisted replies/refunds/replacements/labels across repository instances", async () => {
+    expect(await shop.getRequestActivityRecords("req_missing")).toBeNull();
+    const read = () => new GetRequestActivity(new DrizzleShopRepository(db)).execute({ requestId: request.id }).then(value);
+    const refund = value(await new IssueRefund(deps()).execute({ orderId: order.id, amount: { amountMinor: 1250, currency: "USD" }, reason: "Damage adjustment" }));
+    expect(await read()).toContainEqual({ id: refund.id, at: refund.createdAt, kind: "refund", amount: refund.amount, reason: refund.reason });
+    const reply = value(await new SendReply(deps()).execute({ requestId: request.id, template: "We have arranged your refund.", variables: {} }));
+    expect(await read()).toContainEqual({ id: reply.id, at: reply.createdAt, kind: "reply", bodyExcerpt: reply.body });
+    const replacement = value(await new CreateReplacementOrder(deps()).execute({ orderId: order.id }));
+    const label = value(await new GenerateReturnLabel(deps()).execute({ orderId: order.id }));
+    value(await new TagRequest(deps()).execute({ requestId: request.id, tag: "activity-check" }));
+    value(await new SetRequestStatus(deps()).execute({ requestId: request.id, status: "pending" }));
+    const events = await read();
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "replacement", orderId: replacement.id }),
+      expect.objectContaining({ kind: "return_label", labelId: label.id }),
+      expect.objectContaining({ kind: "recorded_state", status: "pending", tags: expect.arrayContaining(["activity-check"]) }),
+    ]));
+    const unrelated = value(await new GetRequestActivity(shop).execute({ requestId: "req_0002" }));
+    expect(unrelated.some(item => item.id === reply.id || item.id === refund.id || item.id === replacement.id)).toBe(false);
+    const inquiry = fixtures.requests.find(item => item.orderId === null)!;
+    const inquiryEvents = value(await new GetRequestActivity(shop).execute({ requestId: inquiry.id }));
+    expect(inquiryEvents.every(item => item.kind === "request_received" || item.kind === "recorded_state")).toBe(true);
   });
 
   it("combines status, category, customer and exact tag filters for both request sources", async () => {

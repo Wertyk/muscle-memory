@@ -2,7 +2,10 @@ import {
   appBasePath,
   appPathFromLocalRoute,
 } from "@agent-native/core/client/api-path";
+import { setClientAppState } from "@agent-native/core/client/hooks";
 import { useAgentRouteState } from "@agent-native/core/client/navigation";
+import { useEffect } from "react";
+import { useLocation } from "react-router";
 
 import {
   chatThreadPath,
@@ -11,6 +14,11 @@ import {
   NEW_CHAT_PATH,
   threadIdFromPath,
 } from "@/lib/chat-paths";
+import {
+  INBOX_PATH,
+  requestIdFromPath,
+  requestPath,
+} from "@/lib/shop-workspace";
 import { TAB_ID } from "@/lib/tab-id";
 
 export interface NavigationState {
@@ -18,9 +26,21 @@ export interface NavigationState {
   path?: string;
   publicPath?: string;
   threadId?: string;
+  requestId?: string;
 }
 
 export function useNavigationState() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const requestId = requestIdFromPath(pathname);
+    void setClientAppState(
+      `selection:${TAB_ID}`,
+      requestId ? { kind: "request", id: requestId, requestId } : null,
+      { requestSource: TAB_ID },
+    ).catch(() => {
+      // Semantic navigation still carries the request id if this optional write fails.
+    });
+  }, [pathname]);
   useAgentRouteState<NavigationState>({
     browserTabId: TAB_ID,
     requestSource: TAB_ID,
@@ -64,15 +84,19 @@ function matchesPathPrefix(pathname: string, prefix: string): boolean {
 
 export function navigationStateForPath(pathname: string): NavigationState {
   const threadId = threadIdFromPath(pathname);
+  const requestId = requestIdFromPath(pathname);
   return {
     view: viewForPath(pathname),
     path: pathname,
     publicPath: appPathFromLocalRoute(pathname),
     ...(threadId ? { threadId } : {}),
+    ...(requestId ? { requestId } : {}),
   };
 }
 
 function viewForPath(pathname: string): string {
+  if (pathname === INBOX_PATH) return "inbox";
+  if (requestIdFromPath(pathname)) return "request";
   if (isChatPathname(pathname)) return "chat";
   if (pathname === HOME_PATH) return "home";
   if (pathname.startsWith("/database")) return "database";
@@ -88,11 +112,14 @@ function viewForPath(pathname: string): string {
 
 function pathForView(view?: string): string {
   switch (view) {
+    case "inbox":
+    case "request":
+      return INBOX_PATH;
     case "chat":
     case "ask":
       return NEW_CHAT_PATH;
     case "home":
-      return HOME_PATH;
+      return INBOX_PATH;
     case "database":
       return "/database";
     case "extensions":
@@ -111,6 +138,12 @@ function pathForView(view?: string): string {
 }
 
 export function pathForCommand(command: any): string {
+  if (
+    command?.view === "request" &&
+    typeof command.requestId === "string" &&
+    command.requestId.trim()
+  )
+    return requestPath(command.requestId.trim());
   const path = pathForView(command?.view);
   if (command?.view !== "chat" && command?.view !== "ask") return path;
   const threadId =

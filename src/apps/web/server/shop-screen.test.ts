@@ -1,0 +1,126 @@
+import {
+  readAppStateForCurrentTab,
+  writeAppStateForCurrentTab,
+} from "@agent-native/core/application-state";
+import { success } from "@muscle-memory/shop-domain";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import navigate from "../actions/navigate";
+import viewScreen from "../actions/view-screen";
+import * as composition from "./composition";
+import { createShopDemoData } from "./db/shop-demo-data";
+
+vi.mock("@agent-native/core/application-state", () => ({
+  readAppStateForCurrentTab: vi.fn(),
+  writeAppStateForCurrentTab: vi.fn(),
+}));
+const data = createShopDemoData();
+const request = data.requests[0]!;
+const state: Record<string, Record<string, unknown>> = {};
+let useCases: ReturnType<typeof composition.createShopUseCases>;
+beforeEach(() => {
+  for (const key of Object.keys(state)) delete state[key];
+  vi.mocked(readAppStateForCurrentTab).mockImplementation(
+    async (key) => state[key] ?? null,
+  );
+  useCases = {
+    getRequest: { execute: vi.fn(async () => success(request)) },
+    getRequestActivity: {
+      execute: vi.fn(async () =>
+        success([
+          { id: request.id, at: request.createdAt, kind: "request_received" },
+        ]),
+      ),
+    },
+    getCustomer: {
+      execute: vi.fn(async () =>
+        success(data.customers.find((item) => item.id === request.customerId)!),
+      ),
+    },
+    getOrder: {
+      execute: vi.fn(async () =>
+        success(data.orders.find((item) => item.id === request.orderId)!),
+      ),
+    },
+    getShipmentStatus: {
+      execute: vi.fn(async () =>
+        success({ orderStatus: "delivered", shipment: null }),
+      ),
+    },
+    listRequests: { execute: vi.fn(async () => success([request])) },
+  } as unknown as typeof useCases;
+  vi.spyOn(composition, "getShopUseCases").mockReturnValue(useCases);
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
+});
+
+describe("agent workspace context", () => {
+  it("reads fresh selected-request details through the existing shop use-cases", async () => {
+    state.navigation = {
+      view: "request",
+      path: `/requests/${request.id}`,
+      requestId: request.id,
+    };
+    state.selection = {
+      kind: "request",
+      requestId: request.id,
+      id: request.id,
+    };
+    const screen = await viewScreen.run({}, { caller: "tool" });
+    expect(screen).toMatchObject({
+      navigation: state.navigation,
+      selection: state.selection,
+      request,
+      customer: { id: request.customerId },
+      order: { id: request.orderId },
+      shipment: { shipment: null },
+    });
+    expect(useCases.getRequest.execute).toHaveBeenCalledExactlyOnceWith({
+      requestId: request.id,
+    });
+    expect(useCases.getOrder.execute).toHaveBeenCalledExactlyOnceWith({
+      orderId: request.orderId,
+    });
+  });
+  it("uses inbox URL filters and ignores stale request selection when choosing a view", async () => {
+    state.navigation = { view: "inbox", path: "/inbox" };
+    state.selection = { requestId: request.id };
+    state.__url__ = { searchParams: { status: "open", type: "return" } };
+    expect(await viewScreen.run({}, { caller: "tool" })).toMatchObject({
+      activeFilters: { status: "open", type: "return" },
+      requests: [request],
+    });
+    expect(useCases.listRequests.execute).toHaveBeenCalledExactlyOnceWith({
+      status: "open",
+      type: "return",
+    });
+    expect(useCases.getRequest.execute).not.toHaveBeenCalled();
+  });
+  it("returns a useful snapshot for inquiries without orders and rejects invalid ids", async () => {
+    state.navigation = { view: "request", requestId: request.id };
+    vi.mocked(useCases.getRequest.execute).mockResolvedValue(
+      success({ ...request, orderId: null }),
+    );
+    const screen = await viewScreen.run({}, { caller: "tool" });
+    expect(screen).toHaveProperty("customer");
+    expect(screen).not.toHaveProperty("order");
+    state.navigation.requestId = "../../not-a-request";
+    await expect(viewScreen.run({}, { caller: "tool" })).rejects.toThrow();
+  });
+  it("writes a one-shot semantic request navigation command to the current tab", async () => {
+    await navigate.run(
+      { view: "request", requestId: request.id },
+      { caller: "tool" },
+    );
+    expect(writeAppStateForCurrentTab).toHaveBeenCalledWith(
+      "navigate",
+      expect.objectContaining({
+        view: "request",
+        requestId: request.id,
+        _writeId: expect.any(String),
+      }),
+    );
+  });
+});

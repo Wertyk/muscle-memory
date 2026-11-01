@@ -41,6 +41,16 @@ export class InMemoryShop implements ShopRepository {
     ));
   }
   async getRequest(id: RequestId): Promise<Request | null> { return clone(this.requests.get(id) ?? null); }
+  async getRequestActivityRecords(requestId: RequestId) {
+    const request = await this.getRequest(requestId);
+    if (!request) return null;
+    const order = request.orderId ? await this.getOrder(request.orderId) : null;
+    return clone({ request, order, shipment: order ? await this.getShipmentForOrder(order.id) : null,
+      replies: this.replies.filter(reply => reply.requestId === requestId),
+      refunds: order ? await this.listRefundsForOrder(order.id) : [],
+      replacements: order ? [...this.orders.values()].filter(item => item.replacementForOrderId === order.id) : [],
+    });
+  }
   async saveRequest(request: Request): Promise<void> { this.requests.set(request.id, clone(request)); }
   async getCustomer(id: CustomerId): Promise<Customer | null> { return clone(this.customers.get(id) ?? null); }
   async getProduct(id: ProductId): Promise<Product | null> { return clone(this.products.get(id) ?? null); }

@@ -1,6 +1,6 @@
 # Chat — Agent Guide
 
-Chat is the minimal chat-first agent-native app. `/` redirects to shared sign-in, then `/home`, the editable Get started page. Chat lives at `/chat`; new chats start there. Actions carry capabilities; screens exist only for durable workflows.
+Muscle Memory is the Kiln & Co. ceramics shop workspace. `/` redirects through shared sign-in to `/inbox` (app.homePath). `/requests/:requestId` opens a support request. Chat lives at `/chat`; `/home` redirects to `/inbox` for old bookmarks. The persistent shell keeps domain navigation and the contextual agent sidebar beside the work surface.
 
 ## Skills
 
@@ -27,6 +27,7 @@ policy failures throw typed action errors. Adapters are wired only in `server/co
 | --- | --- | --- |
 | `list-requests` | Optional `status`, `type`, `customerId`, `tag` | Matching requests; filters combine |
 | `get-request` | `requestId` | Original content, related IDs, status, tags and escalation |
+| `get-request-activity` | `requestId` | Persisted request/order activity, newest first: reply excerpts, refunds, replacements, return labels and recorded request state |
 | `get-order` | `orderId` | Purchased items, payment, address and return label |
 | `get-customer` | `customerId` | Name, email and address book entry |
 | `get-shipment-status` | `orderId` | Order status and shipment (nullable), carrier, tracking and estimate |
@@ -55,8 +56,17 @@ Only sanitized assertions/metadata are saved to `scripts/shop-actions-evidence.j
 
 ## Application state
 
-- `navigation` describes the view and selected ids. Chat is `chat` at `/chat` and `/chat/<threadId>`; the Get started page is `home` at `/home`; `/` opens shared sign-in/signup.
+- `navigation` describes the view and selected ids. Inbox is `{ view: "inbox", path: "/inbox" }`; an open request is `{ view: "request", requestId, path: "/requests/<requestId>" }`. The same id is in tab-scoped `selection:<TAB_ID>`; leaving the request clears selection. Filters (`status`, `type`) live in URL search params. Chat is `chat` at `/chat` and `/chat/<threadId>`; legacy `/home` links redirect to the inbox.
 - Use `navigate` when supported and `view-screen` for a fresh read of visible details; basic navigation is already in `<current-screen>`.
+- `navigate({ view: "inbox" })` opens the inbox; `navigate({ view: "request", requestId })` opens a request. `view-screen` reads tab-scoped state and the same shop use-cases to return current request/customer/order/shipment details or filtered inbox records. Never infer the target from a previous chat message when current navigation is available.
+
+## Request workspace
+
+`/inbox` calls `list-requests` with status/type URL filters and `get-customer` for customer names. `/requests/:requestId` calls `get-request`, `get-customer`, `get-order`, `get-shipment-status` and `get-request-activity`. The reply composer calls `send-reply` (plain text or literal template plus optional JSON variables); Add tag calls `tag-request`; Resolve/status menu calls `set-request-status`; Escalate calls `escalate` with a reason. Order actions call `issue-refund`, `create-replacement-order`, `update-shipping-address` and `generate-return-label`. The server validates all policies. Framework action queries refresh after both frontend mutations and the current user's agent writes; no background polling is needed.
+
+Handle with agent stages a bounded request-specific prompt in the contextual sidebar using `sendToAgentChat`; the operator sends it there and can steer the same conversation. Replies are demo records, not externally delivered email. Activity is read through the same read-only `get-request-activity` action the agent uses; replies, refunds, replacements and labels remain visible after reload. Existing request snapshots are labeled Recorded request state, not invented change history. The Teach slot is noninteractive and reserved for TASK-9.
+
+Seed content and relative time offsets are deterministic. `pnpm -C src seed:shop` anchors timestamps to the current seeding minute; set `SHOP_DEMO_ANCHOR` to an ISO timestamp for a fixed rehearsal/test anchor (also floored to the minute). The generator accepts an explicit anchor for offline fixtures.
 
 ## Building a domain app
 

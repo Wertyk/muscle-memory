@@ -1,6 +1,8 @@
 import { isWithinAutoRefundLimit, requestType, type Request } from "@muscle-memory/shop-domain";
-import { describe, expect, it } from "vitest";
-import { createShopDemoData, DEMO_NOW } from "./shop-demo-data.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createShopDemoData, DEMO_NOW, shopDemoAnchor } from "./shop-demo-data.js";
+
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 function present<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) throw new Error("Missing fixture");
@@ -8,15 +10,39 @@ function present<T>(value: T | null | undefined): T {
 }
 
 describe("rehearsal fixtures", () => {
-  const data = createShopDemoData();
+  const data = createShopDemoData(DEMO_NOW);
   const orderFor = (request: Request) => present(data.orders.find((order) => order.id === request.orderId));
   const replyFor = (request: Request) => present(data.replies.find((reply) => reply.requestId === request.id));
   const damagedHistory = data.requests.filter((r) => r.status === "resolved" && requestType(r) === "damaged_item");
   const historyCase = (id: Request["id"]) => present(damagedHistory.find((r) => r.id === id));
 
   it("recreates identical data with the fixed seed and dates", () => {
+    expect(createShopDemoData(DEMO_NOW)).toEqual(data);
+    expect(createShopDemoData(DEMO_NOW)).toEqual(data);
+  });
+
+  it("anchors default data to the current seeding minute and accepts a fixed rehearsal anchor", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-08T18:30:47.987Z"));
+    vi.stubEnv("SHOP_DEMO_ANCHOR", undefined);
+    expect(shopDemoAnchor()).toBe("2026-11-08T18:30:00.000Z");
+    expect(createShopDemoData()).toEqual(createShopDemoData("2026-11-08T18:30:00Z"));
+    vi.stubEnv("SHOP_DEMO_ANCHOR", DEMO_NOW);
     expect(createShopDemoData()).toEqual(data);
-    expect(createShopDemoData()).toEqual(data);
+    vi.stubEnv("SHOP_DEMO_ANCHOR", "invalid");
+    expect(() => createShopDemoData()).toThrow("SHOP_DEMO_ANCHOR");
+  });
+
+  it("shifts every timestamp by exactly the anchor difference without changing any other content", () => {
+    const anchor = "2026-11-08T17:43:59.999Z";
+    const delta = Date.parse(shopDemoAnchor(anchor)) - Date.parse(DEMO_NOW);
+    const shift = (value: unknown): unknown => {
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) return new Date(Date.parse(value) + delta).toISOString();
+      if (Array.isArray(value)) return value.map(shift);
+      if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shift(item)]));
+      return value;
+    };
+    expect(createShopDemoData(anchor)).toEqual(shift(data));
   });
 
   it("uses fictional-looking contacts and addresses without disclosure words in customer-facing data", () => {

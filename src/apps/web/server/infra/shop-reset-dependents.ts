@@ -1,7 +1,7 @@
 import { getTableName, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { ShopDb } from "../db/index.js";
-import { recipeHandoffs, recipeRuns, recipes, recipeVersions, requestProcessing } from "../db/schema.js";
+import { demoSteps, demonstrations, recipeHandoffs, recipeRuns, recipes, recipeVersions, requestProcessing } from "../db/schema.js";
 import { lockShopWrites } from "./shop-repository.js";
 
 export type ShopResetTransaction = Parameters<Parameters<ShopDb["transaction"]>[0]>[0];
@@ -20,10 +20,12 @@ interface ResetDependent {
 }
 
 /** The single registration point for shop dependents, in child-before-parent
- * DELETE order. Add TASK-9 step/demonstration tables here before their parents.
+ * DELETE order. Register new operational child tables here before their parents.
  * Missing tables are skipped for databases with only the shop migration applied.
  * No framework tables or CASCADE/TRUNCATE are included. */
 export const shopResetDependents: readonly ResetDependent[] = [
+  { table: demoSteps },
+  { table: demonstrations },
   { table: requestProcessing },
   { table: recipeHandoffs, where: scope => scope.all ? undefined : or(
     isNotNull(recipeHandoffs.requestId), inArray(recipeHandoffs.runId, [...scope.requestRunIds]),

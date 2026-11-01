@@ -13,7 +13,6 @@ import {
   IconCheck,
   IconMail,
   IconPackage,
-  IconPlayerRecord,
   IconTruck,
 } from "@tabler/icons-react";
 import { useState } from "react";
@@ -28,6 +27,7 @@ import { ActivityTimeline } from "./ActivityTimeline";
 import { OrderOperations } from "./OrderOperations";
 import { ReplyForm, RequestControls, TagForm } from "./RequestControls";
 import { RequestProcessingBanner } from "./RequestProcessingBanner";
+import { TeachBar } from "./TeachBar";
 import {
   QueryError,
   ShopMasthead,
@@ -130,7 +130,11 @@ function OriginalContent({
 
 function CustomerPanel({ id }: { id: string }) {
   const t = useT();
-  const customer = useActionQuery<Customer>("get-customer", { customerId: id });
+  const customer = useActionQuery<Customer>(
+    "get-customer",
+    { customerId: id },
+    { resources: ["shop"] },
+  );
   return (
     <section className="shop-panel">
       <h2>{t("shop.customer")}</h2>
@@ -235,12 +239,16 @@ function OrderPanel({
 export function RequestPage({ requestId }: { requestId: string }) {
   const t = useT();
   const [saved, setSaved] = useState<SavedResult | null>(null);
-  const query = useActionQuery<Request>("get-request", { requestId });
+  const query = useActionQuery<Request>(
+    "get-request",
+    { requestId },
+    { resources: ["shop"] },
+  );
   const request = query.data;
   const order = useActionQuery<Order>(
     "get-order",
     { orderId: request?.orderId ?? "" },
-    { enabled: Boolean(request?.orderId) },
+    { enabled: Boolean(request?.orderId), resources: ["shop"] },
   );
   const shipment = useActionQuery<{
     orderStatus: string;
@@ -248,7 +256,7 @@ export function RequestPage({ requestId }: { requestId: string }) {
   }>(
     "get-shipment-status",
     { orderId: request?.orderId ?? "" },
-    { enabled: Boolean(request?.orderId) },
+    { enabled: Boolean(request?.orderId), resources: ["shop"] },
   );
   if (query.isPending) return <WorkspaceLoading detail />;
   if (!request)
@@ -294,13 +302,7 @@ export function RequestPage({ requestId }: { requestId: string }) {
         </div>
       </header>
       <RequestProcessingBanner requestId={requestId} />
-      <div className="shop-teach-slot" data-teach-slot="reserved">
-        <IconPlayerRecord className="size-4" aria-hidden="true" />
-        <span className="font-medium">{t("shop.teach")}</span>
-        <span className="ms-auto text-xs text-muted-foreground">
-          {t("shop.teachSoon")}
-        </span>
-      </div>
+      <TeachBar key={request.id} request={request} order={order.data} />
       <div role="status" aria-live="polite">
         {saved && (
           <div className="shop-saved-result">

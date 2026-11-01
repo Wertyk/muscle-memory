@@ -49,8 +49,7 @@ read the request/order/shipment, store an accurate reply, then resolve when hand
 Money is in minor units. `issue-refund` uses the shop-domain auto-refund policy
 for agent approval; omitted amounts conservatively require approval too. Frontend
 calls use the framework's UI capability and are not blocked by this agent gate.
-Every shop mutation uses `traced()`; the injected capture stays inactive until
-TASK-9 adds recording/session policy.
+Every request-handling shop mutation and query uses `traced()`; capture is active only for the teaching operator’s tab and request.
 
 Intake uses active catalog version pointers, not arbitrary saved versions. Structured
 fields match without extraction; free text gets one cheap extraction attempt and must
@@ -97,13 +96,13 @@ Only sanitized assertions/metadata are saved to `scripts/shop-actions-evidence.j
 
 `/inbox` calls `list-requests` with status/type URL filters and `get-customer` for customer names. `/requests/:requestId` calls `get-request`, `get-customer`, `get-order`, `get-shipment-status` and `get-request-activity`. The reply composer calls `send-reply` (plain text or literal template plus optional JSON variables); Add tag calls `tag-request`; Resolve/status menu calls `set-request-status`; Escalate calls `escalate` with a reason. Order actions call `issue-refund`, `create-replacement-order`, `update-shipping-address` and `generate-return-label`. The server validates all policies. Framework action queries refresh after frontend mutations and the current user's agent writes. Only `/inbox` and `/requests/:requestId` opt into shared `useDbSync` for external arrivals and recipe changes; hidden tabs pause and idle polling backs off. Other routes keep background sync off.
 
-Handle with agent stages a bounded request-specific prompt in the contextual sidebar using `sendToAgentChat`; the operator sends it there and can steer the same conversation. Replies are demo records, not externally delivered email. Activity is read through the same read-only `get-request-activity` action the agent uses; replies, refunds, replacements and labels remain visible after reload. Existing request snapshots are labeled Recorded request state, not invented change history. The Teach slot is noninteractive and reserved for TASK-9.
+Handle with agent stages a bounded request-specific prompt in the contextual sidebar using `sendToAgentChat`; the operator sends it there and can steer the same conversation. Replies are demo records, not externally delivered email. Activity is read through the same read-only `get-request-activity` action the agent uses; replies, refunds, replacements and labels remain visible after reload. Existing request snapshots are labeled Recorded request state, not invented change history. The Teach bar records the current request through the shared demonstration actions below.
 
 Seed content and relative time offsets are deterministic. `pnpm -C src seed:shop` anchors timestamps to the current seeding minute; set `SHOP_DEMO_ANCHOR` to an ISO timestamp for a fixed rehearsal/test anchor (also floored to the minute). The generator accepts an explicit anchor for offline fixtures.
 
 For another rehearsal, `pnpm -C src seed:shop` atomically removes prior shop-linked
-intake checkpoints, handoffs and recipe runs before restoring the shop seed. Recipe
-catalog entries and immutable versions survive, so active recipes remain usable.
+intake checkpoints, handoffs, recipe runs and demonstrations/steps before restoring
+the shop seed. Recipe catalog entries and immutable versions survive, so active recipes remain usable.
 `pnpm -C src reset:shop` performs the same cleanup and leaves the shop empty.
 Add `--all` to either command for a pristine rehearsal: all recipe runs/handoffs,
 catalog entries and versions are removed too. `seed:shop --all` restores only the
@@ -111,7 +110,8 @@ shop seed; it never installs fixture recipes. Framework data and migration recor
 survive every mode. Run these maintenance commands between executions; they do not
 cancel an in-flight worker.
 
-Register additional shop-dependent tables (including TASK-9 demonstrations/steps)
+TASK-9 demonstrations/steps are registered alongside intake data. Register additional
+shop-dependent tables
 in `server/infra/shop-reset-dependents.ts`, before their parents in DELETE order.
 That registry controls cleanup and locking for both commands; do not add separate
 seed-only teardown code. Missing optional tables are skipped on shop-only schemas.
@@ -125,3 +125,60 @@ Use `adding-a-feature` for functional parity and `frontend-design` for a user-fa
 Before building common workspace or agent UI, read `agent-native-toolkit`; for supported customization, read `customizing-agent-native`.
 
 - Guarded verification: run `pnpm agent-native:doctor`; fix findings before done.
+
+## Teach mode (TASK-9)
+
+`start-demonstration({requestId, fields?})` starts on the request open in the current tab.
+`stop-demonstration({demonstrationId})` retains a completed trace; `cancel-demonstration`
+with the same ID discards the recording and frees the slot (shop effects remain).
+Only one active recording is allowed per authenticated user/workspace/browser tab.
+`get-demonstration({requestId})` reads this tab’s latest trace for the request;
+`get-demonstration({demonstrationId})` reads an owned trace from UI, agent, MCP or CLI,
+including the identical intake trigger, ordered inputs/outputs, navigation and timing.
+`view-screen` exposes the current demonstration ID, status, count and incomplete reason.
+After stopping, re-read it and verify status and saved step count; never infer success
+from the button alone. Incomplete traces retain a reason and must be reviewed.
+
+Teach never calls a model. Structured requests use their original fields through
+`buildRequestTrigger`; free text reuses saved validated intake fields or requires
+operator-confirmed details through the same strict shop schema. A trace stores full
+successful shop results, with invocation-order reservations for concurrent reads.
+Within a demonstration each distinct read (same action + canonical JSON input) is
+captured once, retaining the first invocation’s output even if identical reads
+finish out of order. Refetches still return current shop state. Mutations are
+always captured. The bar numbers actions and summarizes lookups separately; Inspect
+and get-demonstration retain the complete ordered trace of first reads + mutations.
+Rejected actions are omitted; failed capture preserves the successful shop action
+and marks the trace incomplete. Do not repeat a refund/reply because capture failed.
+A durable pending reservation also prevents stop from claiming an interrupted trace
+is complete. Stopping while calls are in flight is explicitly incomplete.
+
+Navigation and related request/order/customer IDs must match; other tabs/users,
+inbox-wide query results and deterministic recipe/intake execution are excluded.
+The bar observes framework action queries and opts into the shared sync transport
+only while recording, because read-only shop calls also write captured steps.
+Those notifications target the demonstrations resource; shop query observers declare
+the shop resource to prevent refetch/capture loops. No feature polling loop exists.
+Demonstrations retain historical snapshots until an explicit rehearsal reset/reseed,
+which removes their headers and steps together with other shop operational data.
+
+Offline tests cover the capture-failure refund regression and the Teach controls.
+Opt-in HTTP proof: `pnpm exec tsx scripts/teach-mode-smoke.ts` from apps/web. It
+seeds an isolated temporary PGlite through the workspace seed command, starts dev
+on port 5189, uses the normal authenticated frontend action transport, verifies
+five first lookup snapshots + three mutations despite refetches, a 50%-platter
+refund and trigger shape, tests overlap/cancellation/isolation, then
+stops the server and removes its temporary database. No model is called.
+
+
+### Menu-launched dialogs (TASK-8 regression fixed in TASK-9)
+
+Order actions and the request-status menu use `DropdownMenu modal={false}` because
+they launch modal dialogs. Only Dialog owns the body pointer lock during the
+handoff; overlapping modal menu/dialog lifetimes can leave pointer-events:none
+on body after the last dialog closes. Keep the dialogs modal and leave pointer
+style cleanup to Radix. Do not globally reset body styles or disable dialog
+modality. Rejected submissions retain an interactive dialog until retry/cancel.
+The pointer-event workspace regressions cover all four order dialogs and Escalate
+with submit/cancel/rejected-submit→cancel, body lock restoration, and a subsequent
+Stop & save click, plus the filmed refund→reply→tag→Stop continuation.

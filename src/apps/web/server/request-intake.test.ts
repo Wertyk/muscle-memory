@@ -3,9 +3,10 @@ import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { writeAppStateForCurrentTab } from "@agent-native/core/application-state";
 import { closeDbExec, getDbExec, withMigrationRuntime } from "@agent-native/core/db";
 import { listSubscriptions, subscribe, unsubscribe } from "@agent-native/core/event-bus";
-import { loadActionsFromStaticRegistry } from "@agent-native/core/server";
+import { loadActionsFromStaticRegistry, runWithRequestContext } from "@agent-native/core/server";
 import { parseRecipeVersion, type JsonObject } from "@muscle-memory/recipe-engine";
 import { ClassifyRequest } from "@muscle-memory/shop-domain";
 import { eq } from "drizzle-orm";
@@ -20,6 +21,9 @@ import sendReply from "../actions/send-reply.js";
 import tagRequest from "../actions/tag-request.js";
 import resumeRecipeRun from "../actions/resume-recipe-run.js";
 import setRequestStatus from "../actions/set-request-status.js";
+import startDemonstration from "../actions/start-demonstration.js";
+import stopDemonstration from "../actions/stop-demonstration.js";
+import getRequest from "../actions/get-request.js";
 import * as composition from "./composition.js";
 import { getDb, type ShopDb } from "./db/index.js";
 import * as tables from "./db/schema.js";
@@ -293,6 +297,17 @@ describe("request.created intake: real actions/event bus/executor on PGlite, off
   it("supports the root seed/reset CLI after intake and forwards the explicit pristine flag", async () => {
     const cases = await activateFixtures();
     await cases.demo.execute();
+    await runWithRequestContext({ userEmail: context.userEmail, orgId: "shop", run: { browserTabId: "reseed_teach" } }, async () => {
+      await writeAppStateForCurrentTab("navigation", { view: "request", requestId: "req_0001", path: "/requests/req_0001" });
+      const demo = await startDemonstration.run({ requestId: "req_0001" }, context);
+      await getRequest.run({ requestId: "req_0001" }, context);
+      await tagRequest.run({ requestId: "req_0001", tag: "rehearsal" }, context);
+      const saved = await stopDemonstration.run({ demonstrationId: demo.id }, context);
+      expect(saved.status).toBe("completed");
+      expect(saved.steps.map(step => step.action)).toEqual(["get-request", "tag-request"]);
+    });
+    expect(await db.select().from(tables.demonstrations)).toHaveLength(1);
+    expect(await db.select().from(tables.demoSteps)).toHaveLength(2);
     const catalog = await db.select().from(tables.recipes).orderBy(tables.recipes.id);
     const exec = promisify(execFile);
     const cli = async (command: string, flags: string[] = []) => {
@@ -310,6 +325,8 @@ describe("request.created intake: real actions/event bus/executor on PGlite, off
     expect(await db.select().from(tables.requestProcessing)).toEqual([]);
     expect(await db.select().from(tables.recipeHandoffs)).toEqual([]);
     expect(await db.select().from(tables.recipeRuns)).toEqual([]);
+    expect(await db.select().from(tables.demonstrations)).toEqual([]);
+    expect(await db.select().from(tables.demoSteps)).toEqual([]);
     expect(await db.select().from(tables.recipes).orderBy(tables.recipes.id)).toEqual(catalog);
     await expect(cli("seed:shop", ["--al"])).rejects.toThrow("Usage:");
     expect(await db.select().from(tables.requests)).toHaveLength(60);

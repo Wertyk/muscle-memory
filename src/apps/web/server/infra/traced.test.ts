@@ -25,6 +25,7 @@ describe("traced action run", () => {
         },
         {
           recording: async () => ({
+            incomplete: async () => {},
             append: async (step) => {
               steps.push(step);
             },
@@ -65,7 +66,10 @@ describe("traced action run", () => {
       navigation,
     });
     await expect(run({}, context)).resolves.toEqual({ ok: true });
-    expect(recording).toHaveBeenCalledWith(context);
+    expect(recording).toHaveBeenCalledWith(context, {
+      actionName: "mutate",
+      input: {},
+    });
     expect(navigation).not.toHaveBeenCalled();
     expect(append).not.toHaveBeenCalled();
   });
@@ -73,11 +77,11 @@ describe("traced action run", () => {
   it("keeps the session captured at entry when the active recording changes", async () => {
     const first = vi.fn();
     const second = vi.fn();
-    let active = { append: first };
+    let active = { append: first, incomplete: vi.fn() };
     const run = traced(
       "mutate",
       async () => {
-        active = { append: second };
+        active = { append: second, incomplete: vi.fn() };
         return 7;
       },
       {
@@ -90,10 +94,11 @@ describe("traced action run", () => {
     expect(second).not.toHaveBeenCalled();
   });
 
-  it("does not record rejected calls and propagates persistence failures", async () => {
+  it("does not record rejected calls; returns successful output exactly once when persistence fails", async () => {
     const append = vi.fn();
+    const incomplete = vi.fn();
     const capture = {
-      recording: async () => ({ append }),
+      recording: async () => ({ append, incomplete }),
       navigation: async () => null,
     };
     await expect(
@@ -107,8 +112,14 @@ describe("traced action run", () => {
     ).rejects.toThrow("rejected");
     expect(append).not.toHaveBeenCalled();
     append.mockRejectedValue(new Error("store unavailable"));
-    await expect(traced("mutate", async () => 1, capture)({})).rejects.toThrow(
-      "store unavailable",
+    const mutation = vi.fn(async () => 1);
+    await expect(traced("mutate", mutation, capture)({})).resolves.toBe(1);
+    expect(mutation).toHaveBeenCalledOnce();
+    expect(incomplete).toHaveBeenCalledWith(
+      expect.stringContaining("shop action succeeded"),
     );
+    incomplete.mockRejectedValue(new Error("still unavailable"));
+    await expect(traced("mutate", mutation, capture)({})).resolves.toBe(1);
+    expect(mutation).toHaveBeenCalledTimes(2);
   });
 });

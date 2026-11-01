@@ -8,3 +8,5 @@ export type { MatchInput, RequestMatch, MatchReason } from "./application/match-
 export { buildRequestTrigger } from "./application/request-trigger.js";
 export { BacktestRecipe } from "./application/backtest-recipe.js";
 export type { StartBacktest, CompareBacktestVersions } from "./application/backtest-recipe.js";
+export type * from "./domain/demonstration.js";
+export { Demonstrations, DemonstrationError } from "./application/demonstrations.js";

@@ -1,0 +1,329 @@
+// Opt-in HTTP smoke. No browser automation, real model calls, or production data.
+import assert from "node:assert/strict";
+import { execFile, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+import type { Demonstration } from "@muscle-memory/recipe-engine";
+import type { Order, Refund, Request } from "@muscle-memory/shop-domain";
+import { Window } from "happy-dom";
+
+const web = fileURLToPath(new URL("../", import.meta.url));
+const workspace = fileURLToPath(new URL("../../../", import.meta.url));
+const exec = promisify(execFile);
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const origin = "http://localhost:5189";
+let stage = "initialization";
+async function smoke() {
+  assert(
+    !(await fetch(`${origin}/_agent-native/ping`).then(
+      () => true,
+      () => false,
+    )),
+    "Smoke port must be free",
+  );
+  const directory = await mkdtemp(`${tmpdir()}/muscle-memory-teach-smoke-`);
+  const env = {
+    ...process.env,
+    DATABASE_URL: `pglite:${directory}/db`,
+    NODE_ENV: "development",
+    BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
+    BETTER_AUTH_URL: origin,
+  };
+  let server: ReturnType<typeof spawn> | undefined;
+  let dom: Window | undefined;
+  const nativeFetch = globalThis.fetch;
+  const saved = new Map<string, PropertyDescriptor | undefined>();
+  const cookies = new Map<string, string>();
+  const remember = (r: Response) => {
+    for (const value of r.headers.getSetCookie()) {
+      const pair = value.split(";")[0]!;
+      cookies.set(pair.slice(0, pair.indexOf("=")), pair);
+    }
+  };
+  try {
+    stage = "seed and start";
+    await exec("pnpm", ["-C", workspace, "seed:shop"], {
+      env,
+      timeout: 60_000,
+      maxBuffer: 1_000_000,
+    });
+    server = spawn("pnpm", ["-C", workspace, "dev", "--port", "5189"], {
+      cwd: web,
+      env,
+      detached: true,
+      stdio: "ignore",
+    });
+    for (let attempt = 0; ; attempt++) {
+      if (
+        await nativeFetch(`${origin}/_agent-native/ping`).then(
+          (r) => r.ok,
+          () => false,
+        )
+      )
+        break;
+      assert(
+        attempt < 50 && server.exitCode === null,
+        "Local server did not start",
+      );
+      await delay(500);
+    }
+    stage = "authenticated landing";
+    let signIn = await nativeFetch(`${origin}/sign-in`, {
+      redirect: "manual",
+      headers: { Accept: "text/html" },
+    });
+    for (let attempt = 0; signIn.status === 503 && attempt < 20; attempt++) {
+      await delay(500);
+      signIn = await nativeFetch(`${origin}/sign-in`, {
+        redirect: "manual",
+        headers: { Accept: "text/html" },
+      });
+    }
+    remember(signIn);
+    assert(
+      cookies.size > 0,
+      "Fresh development DB must issue its normal local session",
+    );
+    const inbox = await nativeFetch(`${origin}/inbox`, {
+      headers: { cookie: [...cookies.values()].join("; ") },
+    });
+    assert(inbox.ok, "Authenticated inbox must load");
+    dom = new Window({ url: `${origin}/requests/req_0001` });
+    for (const [key, value] of Object.entries({
+      window: dom,
+      document: dom.document,
+      navigator: dom.navigator,
+    })) {
+      saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+      Object.defineProperty(globalThis, key, {
+        value,
+        configurable: true,
+        writable: true,
+      });
+    }
+    globalThis.fetch = async (input, init) => {
+      const headers = new Headers(init?.headers);
+      headers.set("cookie", [...cookies.values()].join("; "));
+      headers.set("origin", origin);
+      headers.set("referer", `${origin}/requests/req_0001`);
+      const response = await nativeFetch(new URL(String(input), origin), {
+        ...init,
+        headers,
+      });
+      remember(response);
+      return response;
+    };
+    const { callAction, getBrowserTabId, writeClientAppState } =
+      await import("@agent-native/core/client/hooks");
+    await writeClientAppState(
+      "navigation",
+      { view: "request", requestId: "req_0001", path: "/requests/req_0001" },
+      { requestSource: getBrowserTabId() },
+    );
+    stage = "start and overlap rejection";
+    const first = await callAction<Demonstration>(
+      "start-demonstration",
+      { requestId: "req_0001" },
+      { uiOnly: true },
+    );
+    let overlapRejected = false;
+    try {
+      await callAction(
+        "start-demonstration",
+        { requestId: "req_0001" },
+        { uiOnly: true },
+      );
+    } catch {
+      overlapRejected = true;
+    }
+    assert(overlapRejected, "Overlapping recording must fail");
+    stage = "initial lookups, refund, reply, tag with automatic refetches";
+    const request = await callAction<Request>(
+      "get-request",
+      { requestId: "req_0001" },
+      { method: "GET" },
+    );
+    const order = await callAction<Order>(
+      "get-order",
+      { orderId: request.orderId! },
+      { method: "GET" },
+    );
+    const refetch = () =>
+      Promise.all([
+        callAction("get-request", { requestId: request.id }, { method: "GET" }),
+        callAction("get-order", { orderId: order.id }, { method: "GET" }),
+        callAction(
+          "get-shipment-status",
+          { orderId: order.id },
+          { method: "GET" },
+        ),
+        callAction(
+          "get-customer",
+          { customerId: request.customerId },
+          { method: "GET" },
+        ),
+        callAction(
+          "get-request-activity",
+          { requestId: request.id },
+          { method: "GET" },
+        ),
+      ]);
+    await refetch();
+    assert(
+      request.content.source === "structured" &&
+        request.content.fields.type === "damaged_item",
+    );
+    const productId = request.content.fields.productId;
+    const platter = order.items.find((item) => item.productId === productId)!;
+    const halfPriceMinor = Math.round(platter.unitPrice.amountMinor * 0.5);
+    const refund = await callAction<Refund>(
+      "issue-refund",
+      {
+        orderId: order.id,
+        amount: { amountMinor: halfPriceMinor, currency: order.paid.currency },
+        reason: "50% of chipped platter price",
+      },
+      { uiOnly: true },
+    );
+    assert.equal(refund.amount.amountMinor, halfPriceMinor);
+    await refetch();
+    await callAction(
+      "send-reply",
+      {
+        requestId: request.id,
+        template: `We refunded $${(halfPriceMinor / 100).toFixed(2)} for the chipped platter.`,
+        variables: {},
+      },
+      { uiOnly: true },
+    );
+    await refetch();
+    await callAction(
+      "tag-request",
+      { requestId: request.id, tag: "teach-smoke" },
+      { uiOnly: true },
+    );
+    await refetch();
+    await callAction(
+      "get-request",
+      { requestId: "req_0002" },
+      { method: "GET" },
+    );
+    const otherTab = await callAction(
+      "get-demonstration",
+      { requestId: "req_0001" },
+      {
+        method: "GET",
+        headers: { "X-Agent-Native-Browser-Tab": "smoke_other_tab" },
+      },
+    );
+    assert.equal(otherTab, null);
+    stage = "live readback";
+    const live = await callAction<Demonstration>(
+      "get-demonstration",
+      { demonstrationId: first.id },
+      { method: "GET" },
+    );
+    assert.equal(live.status, "recording");
+    assert.equal(live.steps.length, 8);
+    assert.deepEqual(
+      live.steps.slice(5).map((s) => s.action),
+      ["issue-refund", "send-reply", "tag-request"],
+    );
+    assert.equal(new Set(live.steps.slice(0, 5).map((s) => s.action)).size, 5);
+    assert.equal(live.trigger.type, "damaged_item");
+    assert.equal(live.trigger.requestId, "req_0001");
+    assert(!("content" in live.trigger));
+    assert.equal((live.steps[5]!.output as { id: string }).id, refund.id);
+    stage = "stop and persisted readback";
+    await callAction(
+      "stop-demonstration",
+      { demonstrationId: first.id },
+      { uiOnly: true },
+    );
+    const savedTrace = await callAction<Demonstration>(
+      "get-demonstration",
+      { demonstrationId: first.id },
+      { method: "GET" },
+    );
+    assert.equal(savedTrace.status, "completed");
+    assert.equal(savedTrace.steps.length, 8);
+    stage = "cancel frees slot";
+    const second = await callAction<Demonstration>(
+      "start-demonstration",
+      { requestId: "req_0001" },
+      { uiOnly: true },
+    );
+    await callAction(
+      "cancel-demonstration",
+      { demonstrationId: second.id },
+      { uiOnly: true },
+    );
+    const third = await callAction<Demonstration>(
+      "start-demonstration",
+      { requestId: "req_0001" },
+      { uiOnly: true },
+    );
+    await callAction(
+      "stop-demonstration",
+      { demonstrationId: third.id },
+      { uiOnly: true },
+    );
+    console.log(
+      JSON.stringify({
+        authenticatedLanding: true,
+        overlapRejected,
+        sessionIsolation: true,
+        unrelatedRequestExcluded: true,
+        capturedActions: savedTrace.steps.slice(5).map((s) => s.action),
+        distinctLookups: 5,
+        refetchDeduplication: true,
+        refundAmountMinor: halfPriceMinor,
+        savedStepCount: savedTrace.steps.length,
+        triggerShape: "intake",
+        stopped: true,
+        cancellationFreedSlot: true,
+        demonstrationId: first.id,
+      }),
+    );
+  } finally {
+    globalThis.fetch = nativeFetch;
+    for (const [key, value] of saved) {
+      if (value) Object.defineProperty(globalThis, key, value);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+    await dom?.happyDOM.close();
+    if (server?.pid) {
+      try {
+        process.kill(-server.pid, "SIGTERM");
+      } catch {
+        /* already stopped */
+      }
+      if (server.exitCode === null)
+        await Promise.race([
+          new Promise((done) => server!.once("exit", done)),
+          delay(3000),
+        ]);
+      try {
+        process.kill(-server.pid, "SIGKILL");
+      } catch {
+        /* already stopped */
+      }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+try {
+  await smoke();
+} catch {
+  console.error(
+    `Teach HTTP smoke failed at: ${stage}. No credential or response details logged.`,
+  );
+  process.exitCode = 1;
+}
+
+// Client helpers retain session timers in Node; the server and DOM are closed above.
+process.exit(process.exitCode ? 1 : 0);

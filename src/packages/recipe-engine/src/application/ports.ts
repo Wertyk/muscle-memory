@@ -1,3 +1,4 @@
+import type { Demonstration, DemonstrationOwner, DemonstrationScope } from "../domain/demonstration.js";
 import type { ExtractField, JsonObject, JsonValue, RecipeVersion } from "../domain/model.js";
 import type { ActionEffect, HandoffContext, Run, TokenUsage } from "../domain/run.js";
 import type { HistoricalCase, Mutation } from "../domain/backtest.js";
@@ -79,4 +80,22 @@ export interface BacktestRecipeDependencies {
   /** Fresh IDs also prevent read adapters from sharing idempotency keys across cases. */
   readonly ids: IdGenerator;
   readonly normalizer?: MutationNormalizer;
+}
+
+/** All operations in the callback commit atomically under an exclusive DB lock.
+ * Callbacks are invoked once, never automatically retried. Scope all reads. */
+export interface TraceStore {
+  transaction<T>(
+    work: (records: DemonstrationRecords) => Promise<T>,
+  ): Promise<T>;
+}
+export interface DemonstrationRecords {
+  active(scope: DemonstrationScope): Promise<Demonstration | null>;
+  latest(
+    scope: DemonstrationScope,
+    subjectId: string,
+  ): Promise<Demonstration | null>;
+  get(owner: DemonstrationOwner, id: string): Promise<Demonstration | null>;
+  /** Atomically replace the entire snapshot, including removal of superseded steps. */
+  save(demonstration: Demonstration): Promise<void>;
 }

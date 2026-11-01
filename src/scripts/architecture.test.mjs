@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { writeFileSync, unlinkSync } from "node:fs";
-import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, relative, resolve } from "node:path";
 import { test } from "node:test";
 
 const workspace = resolve(import.meta.dirname, "..");
 
-function check() {
-  return spawnSync("pnpm", ["lint:arch"], {
+function check(args = []) {
+  return spawnSync("pnpm", ["lint:arch", ...args], {
     cwd: workspace,
     encoding: "utf8",
     timeout: 30_000,
@@ -51,7 +52,46 @@ for (const name of ["recipe-engine", "shop-domain"]) {
       unlinkSync(probe);
     }
   });
+
+  test(`${name}: application still rejects a non-Zod package resolved through pnpm`, () => {
+    const probe = resolve(workspace, "packages", name, "src/application/__architecture-probe.ts");
+    const webRequire = createRequire(resolve(workspace, "apps/web/package.json"));
+    const specifier = relative(dirname(probe), webRequire.resolve("react"));
+    writeFileSync(probe, `import ${JSON.stringify(specifier)};`, { flag: "wx" });
+    try {
+      const result = check(["--output-type", "json"]);
+      const graph = JSON.parse(result.stdout);
+      // The JSON reporter communicates violations in the graph, not the exit status.
+      assert.ok(graph.summary.error > 0);
+      const module = graph.modules.find((entry) => entry.source === relative(workspace, probe));
+      const dependency = module?.dependencies.find((entry) => entry.module === specifier);
+      assert.ok(dependency, "The probe must actually import the resolved non-Zod package");
+      assert.equal(dependency.couldNotResolve, false);
+      assert.match(dependency.resolved, /^node_modules\/\.pnpm\/react@[^/]+\/node_modules\/react\//);
+      assert.ok(graph.summary.violations.some((violation) => violation.from === relative(workspace, probe) && violation.rule.name === `${name}-application-dependencies`));
+    } finally {
+      unlinkSync(probe);
+    }
+  });
 }
+
+test("recipe-engine: application may import Zod resolved through pnpm", () => {
+  const probe = resolve(workspace, "packages/recipe-engine/src/application/__architecture-probe.ts");
+  writeFileSync(probe, 'import { z } from "zod";\nexport const schema = z.string();', { flag: "wx" });
+  try {
+    const result = check(["--output-type", "json"]);
+    const graph = JSON.parse(result.stdout);
+    const module = graph.modules.find((entry) => entry.source === relative(workspace, probe));
+    const dependency = module?.dependencies.find((entry) => entry.module === "zod");
+    assert.ok(dependency, "The probe must actually import Zod");
+    assert.equal(dependency.couldNotResolve, false);
+    assert.match(dependency.resolved, /^node_modules\/\.pnpm\/zod@[^/]+\/node_modules\/zod\//);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(graph.summary.error, 0, JSON.stringify(graph.summary.violations));
+  } finally {
+    unlinkSync(probe);
+  }
+});
 
 for (const sdk of [
   "ai",

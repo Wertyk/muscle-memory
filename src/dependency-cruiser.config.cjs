@@ -30,7 +30,14 @@ module.exports = {
           severity: "error",
           from: { path: `^${own}/application/` },
           to: {
-            pathNot: [`^${own}/domain/`, `^${own}/application/`, "^node_modules/zod/", "^zod(?:/|$)"],
+            pathNot: [
+              `^${own}/domain/`,
+              `^${own}/application/`,
+              "^node_modules/zod/",
+              // pnpm resolves Zod to its own versioned store directory.
+              "^node_modules/\\.pnpm/zod@[^/]+/node_modules/zod/",
+              "^zod(?:/|$)",
+            ],
           },
         },
         {

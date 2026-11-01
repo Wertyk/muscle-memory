@@ -1,10 +1,95 @@
 # Recipe engine
 
-Pure, domain-agnostic recipe DSL, evaluation, and demonstration provenance inference.
+Pure, domain-agnostic recipe DSL, evaluation, demonstration provenance inference, and execution.
 Import the public API from `@muscle-memory/recipe-engine`.
 The domain has no external dependencies; application validation depends only on Zod.
-Persistence, execution, LLM extraction, and selecting/resolving a draft's trigger and doubts
-are subsequent use-cases, outside this module's current scope.
+Execution uses injected ports; this package contains no framework, DB, or LLM adapters.
+Selecting/resolving a draft's trigger and doubts remains a subsequent use-case.
+
+## Execution (TASK-14 Phase 1)
+
+`RunRecipe` takes `RunRecipeDependencies`: `actions` (`ActionInvoker`), `extractor`
+(`TextExtractor`), `handoff` (`AgentHandoff`), `runs` (`RunRepository`), `clock` (`Clock`),
+and `ids` (`IdGenerator`). All interfaces and run models are exported from the public API.
+`test/fakes.ts` supplies detached in-memory adapters for unit tests, without network calls.
+
+```ts
+const executor = new RunRecipe({ actions, extractor, handoff, runs, clock, ids });
+const run = await executor.execute({ recipe: version, trigger: payload });
+// Gates apply to every step kind, independently of framework action approvals.
+if (run.status === "awaiting_approval") {
+  await executor.resume({
+    runId: run.id,
+    approval: { stepId: run.awaitingApprovalStepId!, decision: "approve" },
+  });
+  // decision: "reject" permanently aborts the run before this step executes.
+}
+```
+
+Start validates and snapshots the version and trigger. Matching the trigger event/condition
+is the caller's responsibility. The run stores its immutable version, mode, trigger, pending
+step IDs, approval decisions, logs, and token totals. Resume takes only a run ID and optional
+decision/retry; it cannot substitute a different version, payload, or mode. The pending queue
+preserves the selected branch and the continuation after nested branches across pauses.
+Approvals are scoped to a step; replaying an earlier approval cannot approve a later gate.
+
+Each visited step has an attempt log with status, resolved input, output, active duration in
+milliseconds, input/output tokens, timestamps, and any error. Unselected branch children are
+not visited/logged. Branch output records `{branch: "then" | "else"}` as control-flow metadata;
+as required by the DSL, branch/handoff outputs are not binding sources. A rejected gate has
+`rejected` status; the run becomes `aborted`. Approval waiting is excluded from step duration.
+Retries append attempts, retaining failures and their consumed extraction tokens. The run's
+`tokens` sums all attempts; total tokens are `tokens.input + tokens.output`.
+
+Extraction resolves text to a string, calls the port with the typed fields, validates required
+fields and primitive types, rejects undeclared fields, and counts the returned token usage
+even if output validation fails. Adapters must return nonnegative safe integer usage and
+bounded finite JSON. Action adapters must turn unsuccessful action results into exceptions.
+No model is involved in an action/branch-only happy path.
+
+Explicit handoff terminates recipe execution and sends the requested `agent`/`human` target,
+resolved note, trigger, version/run/step IDs, prior outputs, and logs to `AgentHandoff`.
+Unexpected failures go to the same port with reason `failure`; interrupted attempts use
+`interrupted`. Handoff delivery is checkpointed and retryable independently of shop actions.
+A failed delivery leaves `status: "failed"`, `handoff.status: "pending"`; plain `resume`
+retries only delivery. Successful delivery gives `handed_off` and stops the recipe.
+After a failure, `resume({runId, retry: true})` can explicitly retry a safe read, extraction,
+or evaluation; failed/interrupted mutations require reconciliation by the agent instead.
+
+### Checkpoints and adapter obligations
+
+The repository must durably save the running intent before an external call, then its result
+and cursor together. It must serialize the entire start/resume operation per run **across
+workers**, including loading, external calls, and individual checkpoint writes. Locking is
+not a transaction that can roll back prior checkpoints, and callbacks must never be retried
+automatically. `create` rejects ID collisions; `save` rejects missing records. Run IDs are
+short strings such as `run_0001`. The clock returns finite epoch milliseconds.
+
+Resume reuses completed results and never repeats completed mutations. If a worker loses the
+result checkpoint after an action may have run, the persisted `running` attempt is handed off
+instead of replayed. Action calls also receive a stable `runId:stepId` idempotency key, which
+adapters can propagate. Handoff delivery retries use their own stable key; the handoff adapter
+must deduplicate it. This avoids blind replay without claiming atomicity between the engine
+repository and an external side effect. Usage lost in a process crash cannot be reconstructed
+by the engine.
+
+### Dry-run
+
+`execute({recipe, trigger, mode: "dry-run"})` invokes reads and extraction (counting actual
+tokens), while mutations have `planned` logs containing the action name and intended input.
+These logs are the intended-mutation report; filter by `effect === "mutation"`. Approval
+requirements are reported but do not pause a simulation. No agent/human handoff is delivered,
+including on failure; explicit handoff is logged as planned and ends the simulation.
+
+The engine does not invent mutation outputs. Steps depending on them have `blocked` status,
+`input: null`, and `blockedBy` source paths. This check includes expression defaults and
+approval conditions so missing outputs cannot silently choose a branch. A blocked branch's
+children are not simulated; independent later steps still run. A completed dry-run can
+therefore contain blocked steps and is not evidence that those paths succeeded.
+
+Framework invoker/extraction/handoff adapters, real actions, and DB persistence are TASK-14
+**Phase 2**, after TASK-3 and TASK-6 merge. Phase 1 verifies the engine side of AC #1/#5 and
+AC #2–#4/#6–#8 with fakes. No `apps/web` integration is included here.
 
 ## Validated versions
 

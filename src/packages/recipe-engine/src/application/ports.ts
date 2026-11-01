@@ -1,4 +1,4 @@
-import type { ExtractField, JsonObject, JsonValue } from "../domain/model.js";
+import type { ExtractField, JsonObject, JsonValue, RecipeVersion } from "../domain/model.js";
 import type { ActionEffect, HandoffContext, Run, TokenUsage } from "../domain/run.js";
 import type { HistoricalCase, Mutation } from "../domain/backtest.js";
 
@@ -16,6 +16,17 @@ export interface TextExtractor {
     readonly text: string;
     readonly fields: Readonly<Record<string, ExtractField>>;
   }): Promise<{ readonly output: JsonObject; readonly tokens: TokenUsage }>;
+}
+
+export interface ActiveRecipeSource {
+  /** Only active pointers, resolved to immutable, detached version snapshots. */
+  listActive(): Promise<readonly RecipeVersion[]>;
+}
+
+export interface RequestExtractor {
+  /** One narrow extraction call. Null fields means invalid/incomplete app fields;
+   * preserve known usage even when validation fails. Never guess missing fields. */
+  extract(text: string): Promise<{ readonly fields: JsonObject | null; readonly tokens: TokenUsage }>;
 }
 
 export interface AgentHandoff {

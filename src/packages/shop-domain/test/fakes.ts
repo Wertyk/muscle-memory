@@ -41,6 +41,10 @@ export class InMemoryShop implements ShopRepository {
     ));
   }
   async getRequest(id: RequestId): Promise<Request | null> { return clone(this.requests.get(id) ?? null); }
+  async createRequest(request: Request): Promise<void> {
+    if (this.requests.has(request.id)) throw new Error("Duplicate request ID");
+    this.requests.set(request.id, clone(request));
+  }
   async saveRequest(request: Request): Promise<void> { this.requests.set(request.id, clone(request)); }
   async getCustomer(id: CustomerId): Promise<Customer | null> { return clone(this.customers.get(id) ?? null); }
   async getProduct(id: ProductId): Promise<Product | null> { return clone(this.products.get(id) ?? null); }

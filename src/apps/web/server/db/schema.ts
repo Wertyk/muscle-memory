@@ -1,9 +1,9 @@
 import type {
   Customer, Order, Product, Refund, Reply, Request, RequestType, Shipment,
 } from "@muscle-memory/shop-domain";
-import type { HandoffContext, RecipeVersion, Run } from "@muscle-memory/recipe-engine";
+import type { HandoffContext, Recipe, RecipeVersion, RequestMatch, Run } from "@muscle-memory/recipe-engine";
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, pgTable, text, uniqueIndex, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { foreignKey, index, integer, jsonb, pgTable, text, uniqueIndex, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 export const customers = pgTable("customers", {
   id: varchar("id", { length: 31 }).$type<Customer["id"]>().primaryKey(),
@@ -84,13 +84,30 @@ export const replies = pgTable("replies", {
   createdAt: text("created_at").notNull(),
 }, (table) => [index("replies_request_idx").on(table.requestId), index("replies_customer_idx").on(table.customerId)]);
 
-// Minimal immutable versions; registry/activation is a later task.
+// Immutable snapshots can also exist without a catalog entry (ad hoc runs).
 export const recipeVersions = pgTable("recipe_versions", {
   id: varchar("id", { length: 31 }).primaryKey(),
   recipeId: varchar("recipe_id", { length: 31 }).notNull(),
   version: integer("version").notNull(),
   snapshot: jsonb("snapshot").$type<RecipeVersion>().notNull(),
-}, (table) => [uniqueIndex("recipe_versions_number_idx").on(table.recipeId, table.version)]);
+}, (table) => [
+  uniqueIndex("recipe_versions_number_idx").on(table.recipeId, table.version),
+  uniqueIndex("recipe_versions_owner_idx").on(table.recipeId, table.id),
+]);
+
+export const recipes = pgTable("recipes", {
+  id: varchar("id", { length: 31 }).primaryKey(),
+  name: text("name").notNull(),
+  status: text("status", { enum: ["draft", "active"] }).$type<Recipe["status"]>().notNull(),
+  activeVersionId: varchar("active_version_id", { length: 31 }),
+}, (table) => [foreignKey({ columns: [table.id, table.activeVersionId], foreignColumns: [recipeVersions.recipeId, recipeVersions.id] })]);
+
+export const requestProcessing = pgTable("request_processing", {
+  requestId: varchar("request_id", { length: 31 }).$type<Request["id"]>().primaryKey().references(() => requests.id, { onDelete: "cascade" }),
+  // Reserved before execution; the checkpoint can survive a crash before run creation.
+  runId: varchar("run_id", { length: 31 }).notNull().unique(),
+  match: jsonb("match").$type<RequestMatch>(),
+});
 
 export const recipeRuns = pgTable("recipe_runs", {
   id: varchar("id", { length: 31 }).primaryKey(),

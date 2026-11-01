@@ -9,7 +9,7 @@ async function main() {
   }
   const started = performance.now();
   const result = await extractRequest("The mug in order ord_1042 arrived broken. Can you help?", { model, apiKey });
-  if (result.fields.category !== "damaged" || result.fields.orderId !== "ord_1042") {
+  if (result.fields.category !== "damaged_item" || result.fields.orderId !== "ord_1042") {
     throw new Error("Extraction did not match the synthetic fixture.");
   }
   console.log(JSON.stringify({ model: result.model, fields: result.fields, usage: result.usage, latencyMs: Math.round(performance.now() - started) }));

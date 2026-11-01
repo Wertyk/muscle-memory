@@ -29,6 +29,25 @@ export const recipeMigrations: MigrationEntry[] = [{
     );
     CREATE INDEX IF NOT EXISTS recipe_handoffs_request_idx ON recipe_handoffs(request_id);
   `,
+}, {
+  version: 2,
+  name: "task15-recipe-catalog-and-intake",
+  sql: `
+    CREATE UNIQUE INDEX IF NOT EXISTS recipe_versions_owner_idx ON recipe_versions(recipe_id, id);
+    CREATE TABLE IF NOT EXISTS recipes (
+      id VARCHAR(31) PRIMARY KEY CHECK (id ~ '^[A-Za-z_][A-Za-z0-9_-]*$'),
+      name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+      status TEXT NOT NULL CHECK (status IN ('draft', 'active')),
+      active_version_id VARCHAR(31),
+      FOREIGN KEY (id, active_version_id) REFERENCES recipe_versions(recipe_id, id),
+      CHECK ((status = 'draft' AND active_version_id IS NULL) OR (status = 'active' AND active_version_id IS NOT NULL))
+    );
+    CREATE TABLE IF NOT EXISTS request_processing (
+      request_id VARCHAR(31) PRIMARY KEY REFERENCES requests(id) ON DELETE CASCADE,
+      run_id VARCHAR(31) NOT NULL UNIQUE CHECK (run_id ~ '^run_[A-Za-z0-9_-]+$'),
+      match JSONB
+    );
+  `,
 }];
 
 export const migrateRecipes = runMigrations(recipeMigrations, { table: "_muscle_memory_recipe_migrations" });

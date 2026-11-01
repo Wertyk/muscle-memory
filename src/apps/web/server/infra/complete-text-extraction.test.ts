@@ -9,26 +9,26 @@ function completion(text: string): CompleteTextResult {
 
 describe("completeText extraction boundary (fake completion only)", () => {
   it("calls the narrow helper and validates JSON, preserving usage", async () => {
-    const fake = vi.fn(async () => completion('{"category":"damaged","orderId":"ord_1042"}'));
+    const fake = vi.fn(async () => completion('{"category":"damaged_item","orderId":"ord_1042"}'));
     const result = await extractRequest("My ord_1042 mug arrived broken.", config, fake);
-    expect(result).toMatchObject({ fields: { category: "damaged", orderId: "ord_1042" }, usage: { inputTokens: 20, outputTokens: 10 } });
+    expect(result).toMatchObject({ fields: { category: "damaged_item", orderId: "ord_1042" }, usage: { inputTokens: 20, outputTokens: 10 } });
     expect(fake).toHaveBeenCalledWith(expect.objectContaining({ engine: "ai-sdk:openai", model: "test-model", maxOutputTokens: 256, timeoutMs: 30_000 }));
   });
   it("allows a missing order ID", async () => {
-    expect((await extractRequest("Wholesale inquiry", config, async () => completion('{"category":"other","orderId":null}'))).fields.orderId).toBeNull();
+    expect((await extractRequest("Wholesale inquiry", config, async () => completion('{"category":"wholesale_inquiry","orderId":null}'))).fields.orderId).toBeNull();
   });
   it.each([
-    '```json\n{"category":"damaged","orderId":"ord_1042"}\n```',
+    '```json\n{"category":"damaged_item","orderId":"ord_1042"}\n```',
     '{"category":"invalid","orderId":"ord_1042"}',
-    '{"category":"damaged","orderId":"not-an-id"}',
-    '{"category":"damaged","orderId":"ord_1042","extra":true}',
-    '{"category":"damaged"}',
+    '{"category":"damaged_item","orderId":"not-an-id"}',
+    '{"category":"damaged_item","orderId":"ord_1042","extra":true}',
+    '{"category":"damaged_item"}',
     'not JSON',
   ])("rejects malformed or schema-invalid output without leaking it", async text => {
     await expect(extractRequest("customer data", config, async () => completion(text))).rejects.toThrow("Extraction returned invalid structured output.");
   });
   it("rejects truncated output and sanitizes provider errors", async () => {
-    await expect(extractRequest("hello", config, async () => ({ ...completion('{"category":"other","orderId":null}'), stopReason: "max_tokens" }))).rejects.toThrow("Extraction returned invalid structured output.");
+    await expect(extractRequest("hello", config, async () => ({ ...completion('{"category":"wholesale_inquiry","orderId":null}'), stopReason: "max_tokens" }))).rejects.toThrow("Extraction returned invalid structured output.");
     await expect(extractRequest("hello", config, async () => { throw new Error("private provider details"); })).rejects.toThrow("Extraction provider request failed.");
   });
   it("rejects oversized or empty input before calling the provider", async () => {

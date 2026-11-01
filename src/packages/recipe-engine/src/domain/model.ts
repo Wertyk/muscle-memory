@@ -55,6 +55,14 @@ export interface RecipeVersion {
   readonly steps: readonly Step[];
 }
 
+/** Mutable catalog metadata; executable versions remain immutable. */
+export interface Recipe {
+  readonly id: string;
+  readonly name: string;
+  readonly status: "draft" | "active";
+  readonly activeVersionId: string | null;
+}
+
 /** Minimal successful-trace projection; capture adapters can retain extra metadata. */
 export interface TraceStep {
   readonly id: string;

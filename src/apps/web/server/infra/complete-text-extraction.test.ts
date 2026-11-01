@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { CompleteTextResult } from "@agent-native/core/server";
-import { extractRequest } from "./complete-text-extraction";
+import type { CompleteTextOptions, CompleteTextResult } from "@agent-native/core/server";
+import { CompleteTextExtractor, extractRequest } from "./complete-text-extraction";
 
 const config = { model: "test-model", apiKey: "synthetic-test-credential" };
 function completion(text: string): CompleteTextResult {
@@ -36,5 +36,55 @@ describe("completeText extraction boundary (fake completion only)", () => {
     await expect(extractRequest(" ", config, fake)).rejects.toThrow("Invalid extraction input");
     await expect(extractRequest("a".repeat(4001), config, fake)).rejects.toThrow("Invalid extraction input");
     expect(fake).not.toHaveBeenCalled();
+  });
+});
+
+describe("recipe field extraction (offline)", () => {
+  const fields = {
+    damaged: { type: "boolean" as const, required: true, description: "Item arrived damaged" },
+    fraction: { type: "number" as const, required: true },
+    note: { type: "string" as const, required: false },
+  };
+  it("derives a strict output schema from declared fields and returns exact usage", async () => {
+    const complete = vi.fn(async (_options: CompleteTextOptions) => completion('{"damaged":true,"fraction":0.5}'));
+    const result = await new CompleteTextExtractor(() => config, complete).extract({ text: "Broken mug", fields });
+    expect(result).toEqual({ output: { damaged: true, fraction: 0.5 }, tokens: { input: 20, output: 10 } });
+    const prompt = complete.mock.calls[0]![0] as { systemPrompt: string; model: string };
+    expect(prompt.model).toBe(config.model);
+    const schema = JSON.parse(prompt.systemPrompt.split("Schema: ")[1]!);
+    expect(schema).toMatchObject({ additionalProperties: false, required: ["damaged", "fraction"], properties: {
+      damaged: { type: "boolean", description: "Item arrived damaged" }, fraction: { type: "number" }, note: { type: "string" },
+    } });
+  });
+
+  it("reads EXTRACT_MODEL rather than the chat model", async () => {
+    vi.stubEnv("EXTRACT_MODEL", "cheap-extractor");
+    vi.stubEnv("AGENT_MODEL", "chat-model");
+    vi.stubEnv("OPENAI_API_KEY", config.apiKey);
+    const fake = vi.fn(async () => completion('{"damaged":false,"fraction":0}'));
+    try {
+      await new CompleteTextExtractor(undefined, fake).extract({ text: "Intact", fields });
+      expect(fake).toHaveBeenCalledWith(expect.objectContaining({ model: "cheap-extractor" }));
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it("returns parsed schema-invalid fields with usage so the executor can count failed attempts", async () => {
+    const extractor = new CompleteTextExtractor(() => config, async () => completion('{"damaged":"wrong","extra":1}'));
+    expect(await extractor.extract({ text: "Message", fields })).toEqual({
+      output: { damaged: "wrong", extra: 1 }, tokens: { input: 20, output: 10 },
+    });
+  });
+
+  it.each([undefined, { inputTokens: -1, outputTokens: 5 }, { inputTokens: 1.5, outputTokens: 5 }, { inputTokens: 2 }])("fails closed for unknown or invalid usage", async (usage) => {
+    const fake = async (): Promise<CompleteTextResult> => {
+      const result = completion("{}");
+      delete result.usage;
+      return { ...result, ...(usage ? { usage } : {}) };
+    };
+    await expect(new CompleteTextExtractor(() => config, fake).extract({ text: "Message", fields })).rejects.toThrow("invalid token usage");
+  });
+
+  it.each(["[]", "not JSON", '{"__proto__":{}}'])("rejects malformed or unsafe output", async (text) => {
+    await expect(new CompleteTextExtractor(() => config, async () => completion(text)).extract({ text: "Message", fields })).rejects.toThrow("invalid structured output");
   });
 });

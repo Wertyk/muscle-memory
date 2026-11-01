@@ -1,8 +1,9 @@
 import type {
   Customer, Order, Product, Refund, Reply, Request, RequestType, Shipment,
 } from "@muscle-memory/shop-domain";
+import type { HandoffContext, RecipeVersion, Run } from "@muscle-memory/recipe-engine";
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, text, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, uniqueIndex, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 export const customers = pgTable("customers", {
   id: varchar("id", { length: 31 }).$type<Customer["id"]>().primaryKey(),
@@ -82,3 +83,27 @@ export const replies = pgTable("replies", {
   body: text("body").notNull(),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("replies_request_idx").on(table.requestId), index("replies_customer_idx").on(table.customerId)]);
+
+// Minimal immutable versions; registry/activation is a later task.
+export const recipeVersions = pgTable("recipe_versions", {
+  id: varchar("id", { length: 31 }).primaryKey(),
+  recipeId: varchar("recipe_id", { length: 31 }).notNull(),
+  version: integer("version").notNull(),
+  snapshot: jsonb("snapshot").$type<RecipeVersion>().notNull(),
+}, (table) => [uniqueIndex("recipe_versions_number_idx").on(table.recipeId, table.version)]);
+
+export const recipeRuns = pgTable("recipe_runs", {
+  id: varchar("id", { length: 31 }).primaryKey(),
+  recipeVersionId: varchar("recipe_version_id", { length: 31 }).notNull().references(() => recipeVersions.id),
+  // A single row atomically commits logs, results, metrics and continuation.
+  checkpoint: jsonb("checkpoint").$type<Run>().notNull(),
+}, (table) => [index("recipe_runs_version_idx").on(table.recipeVersionId)]);
+
+export const recipeHandoffs = pgTable("recipe_handoffs", {
+  idempotencyKey: text("idempotency_key").primaryKey(),
+  runId: varchar("run_id", { length: 31 }).notNull().references(() => recipeRuns.id),
+  requestId: varchar("request_id", { length: 31 }).$type<Request["id"]>().references(() => requests.id),
+  context: jsonb("context").$type<HandoffContext>().notNull(),
+  // Pending work for the later UI; both targets retain the original context.
+  disposition: text("disposition", { enum: ["with_agent", "with_human"] }).notNull(),
+}, (table) => [index("recipe_handoffs_request_idx").on(table.requestId)]);

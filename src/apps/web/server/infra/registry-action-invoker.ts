@@ -17,16 +17,26 @@ export class RegistryActionInvoker {
     private readonly load: () => Promise<Registry> = generatedRegistry,
   ) {}
 
+  private async action(name: string) {
+    const registry = await this.load();
+    const action = Object.prototype.hasOwnProperty.call(registry, name) ? registry[name] : undefined;
+    if (!action) throw new Error(`Unknown action: ${name}`);
+    return action;
+  }
+
+  async describe(name: string): Promise<{ effect: "read" | "mutation" }> {
+    const action = await this.action(name);
+    // Explicit false wins over GET, matching framework action classification.
+    const read = action.readOnly ?? (action.http !== false && action.http?.method === "GET");
+    return { effect: read ? "read" : "mutation" };
+  }
+
   async invoke(
     name: string,
     input: unknown,
     context: ActionRunContext,
   ): Promise<unknown> {
-    const registry = await this.load();
-    const action = Object.prototype.hasOwnProperty.call(registry, name)
-      ? registry[name]
-      : undefined;
-    if (!action) throw new Error(`Unknown action: ${name}`);
+    const action = await this.action(name);
     // A fresh context is necessary for nested action identity and its audit row.
     return action.run(input, { ...context, actionName: name });
   }

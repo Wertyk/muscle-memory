@@ -1,0 +1,704 @@
+{
+  "startedAt": "2026-11-01T21:20:07.162Z",
+  "finishedAt": "2026-11-01T21:21:09.890Z",
+  "frameworkVersion": "0.222.2",
+  "endpoint": "https://ollama.com/v1",
+  "settings": {
+    "maxTokens": 256,
+    "temperature": 0,
+    "timeoutMs": 30000,
+    "attemptsPerCase": 1,
+    "toolChoice": "omitted"
+  },
+  "availableModels": [
+    "deepseek-v4.1-flash",
+    "gpt-oss:120b",
+    "mistral-large-3:675b",
+    "mistral-large-4",
+    "kimi-k3",
+    "nemotron-3-nano:30b",
+    "kimi-k2.6",
+    "glm-5.2",
+    "minimax-m3",
+    "minimax-m3.1-flash",
+    "beam",
+    "deepseek-v4.1-flash:1017",
+    "mimo-v2.6-pro",
+    "glm-5.3",
+    "glm-5.3-flash",
+    "minimax-m2.7",
+    "nemotron-3-ultra",
+    "clef:27b",
+    "muse-spark-open",
+    "nemotron-3-super",
+    "gemma4:31b",
+    "mimo-v2.6-flash",
+    "kimi-k2.7-code",
+    "deepseek-v4-pro:0813",
+    "gpt-oss:20b"
+  ],
+  "summary": [
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "passed": 10,
+      "cases": 10,
+      "meanLatencyMs": 1415,
+      "inputTokens": 5155,
+      "outputTokens": 1208,
+      "totalTokens": 6363
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "passed": 10,
+      "cases": 10,
+      "meanLatencyMs": 1769,
+      "inputTokens": 4917,
+      "outputTokens": 693,
+      "totalTokens": 5610
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "passed": 10,
+      "cases": 10,
+      "meanLatencyMs": 952,
+      "inputTokens": 6206,
+      "outputTokens": 1036,
+      "totalTokens": 7242
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "passed": 8,
+      "cases": 10,
+      "meanLatencyMs": 623,
+      "inputTokens": 2803,
+      "outputTokens": 821,
+      "totalTokens": 3624
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "passed": 10,
+      "cases": 10,
+      "meanLatencyMs": 560,
+      "inputTokens": 4917,
+      "outputTokens": 769,
+      "totalTokens": 5686
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "passed": 8,
+      "cases": 10,
+      "meanLatencyMs": 953,
+      "inputTokens": 2803,
+      "outputTokens": 660,
+      "totalTokens": 3463
+    }
+  ],
+  "measurements": [
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "order",
+      "verdict": "pass",
+      "latencyMs": 1229,
+      "inputTokens": 508,
+      "outputTokens": 82,
+      "totalTokens": 590
+    },
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "order-from-text",
+      "verdict": "pass",
+      "latencyMs": 1098,
+      "inputTokens": 514,
+      "outputTokens": 79,
+      "totalTokens": 593
+    },
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "tag",
+      "verdict": "pass",
+      "latencyMs": 1332,
+      "inputTokens": 508,
+      "outputTokens": 106,
+      "totalTokens": 614
+    },
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "multiple-tags",
+      "verdict": "pass",
+      "latencyMs": 1757,
+      "inputTokens": 515,
+      "outputTokens": 122,
+      "totalTokens": 637
+    },
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "refund-cents",
+      "verdict": "pass",
+      "latencyMs": 1475,
+      "inputTokens": 514,
+      "outputTokens": 134,
+      "totalTokens": 648
+    },
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "refund-dollars",
+      "verdict": "pass",
+      "latencyMs": 1506,
+      "inputTokens": 517,
+      "outputTokens": 136,
+      "totalTokens": 653
+    },
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "reply",
+      "verdict": "pass",
+      "latencyMs": 1308,
+      "inputTokens": 516,
+      "outputTokens": 118,
+      "totalTokens": 634
+    },
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "reply-escaping",
+      "verdict": "pass",
+      "latencyMs": 1469,
+      "inputTokens": 518,
+      "outputTokens": 120,
+      "totalTokens": 638
+    },
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "nested-address",
+      "verdict": "pass",
+      "latencyMs": 1639,
+      "inputTokens": 522,
+      "outputTokens": 183,
+      "totalTokens": 705
+    },
+    {
+      "role": "main",
+      "model": "kimi-k3",
+      "case": "unicode-address",
+      "verdict": "pass",
+      "latencyMs": 1333,
+      "inputTokens": 523,
+      "outputTokens": 128,
+      "totalTokens": 651
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "order",
+      "verdict": "pass",
+      "latencyMs": 1598,
+      "inputTokens": 484,
+      "outputTokens": 36,
+      "totalTokens": 520
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "order-from-text",
+      "verdict": "pass",
+      "latencyMs": 1369,
+      "inputTokens": 490,
+      "outputTokens": 33,
+      "totalTokens": 523
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "tag",
+      "verdict": "pass",
+      "latencyMs": 1396,
+      "inputTokens": 484,
+      "outputTokens": 48,
+      "totalTokens": 532
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "multiple-tags",
+      "verdict": "pass",
+      "latencyMs": 2497,
+      "inputTokens": 491,
+      "outputTokens": 71,
+      "totalTokens": 562
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "refund-cents",
+      "verdict": "pass",
+      "latencyMs": 1583,
+      "inputTokens": 491,
+      "outputTokens": 77,
+      "totalTokens": 568
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "refund-dollars",
+      "verdict": "pass",
+      "latencyMs": 2280,
+      "inputTokens": 494,
+      "outputTokens": 89,
+      "totalTokens": 583
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "reply",
+      "verdict": "pass",
+      "latencyMs": 1886,
+      "inputTokens": 492,
+      "outputTokens": 75,
+      "totalTokens": 567
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "reply-escaping",
+      "verdict": "pass",
+      "latencyMs": 1837,
+      "inputTokens": 494,
+      "outputTokens": 78,
+      "totalTokens": 572
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "nested-address",
+      "verdict": "pass",
+      "latencyMs": 1730,
+      "inputTokens": 499,
+      "outputTokens": 108,
+      "totalTokens": 607
+    },
+    {
+      "role": "main",
+      "model": "glm-5.3",
+      "case": "unicode-address",
+      "verdict": "pass",
+      "latencyMs": 1516,
+      "inputTokens": 498,
+      "outputTokens": 78,
+      "totalTokens": 576
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "order",
+      "verdict": "pass",
+      "latencyMs": 705,
+      "inputTokens": 613,
+      "outputTokens": 57,
+      "totalTokens": 670
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "order-from-text",
+      "verdict": "pass",
+      "latencyMs": 730,
+      "inputTokens": 619,
+      "outputTokens": 58,
+      "totalTokens": 677
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "tag",
+      "verdict": "pass",
+      "latencyMs": 868,
+      "inputTokens": 613,
+      "outputTokens": 99,
+      "totalTokens": 712
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "multiple-tags",
+      "verdict": "pass",
+      "latencyMs": 1443,
+      "inputTokens": 620,
+      "outputTokens": 200,
+      "totalTokens": 820
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "refund-cents",
+      "verdict": "pass",
+      "latencyMs": 1153,
+      "inputTokens": 620,
+      "outputTokens": 128,
+      "totalTokens": 748
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "refund-dollars",
+      "verdict": "pass",
+      "latencyMs": 937,
+      "inputTokens": 623,
+      "outputTokens": 111,
+      "totalTokens": 734
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "reply",
+      "verdict": "pass",
+      "latencyMs": 811,
+      "inputTokens": 621,
+      "outputTokens": 82,
+      "totalTokens": 703
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "reply-escaping",
+      "verdict": "pass",
+      "latencyMs": 784,
+      "inputTokens": 623,
+      "outputTokens": 87,
+      "totalTokens": 710
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "nested-address",
+      "verdict": "pass",
+      "latencyMs": 861,
+      "inputTokens": 628,
+      "outputTokens": 103,
+      "totalTokens": 731
+    },
+    {
+      "role": "main",
+      "model": "deepseek-v4-pro:0813",
+      "case": "unicode-address",
+      "verdict": "pass",
+      "latencyMs": 1229,
+      "inputTokens": 626,
+      "outputTokens": 111,
+      "totalTokens": 737
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "order",
+      "verdict": "pass",
+      "latencyMs": 517,
+      "inputTokens": 273,
+      "outputTokens": 47,
+      "totalTokens": 320
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "order-from-text",
+      "verdict": "pass",
+      "latencyMs": 562,
+      "inputTokens": 279,
+      "outputTokens": 52,
+      "totalTokens": 331
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "tag",
+      "verdict": "pass",
+      "latencyMs": 601,
+      "inputTokens": 273,
+      "outputTokens": 60,
+      "totalTokens": 333
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "multiple-tags",
+      "verdict": "wrong-arguments",
+      "latencyMs": 623,
+      "inputTokens": 280,
+      "outputTokens": 79,
+      "totalTokens": 359
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "refund-cents",
+      "verdict": "wrong-arguments",
+      "latencyMs": 676,
+      "inputTokens": 279,
+      "outputTokens": 128,
+      "totalTokens": 407
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "refund-dollars",
+      "verdict": "pass",
+      "latencyMs": 661,
+      "inputTokens": 282,
+      "outputTokens": 96,
+      "totalTokens": 378
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "reply",
+      "verdict": "pass",
+      "latencyMs": 575,
+      "inputTokens": 281,
+      "outputTokens": 63,
+      "totalTokens": 344
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "reply-escaping",
+      "verdict": "pass",
+      "latencyMs": 623,
+      "inputTokens": 283,
+      "outputTokens": 68,
+      "totalTokens": 351
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "nested-address",
+      "verdict": "pass",
+      "latencyMs": 748,
+      "inputTokens": 287,
+      "outputTokens": 109,
+      "totalTokens": 396
+    },
+    {
+      "role": "main",
+      "model": "gpt-oss:120b",
+      "case": "unicode-address",
+      "verdict": "pass",
+      "latencyMs": 640,
+      "inputTokens": 286,
+      "outputTokens": 119,
+      "totalTokens": 405
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "order",
+      "verdict": "pass",
+      "latencyMs": 552,
+      "inputTokens": 484,
+      "outputTokens": 56,
+      "totalTokens": 540
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "order-from-text",
+      "verdict": "pass",
+      "latencyMs": 461,
+      "inputTokens": 490,
+      "outputTokens": 40,
+      "totalTokens": 530
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "tag",
+      "verdict": "pass",
+      "latencyMs": 486,
+      "inputTokens": 484,
+      "outputTokens": 46,
+      "totalTokens": 530
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "multiple-tags",
+      "verdict": "pass",
+      "latencyMs": 652,
+      "inputTokens": 491,
+      "outputTokens": 122,
+      "totalTokens": 613
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "refund-cents",
+      "verdict": "pass",
+      "latencyMs": 611,
+      "inputTokens": 491,
+      "outputTokens": 105,
+      "totalTokens": 596
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "refund-dollars",
+      "verdict": "pass",
+      "latencyMs": 555,
+      "inputTokens": 494,
+      "outputTokens": 83,
+      "totalTokens": 577
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "reply",
+      "verdict": "pass",
+      "latencyMs": 522,
+      "inputTokens": 492,
+      "outputTokens": 63,
+      "totalTokens": 555
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "reply-escaping",
+      "verdict": "pass",
+      "latencyMs": 530,
+      "inputTokens": 494,
+      "outputTokens": 70,
+      "totalTokens": 564
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "nested-address",
+      "verdict": "pass",
+      "latencyMs": 661,
+      "inputTokens": 499,
+      "outputTokens": 108,
+      "totalTokens": 607
+    },
+    {
+      "role": "cheap",
+      "model": "glm-5.3-flash",
+      "case": "unicode-address",
+      "verdict": "pass",
+      "latencyMs": 570,
+      "inputTokens": 498,
+      "outputTokens": 76,
+      "totalTokens": 574
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "order",
+      "verdict": "pass",
+      "latencyMs": 717,
+      "inputTokens": 273,
+      "outputTokens": 43,
+      "totalTokens": 316
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "order-from-text",
+      "verdict": "pass",
+      "latencyMs": 657,
+      "inputTokens": 279,
+      "outputTokens": 40,
+      "totalTokens": 319
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "tag",
+      "verdict": "pass",
+      "latencyMs": 815,
+      "inputTokens": 273,
+      "outputTokens": 57,
+      "totalTokens": 330
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "multiple-tags",
+      "verdict": "wrong-arguments",
+      "latencyMs": 829,
+      "inputTokens": 280,
+      "outputTokens": 79,
+      "totalTokens": 359
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "refund-cents",
+      "verdict": "wrong-arguments",
+      "latencyMs": 916,
+      "inputTokens": 279,
+      "outputTokens": 72,
+      "totalTokens": 351
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "refund-dollars",
+      "verdict": "pass",
+      "latencyMs": 801,
+      "inputTokens": 282,
+      "outputTokens": 68,
+      "totalTokens": 350
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "reply",
+      "verdict": "pass",
+      "latencyMs": 846,
+      "inputTokens": 281,
+      "outputTokens": 48,
+      "totalTokens": 329
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "reply-escaping",
+      "verdict": "pass",
+      "latencyMs": 1779,
+      "inputTokens": 283,
+      "outputTokens": 50,
+      "totalTokens": 333
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "nested-address",
+      "verdict": "pass",
+      "latencyMs": 983,
+      "inputTokens": 287,
+      "outputTokens": 80,
+      "totalTokens": 367
+    },
+    {
+      "role": "cheap",
+      "model": "gpt-oss:20b",
+      "case": "unicode-address",
+      "verdict": "pass",
+      "latencyMs": 1187,
+      "inputTokens": 286,
+      "outputTokens": 123,
+      "totalTokens": 409
+    }
+  ]
+}

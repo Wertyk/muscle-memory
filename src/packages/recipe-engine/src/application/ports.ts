@@ -1,5 +1,6 @@
 import type { ExtractField, JsonObject, JsonValue } from "../domain/model.js";
 import type { ActionEffect, HandoffContext, Run, TokenUsage } from "../domain/run.js";
+import type { HistoricalCase, Mutation } from "../domain/backtest.js";
 
 export interface ActionInvoker {
   /** Fail closed for unknown actions. Classification must match the invoked action. */
@@ -46,4 +47,25 @@ export interface RunRecipeDependencies {
   readonly runs: RunRepository;
   readonly clock: Clock;
   readonly ids: IdGenerator;
+}
+
+export interface HistoricalCaseSource {
+  /** Read-only. Select the event population and supply historical (not current) payloads. */
+  listCases(selection: JsonValue): Promise<readonly HistoricalCase[]>;
+}
+
+export interface MutationNormalizer {
+  /** Pure, deterministic canonicalisation applied symmetrically to both ordered lists. */
+  normalize(mutations: readonly Mutation[]): readonly Mutation[];
+}
+
+export interface BacktestRecipeDependencies {
+  readonly cases: HistoricalCaseSource;
+  /** Reads must use historical snapshots; effect metadata must fail closed, as for RunRecipe. */
+  readonly actions: ActionInvoker;
+  readonly extractor: TextExtractor;
+  readonly clock: Clock;
+  /** Fresh IDs also prevent read adapters from sharing idempotency keys across cases. */
+  readonly ids: IdGenerator;
+  readonly normalizer?: MutationNormalizer;
 }

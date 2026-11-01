@@ -1,9 +1,18 @@
 import type {
   ActionEffect, ActionInvoker, AgentHandoff, Clock, HandoffContext, IdGenerator,
-  JsonObject, JsonValue, Run, RunRepository, TextExtractor, TokenUsage,
+  HistoricalCase, HistoricalCaseSource, JsonObject, JsonValue, Run, RunRepository, TextExtractor, TokenUsage,
 } from "../src/index.js";
 
 export const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+export class InMemoryHistoricalCases implements HistoricalCaseSource {
+  readonly selections: JsonValue[] = [];
+  constructor(readonly cases: readonly HistoricalCase[]) {}
+  async listCases(selection: JsonValue): Promise<readonly HistoricalCase[]> {
+    this.selections.push(clone(selection));
+    return clone(this.cases);
+  }
+}
 
 export class FakeClock implements Clock {
   timestamp = 1_793_620_800_000;

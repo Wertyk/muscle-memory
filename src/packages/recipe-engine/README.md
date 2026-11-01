@@ -91,6 +91,71 @@ Framework invoker/extraction/handoff adapters, real actions, and DB persistence 
 **Phase 2**, after TASK-3 and TASK-6 merge. Phase 1 verifies the engine side of AC #1/#5 and
 AC #2–#4/#6–#8 with fakes. No `apps/web` integration is included here.
 
+## Backtesting (TASK-18 Phase 1)
+
+`BacktestRecipe` takes `cases` (`HistoricalCaseSource`), `actions` (`ActionInvoker`),
+`extractor` (`TextExtractor`), `clock`, `ids`, and an optional `normalizer`
+(`MutationNormalizer`). It evaluates trigger matches and reuses `RunRecipe` with
+`mode: "dry-run"`; it never invokes mutation actions or delivers handoff. Executor
+checkpoints are private in-memory state per case, so no production `RunRepository`
+is accepted or written. Fresh short run IDs come from `ids`, including for reads'
+idempotency keys. Returned runs retain dry-run logs, approval requirements and tokens.
+
+```ts
+const backtester = new BacktestRecipe({ cases, actions, extractor, clock, ids });
+const report = await backtester.execute({ recipe: version, selection: {
+  event: "request.created", category: "damaged", handled: true,
+} });
+// report.summary: { total, identical, different, notHandled }
+// report.cases: original mutation lists, status, reasons, diff, dry-run evidence
+const comparison = await backtester.compare({ baseline: v1, candidate: v2,
+  selection: { event: "request.created", category: "damaged", handled: true },
+});
+// comparison.baseline / .candidate: complete reports
+// comparison.cases: paired statuses, changed flag, intended-mutation diff
+```
+
+The source's `listCases(selection)` is read-only; selection is opaque JSON understood
+by the adapter. Each `HistoricalCase` is `{ id, trigger, outcome }`, where `outcome`
+is an ordered list of `{ action, input }` mutations. The source selects the appropriate
+event population (events are not inferred from payloads). Two compared versions must
+use the same trigger event. One validated, detached case set is loaded once and reused
+for both versions, preserving case order. Bad versions, malformed cases/normaliser
+outputs, duplicate case IDs, and source/normaliser errors reject the operation rather
+than presenting misleading results.
+
+`identical` and `different` require a complete simulation with at least one intended
+mutation. Unmatched triggers, trigger errors, failed steps, blocked dependencies,
+explicit handoff, and paths planning no mutations are `not_handled`, with reasons.
+Even when a partial mutation list matches history, blocked/failed/handoff paths never
+count as identical. Partial intended mutations and their diffs remain available.
+Approval gates are reported without pausing, following `RunRecipe` dry-run semantics.
+
+Comparison is generic JSON: object key order is irrelevant; mutation and array order,
+primitive types, exact strings and missing versus null matter. `diffJson` returns
+detached field differences with JSON Pointer paths, e.g. `/0/input/amount/amountMinor`.
+`added` means only intended has the value; `removed` means only history has it;
+`changed` includes both values. For version comparisons, historical/intended mean
+baseline/candidate intended mutations. The `changed` flag compares statuses and
+normalised intended mutations; detailed failure reasons remain in the paired reports.
+
+An optional pure, deterministic `normalizer.normalize(mutations)` canonicalises both
+lists symmetrically before comparison. It can reconcile app-specific reply formats or
+equivalent action inputs without adding shop knowledge to the engine. Original lists
+and run evidence remain intact; diff values reflect normalised data. Default comparison
+does not infer semantic equivalence or ignore fields.
+
+Reads and extraction still execute through their ports. Adapters must use stable
+historical read snapshots for both versions, classify action effects correctly, and
+supply a fake extractor in tests. Real extraction can consume tokens and vary between
+simulations; backtesting does not cache or invent outputs or prove mutation policy
+success. Case-local checkpoints are discarded after execution; no resume is exposed.
+
+TASK-18 **Phase 2** supplies the shop historical-case/read adapters (including mapping
+stored refunds, replies and replacement orders into comparable mutations), framework
+actions/composition and Recipe Studio UI before activation. These are intentionally
+deferred. Phase 1 covers AC #1/#2/#4 and the comparison engine portion of AC #3.
+
 ## Validated versions
 
 `parseRecipeVersion(unknown)` (or `recipeVersionSchema.parse` / `.safeParse`) validates a

@@ -43,7 +43,7 @@ describe("DraftRecipeFromDemonstration", () => {
     const { useCase, input, createDraft } = setup();
     const result = await useCase.execute(input);
     expect(parseRecipeVersion(result.draft)).toEqual(result.draft);
-    expect(result.recipe).toEqual({ id: "recipe_test", name: "Draft: damaged_item", status: "draft", activeVersionId: null });
+    expect(result.recipe).toEqual({ id: "recipe_test", name: "Draft: Damaged item", status: "draft", activeVersionId: null });
     expect(result.draft.steps.map(step => step.id)).toEqual(["step_2", "step_6", "step_7", "step_8"]);
     expect(action(result, "get-order").args.orderId).toEqual({ mode: "path", path: "trigger.orderId" });
     expect(action(result, "issue-refund").args.amount).toMatchObject({ amountMinor: { mode: "expr", expr: { "*": [{ var: "steps.step_2.output.items[0].unitPrice.amountMinor" }, 0.5] } } });

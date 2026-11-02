@@ -1,14 +1,17 @@
 import { useT } from "@agent-native/core/client/i18n";
 import type { Binding, JsonValue } from "@muscle-memory/recipe-engine";
-import { IconArrowFork, IconShieldCheck } from "@tabler/icons-react";
+import { IconArrowFork } from "@tabler/icons-react";
 
 import {
+  argumentLabel,
   expressionLabel,
   isObject,
   words,
   type RecipeDraft,
 } from "@/lib/recipe-studio";
+import { moneyText } from "@/lib/shop-workspace";
 
+import { ApprovalEditor } from "./ApprovalEditor";
 import {
   RecipeField,
   WireChip,
@@ -24,7 +27,11 @@ function BindingFields({
   onChange,
   labels,
   disabled,
+  action = "",
+  variables,
 }: {
+  action?: string;
+  variables?: JsonValue | undefined;
   value: JsonValue;
   path: FieldPath;
   label: string;
@@ -35,6 +42,73 @@ function BindingFields({
 }) {
   if (
     isObject(value) &&
+    isObject(value.amountMinor) &&
+    isObject(value.currency)
+  ) {
+    const amount = value.amountMinor as unknown as Binding;
+    const currency = value.currency as unknown as Binding;
+    const currencyLabel =
+      currency.mode === "fixed"
+        ? String(currency.value)
+        : "Currency · selected line";
+    return (
+      <RecipeField
+        label={label}
+        path={[...path, "amountMinor"]}
+        kind="binding"
+        {...{ draft, onChange, disabled }}
+      >
+        <div className="recipe-money-values">
+          <WireChip binding={amount} labels={labels} />
+          <div className="recipe-currency-field">
+            <RecipeField
+              label="Currency"
+              path={[...path, "currency"]}
+              kind="binding"
+              {...{ draft, onChange, disabled }}
+            >
+              <WireChip
+                binding={currency}
+                labels={labels}
+                compactLabel={currencyLabel}
+              />
+            </RecipeField>
+          </div>
+        </div>
+      </RecipeField>
+    );
+  }
+  if (
+    isObject(value) &&
+    value.mode === "fixed" &&
+    isObject(value.value) &&
+    typeof value.value.amountMinor === "number" &&
+    typeof value.value.currency === "string"
+  ) {
+    let amount = `${value.value.amountMinor / 100} ${value.value.currency}`;
+    try {
+      amount = moneyText({
+        amountMinor: value.value.amountMinor,
+        currency: value.value.currency,
+      });
+    } catch {
+      /* Invalid drafts remain editable. */
+    }
+    return (
+      <RecipeField
+        {...{ path, label, draft, onChange, disabled }}
+        kind="binding"
+      >
+        <WireChip
+          binding={value as unknown as Binding}
+          labels={labels}
+          compactLabel={amount}
+        />
+      </RecipeField>
+    );
+  }
+  if (
+    isObject(value) &&
     ["fixed", "path", "expr", "template"].includes(String(value.mode))
   ) {
     return (
@@ -42,22 +116,45 @@ function BindingFields({
         {...{ path, label, draft, onChange, disabled }}
         kind="binding"
       >
-        <WireChip binding={value as unknown as Binding} labels={labels} />
+        <WireChip
+          binding={value as unknown as Binding}
+          labels={labels}
+          steps={draft.content.steps}
+          variables={
+            action === "send-reply" && path[path.length - 1] === "template"
+              ? variables
+              : undefined
+          }
+        />
       </RecipeField>
     );
   }
   if (value && typeof value === "object")
     return (
       <>
-        {Object.entries(value).map(([key, child]) => (
-          <BindingFields
-            key={key}
-            value={child}
-            path={[...path, Array.isArray(value) ? Number(key) : key]}
-            label={`${label}${label ? " · " : ""}${words(key)}`}
-            {...{ draft, onChange, labels, disabled }}
-          />
-        ))}
+        {Object.entries(value)
+          .filter(
+            ([key, child]) =>
+              key !== "variables" ||
+              !(
+                isObject(child) &&
+                (Object.keys(child).length === 0 ||
+                  (child.mode === "fixed" &&
+                    isObject(child.value) &&
+                    Object.keys(child.value).length === 0))
+              ),
+          )
+          .map(([key, child]) => (
+            <BindingFields
+              key={key}
+              value={child}
+              path={[...path, Array.isArray(value) ? Number(key) : key]}
+              label={
+                label ? `${label} · ${words(key)}` : argumentLabel(key, action)
+              }
+              {...{ draft, onChange, labels, disabled, action, variables }}
+            />
+          ))}
       </>
     );
   return (
@@ -127,6 +224,10 @@ export function RecipeSteps({
                   value={step.args ?? {}}
                   path={[...current, "args"]}
                   label=""
+                  action={String(step.action)}
+                  variables={
+                    isObject(step.args) ? step.args.variables : undefined
+                  }
                   {...{ draft, onChange, labels, disabled }}
                 />
               )}
@@ -207,18 +308,11 @@ export function RecipeSteps({
                   ))}
                 </>
               )}
-              <RecipeField
-                label={t("recipes.approval")}
+              <ApprovalEditor
+                step={step}
                 path={[...current, "approval"]}
                 {...{ draft, onChange, disabled }}
-              >
-                <span className="recipe-approval">
-                  <IconShieldCheck className="size-4 shrink-0" />
-                  {step.approval === undefined
-                    ? t("recipes.noApproval")
-                    : expressionLabel(step.approval, labels)}
-                </span>
-              </RecipeField>
+              />
             </article>
           </li>
         );

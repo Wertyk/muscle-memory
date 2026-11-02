@@ -29,7 +29,6 @@ import {
 } from "@/components/shop/WorkspaceParts";
 import { Button } from "@/components/ui/button";
 import {
-  differenceLabel,
   expressionLabel,
   isObject,
   RECIPES_PATH,
@@ -39,16 +38,11 @@ import {
   type RecipeDraft,
 } from "@/lib/recipe-studio";
 
+import { AmbiguitiesPanel } from "./AmbiguitiesPanel";
 import { RecipeField, WireLegend, type ChangeField } from "./RecipeField";
 import { RecipeStatus } from "./RecipesPage";
 import { RecipeSteps } from "./RecipeSteps";
-
-function displayValue(value: JsonValue | undefined) {
-  if (value === undefined) return "—";
-  if (isObject(value) && Object.keys(value).length === 1)
-    return expressionLabel(value);
-  return typeof value === "string" ? value : JSON.stringify(value);
-}
+import { RecipeVersionDiff } from "./RecipeVersionDiff";
 export function RecipePage() {
   const { recipeId = "" } = useParams();
   const t = useT();
@@ -99,11 +93,11 @@ export function RecipePage() {
     );
   };
   if (detail.isPending || draftQuery.isPending)
-    return <WorkspaceLoading detail />;
+    return <WorkspaceLoading detail agentToggle={false} />;
   if (!detail.data || !draftQuery.data)
     return (
       <div className="shop-page">
-        <ShopMasthead />
+        <ShopMasthead agentToggle={false} />
         <QueryError
           error={detail.error ?? draftQuery.error}
           retry={() => {
@@ -139,7 +133,7 @@ export function RecipePage() {
   const disabled = pending || detail.isError || draftQuery.isError;
   return (
     <div className="shop-page recipe-page">
-      <ShopMasthead />
+      <ShopMasthead agentToggle={false} />
       <Link to={RECIPES_PATH} className="shop-back-link">
         <IconArrowLeft className="size-4" />
         {t("recipes.back")}
@@ -298,53 +292,8 @@ export function RecipePage() {
           )}
         </div>
         <aside className="recipe-inspector" aria-label={t("recipes.review")}>
-          <section className="recipe-panel">
-            <h2 className="shop-serif">
-              {t("recipes.ambiguities")}
-              <span className="recipe-count">{draft.ambiguities.length}</span>
-            </h2>
-            {draft.ambiguities.length ? (
-              <ul className="recipe-ambiguities">
-                {draft.ambiguities.map((entry, i) => (
-                  <li key={i}>
-                    {isObject(entry) ? (
-                      <>
-                        <strong>
-                          {words(String(entry.stepId ?? ""))}
-                          {entry.argumentPath
-                            ? ` · ${String(entry.argumentPath)}`
-                            : ""}
-                        </strong>
-                        <p>
-                          {String(
-                            entry.message ??
-                              entry.reason ??
-                              entry.kind ??
-                              entry.type ??
-                              t("recipes.reviewBinding"),
-                          )}
-                        </p>
-                        <details>
-                          <summary>{t("recipes.evidence")}</summary>
-                          <pre>{JSON.stringify(entry, null, 2)}</pre>
-                        </details>
-                      </>
-                    ) : (
-                      <p>{displayValue(entry)}</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t("recipes.noAmbiguities")}
-              </p>
-            )}
-          </section>
-          <section
-            className="recipe-panel recipe-backtest-slot"
-            data-task="TASK-18"
-          >
+          <AmbiguitiesPanel draft={draft} labels={labels} />
+          <section className="recipe-panel recipe-backtest-slot">
             <h2 className="shop-serif">{t("recipes.backtest")}</h2>
             <p>{t("recipes.backtestSlot")}</p>
           </section>
@@ -364,36 +313,14 @@ export function RecipePage() {
                   <details>
                     <summary>
                       <span>v{version.version}</span>
-                      <span>
-                        {version.id === recipe.activeVersionId
-                          ? t("recipes.active")
-                          : version.name}
-                      </span>
+                      <span>{version.name}{version.id === recipe.activeVersionId && ` · ${t("recipes.active")}`}</span>
                     </summary>
                     <p className="mt-3 text-xs text-muted-foreground">
-                      {version.trigger.event} ·{" "}
+                      {version.trigger.event === "request.created" ? t("recipes.requestCreated") : version.trigger.event} ·{" "}
                       {expressionLabel(version.trigger.match)}
                     </p>
                     {diff.length ? (
-                      <ul className="recipe-diff">
-                        {diff.map((item, i) => (
-                          <li key={i}>
-                            <strong>
-                              {differenceLabel(
-                                item.path,
-                                recipeContent(version),
-                                labels,
-                              )}
-                            </strong>
-                            {item.kind !== "added" && (
-                              <del>{displayValue(item.historical)}</del>
-                            )}
-                            {item.kind !== "removed" && (
-                              <ins>{displayValue(item.intended)}</ins>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
+                      <RecipeVersionDiff entry={{version, diff}} previous={history[history.findIndex((item) => item.version.id === version.id) - 1]?.version} labels={labels} />
                     ) : (
                       <p className="my-3 text-xs text-muted-foreground">
                         {t(

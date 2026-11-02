@@ -1,3 +1,4 @@
+/* oxlint-disable unicorn/no-thenable -- Recipe branches contain non-callable then arrays. */
 // Opt-in HTTP smoke. No browser automation, real model calls, or production data.
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
@@ -11,6 +12,7 @@ import {
   buildRequestTrigger,
   type Demonstration,
   type JsonObject,
+  type JsonValue,
   type RecipeDraft,
   type RecipeVersion,
   type StudioDraft,
@@ -417,12 +419,37 @@ async function smoke() {
     for (const operator of ["find", "firstWord", "money", "cat"])
       assert(JSON.stringify(storedPlatter.content).includes(`"${operator}"`));
     const fixture = await readStudio("recipe_fixture_damaged");
+    const gateRefunds = (steps: JsonValue): JsonValue =>
+      Array.isArray(steps)
+        ? steps.map((step) => {
+            if (!step || typeof step !== "object" || Array.isArray(step))
+              return step;
+            if (step.kind === "branch")
+              return {
+                ...step,
+                then: gateRefunds(step.then ?? []),
+                else: gateRefunds(step.else ?? []),
+              };
+            return step.action === "issue-refund"
+              ? {
+                  ...step,
+                  approval: {
+                    ">": [{ var: "input.amount.amountMinor" }, 10000],
+                  },
+                }
+              : step;
+          })
+        : steps;
     const edit = await callAction<StudioDraft>(
       "update-recipe-draft",
       {
         recipeId: fixture.recipeId,
         expectedRevision: fixture.revision,
-        content: { ...fixture.content, name: "Studio fixture rehearsal" },
+        content: {
+          ...fixture.content,
+          name: "Studio fixture rehearsal",
+          steps: gateRefunds(fixture.content.steps ?? []),
+        },
       },
       { uiOnly: true },
     );
@@ -444,6 +471,47 @@ async function smoke() {
     assert.equal(detail.recipe.activeVersionId, version.id);
     assert.equal(detail.history[0]!.version.version, 1);
     assert(detail.history[1]!.diff.length > 0);
+    const activityBeforeGate = await callAction(
+      "get-request-activity",
+      { requestId: request.id },
+      { method: "GET" },
+    );
+    const simulatedGate = await callAction<Run>(
+      "run-recipe",
+      { recipe: version, trigger: savedTrace.trigger, dryRun: true },
+      { uiOnly: true },
+    );
+    assert(
+      simulatedGate.steps.some(
+        (step) =>
+          step.stepId === "refund" &&
+          step.approvalRequired &&
+          step.status === "planned",
+      ),
+    );
+    const pausedGate = await callAction<Run>(
+      "run-recipe",
+      { recipe: version, trigger: savedTrace.trigger },
+      { uiOnly: true },
+    );
+    assert.equal(pausedGate.status, "awaiting_approval");
+    assert.equal(pausedGate.awaitingApprovalStepId, "refund");
+    await callAction(
+      "resume-recipe-run",
+      {
+        runId: pausedGate.id,
+        approval: { stepId: "refund", decision: "reject" },
+      },
+      { uiOnly: true },
+    );
+    assert.deepEqual(
+      await callAction(
+        "get-request-activity",
+        { requestId: request.id },
+        { method: "GET" },
+      ),
+      activityBeforeGate,
+    );
     const current = await readStudio(fixture.recipeId);
     const invalid = await callAction<StudioDraft & { issues: unknown[] }>(
       "update-recipe-draft",
@@ -513,6 +581,7 @@ async function smoke() {
         storedBrokenPlatterInputsReplayed: true,
         canonicalDraftOpenedInStudio: true,
         immutableStudioVersionAndActivation: true,
+        resolvedInputApprovalAndDryRun: true,
         overlapRejected,
         sessionIsolation: true,
         unrelatedRequestExcluded: true,

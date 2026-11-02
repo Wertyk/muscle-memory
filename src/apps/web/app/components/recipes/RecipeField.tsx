@@ -32,6 +32,8 @@ import {
   type WireSource,
 } from "@/lib/recipe-studio";
 
+import { MessagePreview, messageParts } from "./MessagePreview";
+
 export type FieldPath = readonly (string | number)[];
 export type ChangeField = (
   base: RecipeDraft,
@@ -48,20 +50,42 @@ const icons = {
 export function WireChip({
   binding,
   labels = {},
+  variables,
+  steps,
+  compactLabel,
 }: {
   binding: Binding;
+  variables?: JsonValue | undefined;
+  steps?: JsonValue | undefined;
+  compactLabel?: string;
   labels?: Readonly<Record<string, string>>;
 }) {
   const t = useT();
+  const parts = compactLabel ? null : messageParts(binding, variables);
+  if (parts)
+    return (
+      <MessagePreview
+        parts={parts}
+        labels={labels}
+        steps={steps}
+        source={wireSource(binding)}
+      />
+    );
   const source = wireSource(binding);
   const Icon = icons[source];
   return (
-    <span className="recipe-wire" data-source={source}>
+    <span
+      className="recipe-wire"
+      data-source={source}
+      title={compactLabel ? bindingLabel(binding, labels) : undefined}
+    >
       <span className="recipe-wire-source">
         <Icon className="size-3.5" aria-hidden="true" />
         {t(`recipes.sources.${source}`)}
       </span>
-      <span className="recipe-wire-value">{bindingLabel(binding, labels)}</span>
+      <span className="recipe-wire-value">
+        {compactLabel ?? bindingLabel(binding, labels)}
+      </span>
     </span>
   );
 }

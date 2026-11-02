@@ -2,7 +2,7 @@
   "id": "ver_reference",
   "recipeId": "recipe_reference",
   "version": 1,
-  "name": "Draft: damaged_item",
+  "name": "Draft: Damaged item",
   "trigger": {
     "event": "request.created",
     "match": {

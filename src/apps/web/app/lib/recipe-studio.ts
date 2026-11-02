@@ -21,13 +21,32 @@ export const words = (value: string) =>
   value
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[_-]/g, " ")
-    .replace(/\bId\b/g, "ID");
+    .toLowerCase()
+    .replace(/\bid\b/g, "ID");
+export function argumentLabel(path: string, action = "") {
+  if (path === "amount" || path === "amount.amountMinor")
+    return action === "issue-refund" ? "Refund amount" : "Amount";
+  const names: Record<string, string> = {
+    orderId: "Order ID",
+    requestId: "Request ID",
+    customerId: "Customer ID",
+    template: "Reply",
+    "amount.currency": "Currency",
+    tag: "Tag",
+    reason: "Reason",
+    "variables.name": "Customer name",
+    "variables.amount": "Reply amount",
+  };
+  return names[path] ?? words(path).replace(/\./g, " · ");
+}
 export const isObject = (value: unknown): value is Record<string, JsonValue> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 export function pathLabel(
   path: string,
   labels: Readonly<Record<string, string>> = {},
 ) {
+  if (path.startsWith("input."))
+    return `${argumentLabel(path.slice(6))} · this step`;
   const source = path.startsWith("trigger.")
     ? "Request"
     : (labels[path.split(".")[1] ?? ""] ?? words(path.split(".")[1] ?? "Step"));

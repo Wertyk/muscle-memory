@@ -474,3 +474,22 @@ output, constant, formula and template using labels and light/dark colours.
 JSONLogic rendering supports the merged find/firstWord/money/cat operators.
 Backtest actions from TASK-18 remain wired; the Studio panel is still a reserved
 slot for its UI integration.
+
+### Approval input and Studio presentation (review refinements)
+
+The executor resolves the step input before evaluating its approval. Only the
+approval schema/evaluator accepts safe input.<path> references; normal expression
+validation still rejects them in bindings, templates, trigger/branch conditions.
+Known argument roots are checked. Existing dependency checks still block missing
+dry-run outputs before either resolution or approval evaluation. Checkpoints
+retain the exact resolved input, and dry-run logs report approvalRequired without
+executing mutations or pausing. Existing pinned-version/resume gates are unchanged.
+
+Studio approval controls author these expressions through update-recipe-draft;
+money thresholds use dollars and convert exactly to integer minor units. Advanced
+JSON remains available for custom policies. Cat/template previews are presentation
+only: static message text and dynamic source chips, without evaluating bindings or
+calling a model. Empty variables are hidden. Ambiguity questions use step/argument
+labels, retaining every original entry under expandable evidence. Only verified
+identity-source duplicates are collapsed into Minor; policy/source doubts remain
+in the main count. The shell owns the recipe routes’ single agent-panel toggle.

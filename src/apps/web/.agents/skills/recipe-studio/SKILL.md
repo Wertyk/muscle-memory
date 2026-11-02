@@ -23,7 +23,11 @@ UI-owned navigation key. The Backtest slot is reserved for TASK-18.
    Bindings: `fixed.value`, `path.path`, `expr.expr` (safe JSONLogic),
    `template.template` with `{{trigger.field}}` / `{{steps.id.output.field}}`.
    Steps: action/extract/branch/handoff; each may have an `approval` expression.
-   A false approval never pauses. Trigger matches reference only trigger fields.
+   A false approval never pauses. Approval-only `input.<path>` references this
+   step’s resolved arguments, e.g. `{">": [{var:"input.amount.amountMinor"},10000]}`
+   for a refund above $100. Input paths are invalid elsewhere. Trigger matches
+   reference only trigger fields. The Studio provides Never/Always/When controls
+   with dollar thresholds and an Advanced JSON fallback.
 4. Review returned issues and ambiguities; fix invalid references/operators and
    templates. Original ambiguity evidence remains available after edits and is
    never silently marked resolved. The UI shows the same issues inline.

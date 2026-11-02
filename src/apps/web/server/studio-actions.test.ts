@@ -161,6 +161,11 @@ describe("Recipe Studio real actions on PGlite", () => {
     ).toBe(damagedItemFixture.id);
     const history = (await getRecipe.run({ recipeId }, context)).history;
     expect(history[0]?.version).toEqual(damagedItemFixture);
+    expect(history[1]?.version.name).toBe("Damage care");
+    expect((await editableDraft()).content.name).toBe("Damage care");
+    expect(await listRecipes.run({}, context)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: recipeId, name: "Damage care", version: 2 }),
+    ]));
     expect(history[1]?.diff).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

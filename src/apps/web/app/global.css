@@ -1296,6 +1296,12 @@
   font-weight: 500;
   color: hsl(var(--muted-foreground));
 }
+.recipe-diff-transition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
 .recipe-diff del {
   color: hsl(var(--shop-escalated));
   background: hsl(var(--shop-escalated-surface));
@@ -1414,5 +1420,96 @@
   .recipe-branch .recipe-step-number,
   .recipe-branch .recipe-flow::before {
     display: none;
+  }
+}
+
+.recipe-approval-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(4rem, 0.6fr) minmax(6rem, 1fr);
+  gap: 0.5rem;
+}
+.recipe-approval-value {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.recipe-approval-value > span {
+  color: hsl(var(--muted-foreground));
+}
+.recipe-editor > details {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+.recipe-editor > details > summary {
+  cursor: pointer;
+}
+.recipe-message {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 2;
+  padding: 0.7rem 0.8rem;
+  border-inline-start: 2px solid hsl(var(--wire) / 0.5);
+  border-radius: 0.3rem;
+  background: hsl(var(--muted) / 0.25);
+  color: hsl(var(--foreground));
+  font-size: 0.8rem;
+}
+.recipe-inline-wire {
+  display: inline-flex;
+  vertical-align: baseline;
+  margin-inline: 0.12rem;
+  line-height: 1.4;
+  border-inline-start-width: 2px;
+}
+.recipe-inline-wire::before {
+  display: none;
+}
+.recipe-inline-wire .recipe-wire-source {
+  padding: 0.15rem 0.3rem;
+}
+.recipe-inline-wire .recipe-wire-value {
+  padding: 0.15rem 0.4rem;
+}
+.recipe-money-values {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.recipe-currency-field {
+  min-width: 0;
+}
+.recipe-currency-field .recipe-field-row {
+  padding: 0;
+  gap: 0.2rem;
+}
+.recipe-currency-field .recipe-argument {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.recipe-minor {
+  margin-top: 1rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.8rem;
+}
+.recipe-minor > summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+.recipe-ambiguity-step {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.65rem;
+  color: hsl(var(--muted-foreground));
+}
+@container (max-width: 520px) {
+  .recipe-approval-controls {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -9,7 +9,10 @@ import {
   ShopMasthead,
   WorkspaceLoading,
 } from "@/components/shop/WorkspaceParts";
-import { recipePath, type RecipeSummary } from "@/lib/recipe-studio";
+import {
+  recipePath,
+  type RecipeSummary,
+} from "@/lib/recipe-studio";
 
 export function RecipeStatus({ status }: { status: "draft" | "active" }) {
   const t = useT();
@@ -26,10 +29,10 @@ export function RecipeStatus({ status }: { status: "draft" | "active" }) {
 export function RecipesPage() {
   const t = useT();
   const query = useActionQuery<readonly RecipeSummary[]>("list-recipes", {});
-  if (query.isPending) return <WorkspaceLoading />;
+  if (query.isPending) return <WorkspaceLoading agentToggle={false} />;
   return (
     <div className="shop-page recipe-page">
-      <ShopMasthead />
+      <ShopMasthead agentToggle={false} />
       <header className="shop-page-heading">
         <h1 className="shop-serif">{t("recipes.title")}</h1>
         <IconRoute

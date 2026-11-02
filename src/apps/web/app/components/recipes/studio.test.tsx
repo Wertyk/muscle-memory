@@ -81,6 +81,24 @@ async function submit() {
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
 }
+async function choose(label: string, value: string) {
+  const trigger = document.querySelector<HTMLElement>(
+    `[role="combobox"][aria-label="${label}"]`,
+  )!;
+  await act(async () => {
+    trigger.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+  });
+  await settle(() =>
+    expect(document.querySelector('[role="listbox"]')).not.toBeNull(),
+  );
+  const option = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((option) => option.textContent?.trim() === value);
+  if (!option) throw new Error(`Missing option ${value}`);
+  await click(option);
+}
 async function mount(path = `/recipes/${damagedItemFixture.recipeId}`) {
   await act(async () =>
     root.render(
@@ -98,6 +116,7 @@ async function mount(path = `/recipes/${damagedItemFixture.recipeId}`) {
 }
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  Element.prototype.scrollIntoView = vi.fn();
   record = {
     recipe: {
       id: damagedItemFixture.recipeId,
@@ -214,7 +233,8 @@ describe("Recipe Studio UI", () => {
     expect(
       node.querySelectorAll('[data-source="trigger"]').length,
     ).toBeGreaterThan(0);
-    expect(node.textContent).toContain("Reserved for TASK-18");
+    expect(node.querySelector(".recipe-backtest-slot")?.textContent).toContain("Coming soon");
+    expect(node.textContent).not.toContain("TASK-");
   });
   it("opens the accepted stored broken-platter draft and labels all derived bindings readably", async () => {
     const version = parseRecipeVersion(brokenPlatterDraft);
@@ -227,8 +247,24 @@ describe("Recipe Studio UI", () => {
     expect(node.textContent).toContain(
       "50% × unit price of the line matching productId",
     );
-    expect(node.textContent).toContain("First name of");
-    expect(node.textContent).toContain("Money amount of");
+    expect(node.textContent).toContain("First name · recipient");
+    expect(node.querySelector(".recipe-message")?.textContent).toContain(
+      "We have refunded Refund amount, half of its price",
+    );
+    expect(node.querySelector(".recipe-message")?.textContent).not.toContain(
+      " + ",
+    );
+    expect(
+      node.querySelector(".recipe-message .recipe-inline-wire"),
+    ).not.toBeNull();
+    expect(
+      node.querySelector('button[aria-label="Edit variables"]'),
+    ).toBeNull();
+    expect(
+      [...node.querySelectorAll("button")].some(
+        (button) => button.textContent === "Agent sidebar",
+      ),
+    ).toBe(false);
     expect(node.textContent).toContain("Ember serving platter");
     expect(node.textContent).not.toContain("[object Object]");
     expect(button("Save new version").disabled).toBe(false);
@@ -238,7 +274,7 @@ describe("Recipe Studio UI", () => {
     await mount();
     await click(
       node.querySelector<HTMLButtonElement>(
-        'button[aria-label="Edit reason"]',
+        'button[aria-label="Edit Reason"]',
       )!,
     );
     await fill('"A kinder refund reason"');
@@ -261,6 +297,61 @@ describe("Recipe Studio UI", () => {
           call.name === "activate-recipe" && call.input.versionId === "ver_ui2",
       ),
     ).toBe(true);
+  });
+  it("renders event, approval and binding history in the card vocabulary", async () => {
+    const version = parseRecipeVersion(brokenPlatterDraft);
+    const steps = structuredClone(version.steps) as any[];
+    steps[1].args.amount.currency = { mode: "fixed", value: "USD" };
+    const initial = parseRecipeVersion({ ...version, steps });
+    record = {
+      ...record,
+      recipe: { ...record.recipe, id: initial.recipeId, name: initial.name },
+      versions: [initial],
+    };
+    const draft = await studio.getDraft(initial.recipeId);
+    const edited = structuredClone(draft.content) as any;
+    edited.steps[1].approval = { ">": [{ var: "input.amount.amountMinor" }, 10000] };
+    edited.steps[1].args.reason = { mode: "template", template: "Damage to {{trigger.productId}}" };
+    edited.steps[1].args.orderId = { mode: "path", path: "steps.step_2.output.id" };
+    edited.steps[1].args.amount.amountMinor.expr["*"][1] = 0.25;
+    await studio.update({ recipeId: initial.recipeId, expectedRevision: draft.revision, content: edited });
+    await studio.save({ recipeId: initial.recipeId, expectedRevision: draft.revision + 1 });
+    await mount(`/recipes/${initial.recipeId}`);
+    const history = node.querySelector(".recipe-history > li")!;
+    const details = history.querySelector("details")!;
+    await act(async () => { details.open = true; });
+    expect(history.querySelector("p")?.textContent).toContain("A customer request arrives");
+    expect(history.querySelector("p")?.textContent).not.toContain("request.created");
+    const diff = history.querySelector(".recipe-diff")!;
+    expect(diff.textContent).toContain("Never → When refund amount > $100");
+    expect(diff.textContent).not.toContain("10000");
+    expect(diff.querySelectorAll("li")).toHaveLength(4);
+    expect(diff.textContent).toContain("Trigger field");
+    expect(diff.textContent).toContain("Step output");
+    expect(diff.textContent).toContain("Constant");
+    expect(diff.textContent).toContain("Formula");
+    expect(diff.textContent).toContain("Template");
+    expect(diff.textContent).toContain("25% × unit price");
+  });
+  it("uses the stored name, and carries an edited name through save, active history and the list", async () => {
+    const initial = { ...damagedItemFixture, name: "Draft: damaged_item" };
+    record = { ...record, recipe: { ...record.recipe, name: initial.name }, versions: [initial] };
+    await mount();
+    expect(node.querySelector("h1")?.textContent).toBe(initial.name);
+    expect(node.querySelector(".recipe-history summary")?.textContent).toContain(initial.name);
+    await click(node.querySelector<HTMLButtonElement>('button[aria-label="Edit Name"]')!);
+    await fill("Damaged platter care");
+    await submit();
+    await settle(() => expect(node.querySelector("h1")?.textContent).toBe("Damaged platter care"));
+    await click(button("Save new version"));
+    await settle(() => expect(record.versions[1]?.name).toBe("Damaged platter care"));
+    expect(record.versions[0]).toEqual(initial);
+    expect(node.querySelector(".recipe-history summary")?.textContent).toContain("Damaged platter care");
+    await click(button("Activate v2"));
+    await settle(() => expect(node.querySelector(".recipe-history summary")?.textContent).toContain("Damaged platter care · Active"));
+    await click(node.querySelector<HTMLAnchorElement>('a[href="/recipes"]')!);
+    await settle(() => expect(node.querySelector(".recipe-table tbody th")?.textContent).toContain("Damaged platter care"));
+    expect(node.querySelector(".recipe-table")?.textContent).not.toContain("Draft: damaged_item");
   });
   it("renders extract/handoff steps and edits templates through the shared draft action", async () => {
     record = {
@@ -293,7 +384,7 @@ describe("Recipe Studio UI", () => {
     expect(node.textContent).toContain("Extract text");
     expect(node.textContent).toContain("consumes model tokens");
     expect(
-      node.querySelectorAll('.recipe-wire[data-source="template"]'),
+      node.querySelectorAll('.recipe-message[data-source="template"]'),
     ).toHaveLength(2);
     await click(
       node.querySelector<HTMLButtonElement>('button[aria-label="Edit Text"]')!,
@@ -301,7 +392,7 @@ describe("Recipe Studio UI", () => {
     await fill("Summary: {{trigger.subject}}");
     await submit();
     await settle(() =>
-      expect(node.textContent).toContain("Summary: {{trigger.subject}}"),
+      expect(node.textContent).toContain("Summary: subject · Request"),
     );
     expect(atPath(record.draft!.content, ["steps", 2, "text"])).toEqual({
       mode: "template",
@@ -313,10 +404,11 @@ describe("Recipe Studio UI", () => {
   });
   it("edits formulas and per-step approval conditions without executing a recipe", async () => {
     await mount();
-    const formulaField = node
-      .querySelector('.recipe-wire[data-source="formula"]')!
-      .closest(".recipe-field")!;
-    await click(formulaField.querySelector<HTMLButtonElement>("button")!);
+    await click(
+      node.querySelector<HTMLButtonElement>(
+        'button[aria-label="Edit Refund amount"]',
+      )!,
+    );
     await fill(
       '{"ceil":[{"*":[{"var":"steps.order.output.items[0].unitPrice.amountMinor"},0.25]}]}',
     );
@@ -328,12 +420,142 @@ describe("Recipe Studio UI", () => {
         'button[aria-label="Edit Ask for approval"]',
       )!,
     );
-    await fill("false");
+    await choose("Approval policy", "Never");
     await submit();
     await settle(() =>
       expect(
         atPath(record.draft!.content, ["steps", 1, "then", 0, "approval"]),
       ).toBe(false),
+    );
+    expect(
+      calls
+        .filter((call) => call.method === "POST")
+        .every((call) => call.name === "update-recipe-draft"),
+    ).toBe(true);
+  });
+  it("asks plain-language ambiguity questions and counts identity duplicates only under collapsed Minor", async () => {
+    const version = parseRecipeVersion(brokenPlatterDraft);
+    record = {
+      ...record,
+      recipe: { ...record.recipe, id: version.recipeId, name: version.name },
+      versions: [version],
+    };
+    const base = await studio.getDraft(version.recipeId);
+    const entries = [
+      {
+        stepId: "step_6",
+        argumentPath: "amount.amountMinor",
+        kind: "constant-or-variable",
+        candidates: [],
+      },
+      {
+        stepId: "step_7",
+        argumentPath: "template",
+        kind: "request-specific-text",
+        fragments: ["Ember serving platter"],
+        candidates: [],
+      },
+      {
+        stepId: "step_6",
+        argumentPath: "orderId",
+        kind: "multiple-candidates",
+        candidates: [
+          {
+            reason: "exact-match",
+            binding: { mode: "path", path: "trigger.orderId" },
+          },
+          {
+            reason: "exact-match",
+            binding: { mode: "path", path: "steps.step_2.output.id" },
+          },
+          { reason: "constant", binding: { mode: "fixed", value: "ord_1001" } },
+        ],
+      },
+    ];
+    record = { ...record, draft: { ...base, ambiguities: entries } };
+    await mount(`/recipes/${version.recipeId}`);
+    const panel = node.querySelector('[aria-label="Ambiguities"]')!;
+    expect(panel.querySelector(".recipe-count")?.textContent).toBe("2");
+    const questions = [
+      ...panel.querySelectorAll(".recipe-ambiguities > li > p"),
+    ].map((item) => item.textContent);
+    expect(questions).toContain(
+      "Is 50% of the item price a rule or a one-off?",
+    );
+    expect(questions).toContain(
+      "Mentions “Ember serving platter”; should it change per request?",
+    );
+    expect(panel.textContent).toContain("Refund amount");
+    expect(panel.textContent).toContain("Save reply");
+    const minor = panel.querySelector<HTMLDetailsElement>(".recipe-minor")!;
+    expect(minor.open).toBe(false);
+    expect(minor.querySelector("summary")?.textContent).toBe("Minor (1)");
+    expect(panel.querySelector("pre")?.textContent).toContain(
+      "constant-or-variable",
+    );
+    expect(record.draft!.ambiguities).toEqual(entries);
+    expect(calls.some((call) => call.method === "POST")).toBe(false);
+  });
+  it("authors dollar approval conditions with structured controls and preserves an Advanced fallback", async () => {
+    const version = parseRecipeVersion(brokenPlatterDraft);
+    record = {
+      ...record,
+      recipe: { ...record.recipe, id: version.recipeId, name: version.name },
+      versions: [version],
+    };
+    await mount(`/recipes/${version.recipeId}`);
+    const refund = node.querySelector('article[aria-label="Issue refund"]')!;
+    await click(
+      refund.querySelector<HTMLButtonElement>(
+        'button[aria-label="Edit Ask for approval"]',
+      )!,
+    );
+    expect(
+      node.querySelector('[role="combobox"][aria-label="Approval policy"]')
+        ?.textContent,
+    ).toContain("Never");
+    expect(node.querySelector("details[open] textarea")).toBeNull();
+    await choose("Approval policy", "When");
+    expect(
+      node.querySelector('[role="combobox"][aria-label="Argument to check"]')
+        ?.textContent,
+    ).toContain("Refund amount");
+    await fill("100.25");
+    await submit();
+    await settle(() =>
+      expect(atPath(record.draft!.content, ["steps", 1, "approval"])).toEqual({
+        ">": [{ var: "input.amount.amountMinor" }, 10025],
+      }),
+    );
+    expect(refund.textContent).toContain("When refund amount > $100.25");
+    await click(
+      refund.querySelector<HTMLButtonElement>(
+        'button[aria-label="Edit Ask for approval"]',
+      )!,
+    );
+    await choose("Approval policy", "Always");
+    await submit();
+    await settle(() =>
+      expect(atPath(record.draft!.content, ["steps", 1, "approval"])).toBe(
+        true,
+      ),
+    );
+    await click(
+      refund.querySelector<HTMLButtonElement>(
+        'button[aria-label="Edit Ask for approval"]',
+      )!,
+    );
+    const advanced = node.querySelector<HTMLDetailsElement>("form details")!;
+    await act(async () => {
+      advanced.open = true;
+      advanced.dispatchEvent(new Event("toggle"));
+    });
+    await fill('{"<":[{"var":"input.amount.amountMinor"},5000]}');
+    await submit();
+    await settle(() =>
+      expect(atPath(record.draft!.content, ["steps", 1, "approval"])).toEqual({
+        "<": [{ var: "input.amount.amountMinor" }, 5000],
+      }),
     );
     expect(
       calls

@@ -255,3 +255,11 @@ A stale draft revision is a conflict, requiring readback before retrying. Draft
 validation failures stay editable but cannot become executable versions. Saving
 also increments the revision; repeated uncertain saves must read back first.
 Original ambiguity evidence and editable Studio state share TASK-11’s canonical owner/workspace-scoped recipe_drafts row; original version reads preserve their output.
+
+Studio approvals use Never / Always / When controls plus Advanced JSON. Prefer
+`input.amount.amountMinor` for the refund being issued, e.g.
+`{">": [{"var":"input.amount.amountMinor"},10000]}` for amounts above $100.
+`input.*` exists only inside approvals, after this step's input resolves. The UI
+accepts money thresholds in dollars; action JSON uses integer minor units.
+Message previews show text with symbolic source chips, without evaluating or
+calling a model. Minor ambiguity entries are still preserved as review evidence.

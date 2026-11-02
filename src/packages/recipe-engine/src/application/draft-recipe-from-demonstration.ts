@@ -65,7 +65,8 @@ export class DraftRecipeFromDemonstration {
     const ambiguities = rebased.ambiguities.filter(item => kept.has(item.stepId)).map(item => ({
       ...item, candidates: item.candidates.filter(candidate => available(candidate.binding)),
     })).filter(item => item.kind !== "multiple-candidates" || item.candidates.filter(candidate => candidate.reason !== "constant").length > 1);
-    const name = `Draft: ${demonstration.trigger.type}`;
+    const category = demonstration.trigger.type.replace(/[_-]/g, " ");
+    const name = `Draft: ${category.charAt(0).toUpperCase()}${category.slice(1)}`;
     const draft = parseRecipeVersion({
       id: this.deps.nextId("version"), recipeId: this.deps.nextId("recipe"), version: 1, name,
       trigger: { event: "request.created", match: { "===": [{ var: "trigger.type" }, demonstration.trigger.type] } }, steps,

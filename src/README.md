@@ -64,6 +64,10 @@ session from actual handling and saved in run and usage records; there are no fi
 demo savings. It shows tokens, active time, zero-token handling, approvals, and
 active recipes, with observed agent-versus-recipe comparisons for the same request type.
 
+## Demo video
+
+[`docs/video/muscle-memory-demo.mp4`](docs/video/muscle-memory-demo.mp4) is a 3:47 walkthrough of the real app, recorded live on 2026-11-02: Teach → Recipe Studio → Crystallize with the agent → approval rule and backtest → incoming requests (approve in chat, wholesale handoff) → dashboard → Claude Code running the recipe over MCP.
+
 ## Screenshots
 
 | Screen | Screenshot |
@@ -330,6 +334,8 @@ implementation and review evidence; this README change remains subject to review
 | In-app agent | `deepseek-v4-pro:0813` | Unfamiliar requests, ambiguity review, crystallization, and proposed revisions. |
 | Free-text extraction | `glm-5.3-flash` | Validated intake fields and explicit recipe extraction steps, including backtests. |
 | Deterministic recipe path | None | Structured matching, bindings, branches, and action execution need no model. |
+
+**Demo video:** Claude Code recorded it by driving the running app in headless Chrome with real clicks and the live model. A drawn pointer marks where each click lands. Waits for the model and idle pauses are cut; nothing is re-staged or sped up. The narration is synthetic speech from Ollama Phonon (voice "Easton"). The terminal shot is a real Claude Code session calling the app's MCP tools.
 
 Selection evidence and its scope: [Ollama benchmark](benchmarks/ollama-2026-11-01.md).
 Its filename uses UTC; the measurements were taken on 2026-11-02 in Moscow.

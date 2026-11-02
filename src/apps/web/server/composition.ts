@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { ActionRunContext } from "@agent-native/core/action";
-import { Demonstrations, DraftRecipeFromDemonstration, MatchRequest, RunRecipe, type RunRecipeDependencies, type TextExtractor } from "@muscle-memory/recipe-engine";
+import { BacktestRecipe, Demonstrations, DraftRecipeFromDemonstration, MatchRequest, RunRecipe, type RunRecipeDependencies, type TextExtractor } from "@muscle-memory/recipe-engine";
 import {
   ClassifyRequest, CreateRequest, ValidateRequestFields, CreateReplacementOrder, Escalate, GenerateReturnLabel, GetCustomer, GetOrder,
   GetRequest, GetRequestActivity, GetShipmentStatus, ID_PREFIXES, IssueRefund, ListRequests, SendReply,
@@ -23,6 +23,9 @@ import { DrizzleRequestProcessing } from "./infra/request-processing.js";
 import { ShopRequestExtractor } from "./infra/shop-request-extractor.js";
 import { DemoIntake } from "./infra/demo-intake.js";
 import { shopResult } from "./shop-action-contracts.js";
+import { ShopHistoricalCaseSource } from "./infra/shop-historical-cases.js";
+import { ShopMutationNormalizer } from "./infra/shop-mutation-normalizer.js";
+import { ShopRecipeBacktests } from "./infra/shop-recipe-backtests.js";
 
 export function createTeachUseCases(db: ShopDb) {
   const demonstrations = new Demonstrations(
@@ -115,6 +118,24 @@ export function getRecipeUseCases(context?: ActionRunContext) {
   return createRecipeUseCases(getDb(), {
     context: context ?? { caller: "automation" },
   });
+}
+
+export function createRecipeBacktests(db: ShopDb, options: Parameters<typeof createRecipeUseCases>[1] = {}) {
+  return new ShopRecipeBacktests(db, () => {
+    const extractor = options.extractor ?? new CompleteTextExtractor();
+    const validator = new ValidateRequestFields(new DrizzleShopRepository(db));
+    const cases = new ShopHistoricalCaseSource(db, (request) => new ShopRequestExtractor(extractor, validator, request.customerId));
+    return { cases, backtester: new BacktestRecipe({
+      cases, normalizer: new ShopMutationNormalizer(),
+      actions: new RecipeActionInvoker(options.registry ?? new RegistryActionInvoker(), options.context),
+      extractor, clock: { now: Date.now },
+      ids: options.ids ?? { next: () => `run_${randomBytes(8).toString("hex")}` },
+    }) };
+  });
+}
+
+export function getRecipeBacktests(context?: ActionRunContext) {
+  return createRecipeBacktests(getDb(), { context: context ?? { caller: "automation" } });
 }
 
 export function createRequestIntake(db: ShopDb, options: Parameters<typeof createRecipeUseCases>[1] = {}) {

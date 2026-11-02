@@ -85,6 +85,121 @@ to `sendToAgentChat`, letting the agent read the saved context via actions.
 Dry-run writes only its immutable recipe snapshot and run checkpoints. Integration
 tests compare every shop table and handoff records before/after simulation.
 
+## Historical backtesting (TASK-18 Phase 2 backend)
+
+`createRecipeBacktests` is additive to executor composition. It wires the engine's
+`BacktestRecipe` to `ShopHistoricalCaseSource`, `ShopMutationNormalizer`, and the
+same registry invoker and configured `TextExtractor` used for execution/intake.
+The two thin, read-only GET actions are:
+
+| Action | Input |
+| --- | --- |
+| `backtest-recipe` | `{recipe: versionIdOrSnapshot, requestType}` |
+| `compare-recipe-versions` | `{baseline: versionIdOrSnapshot, candidate: versionIdOrSnapshot, requestType}` |
+
+For example, after saving a version, call
+`backtest-recipe({recipe:"ver_damaged_v1",requestType:"damaged_item"})` through the
+normal action transport. CLI accepts a positional JSON object for nested snapshots.
+Unsaved snapshots are validated and never persisted. Missing IDs and non
+`request.created` recipes fail with typed errors before extraction. The explicit
+`requestType` selects the recipe's historical cohort; arbitrary JSONLogic trigger
+conditions cannot in general be inverted into a SQL type selector. The engine
+still evaluates the complete trigger condition for every selected request.
+These actions remain discoverable through tool search. Recipe Studio is TASK-13;
+there is no UI or activation change in this phase.
+
+### Historical inputs and outcomes
+
+The source selects only `status = resolved` and the requested generated category.
+A repeatable-read, read-only transaction loads requests and batches related
+orders, refunds and replies. It closes before any extraction. Structured fields
+are passed through the exact intake `MatchRequest` path; free text uses
+`ShopRequestExtractor` with `ValidateRequestFields`, then the same public
+`buildRequestTrigger(fields,{requestId,customerId,subject})` inside `MatchRequest`.
+There is no extra source/envelope field, classification write, synthetic field
+default, or seed-specific extraction oracle. The original customer text is used.
+If extraction cannot produce complete validated fields, the operation rejects
+instead of silently dropping that case or presenting an incomplete cohort.
+Provider details are sanitized at the action boundary; failed operations may
+still have spent tokens without producing a report.
+
+Outcomes reconstruct **action inputs**, excluding generated record metadata:
+
+- Refund → `issue-refund({orderId,amount,reason})`.
+- Replacement order → `create-replacement-order({orderId:replacementForOrderId,
+  items:[{productId,quantity}]})`.
+- Reply → `send-reply({requestId,template,variables})`.
+- Each recorded tag → `tag-request({requestId,tag})`.
+- Return cohort's stored return label → `generate-return-label({orderId})`;
+  address-change cohort's stored shipping address →
+  `update-shipping-address({orderId,address})`.
+
+Refunds/replacements are linked by order, not request: only records between the
+request's creation and last update (inclusive) are attributed to it. Return
+labels use the same time window. Replies have a direct request link. Events sort
+by timestamp, then refund/replacement/return-label-or-address/reply, then record
+ID for ties. Tags follow as recorded final state. Resolution selects the cohort;
+no `set-request-status` invocation is inferred solely from that selection.
+Tags have no per-tag history, addresses have no pre-change snapshot/timestamp,
+and overlapping request windows on one order can make attribution ambiguous.
+This reconstruction is suitable for the authored seed; it is not an audit trace.
+
+### Comparison equivalences
+
+`ShopMutationNormalizer` is pure and applied symmetrically. Original action input
+lists and dry-run logs remain intact. For known shop mutation actions it drops
+only top-level `id`, `createdAt`, `updatedAt` record metadata. It always retains
+semantic `requestId`, `orderId`, `productId`, amounts/currencies, quantities,
+meaningful reason/reply text, unknown fields and nested fields. Unknown actions
+are compared exactly. It never removes IDs embedded in prose.
+
+Valid `send-reply` templates are reduced to the literal rendered body using the
+shop's one-pass `{{variable}}` substitution semantics. Equivalent template/variable
+layouts and unused variables compare equally; punctuation, spacing and line
+breaks stay significant. Invalid placeholders, missing variables and conflicting
+extra `body` fields retain their exact input. Refund/escalation reasons and tags
+are trimmed as their use-cases trim them. Contiguous exact `tag-request` operations
+are sorted/deduplicated as an idempotent set; tags are never moved past another
+action. All other mutation/array order remains significant. Omitted refund amounts
+or replacement selections are **not** expanded: their defaults depend on data
+unavailable to a pure normalizer. No semantic similarity or reason-text synonym
+matching is performed.
+
+### Read and token semantics
+
+Dry-run shop reads use **current data, not historical snapshots**. This is the
+reviewer-authorized limitation for seeded history; the report exposes
+`readData:"current"` and limitations. Both versions share a detached historical
+case set, but their read actions still execute separately against current data.
+Concurrent edits can change what the two simulations see. The simulation also
+cannot prove that live mutations would pass policy checks.
+
+Free-text preparation calls the real configured extractor, as do any recipe
+`extract` steps. `summary.requestExtractionTokens` reports cohort preparation;
+`summary.recipeExtractionTokens` sums actual case-local run usage, including
+schema-invalid extract output. `summary.tokens` adds input/output tokens from
+both sources and `summary.totalTokens` adds those two totals. Structured cases
+with action/branch-only recipes consume zero tokens. Known provider usage is
+counted; usage unavailable after provider failures/process death is not invented.
+
+Version comparison loads/extracts the cohort once, using the engine's detached
+case set as a per-operation cache. Each version's report attributes that shared
+request usage to its own scenario. The **combined** `summary.tokens` and
+`summary.totalTokens` count `sharedRequestExtractionTokens` once plus both versions'
+recipe extract-step usage. Use this combined summary for actual comparison cost;
+do not add the two scenario totals. Repeat action calls prepare/extract again.
+No persistent extraction cache, run checkpoint, recipe snapshot or handoff is
+written by these backtest actions.
+
+PGlite tests seed the real 30 handled requests. The hand-written
+`fixtures/backtest-recipes.ts` damage fixture uses read/formula bindings and the
+seed's whole-dollar half-prices, avoiding invented mutation outputs. Ten damage
+cases yield seven identical and three different (replacement/no refund, full
+high-value refund, and distinct reply). Readable field reasons accompany exact
+JSON Pointer diffs. Tests assert every shop row and table count remains unchanged,
+including engine/teaching table counts; existing mutation-output-dependent intake
+fixtures remain conservatively `not_handled`.
+
 ## Request intake (TASK-15 Phase 1)
 
 `create-request` accepts `customerId`, `subject`, and `content` with either

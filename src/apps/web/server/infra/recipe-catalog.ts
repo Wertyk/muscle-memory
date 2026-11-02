@@ -1,8 +1,8 @@
-import { parseRecipeVersion, type ActiveRecipeSource, type Recipe, type RecipeVersion } from "@muscle-memory/recipe-engine";
+import { parseRecipeVersion, type ActiveRecipeSource, type DemonstrationOwner, type Recipe, type RecipeDraft, type RecipeRepository, type RecipeVersion } from "@muscle-memory/recipe-engine";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { ShopDb } from "../db/index.js";
-import { recipes, recipeVersions } from "../db/schema.js";
+import { recipeDrafts, recipes, recipeVersions } from "../db/schema.js";
 
 const identifier = z.string().max(31).regex(/^[A-Za-z_][A-Za-z0-9_-]*$/);
 const catalogSchema = z.object({
@@ -22,8 +22,28 @@ export async function persistRecipeVersion(db: VersionConnection, input: RecipeV
 }
 
 /** Small catalog surface for later drafting/editing/activation use-cases. */
-export class DrizzleRecipeCatalog implements ActiveRecipeSource {
+export class DrizzleRecipeCatalog implements ActiveRecipeSource, RecipeRepository {
   constructor(private readonly db: ShopDb) {}
+  async createDraft(owner: DemonstrationOwner, result: RecipeDraft): Promise<void> {
+    const draft = parseRecipeVersion(result.draft);
+    const entry = catalogSchema.parse(result.recipe);
+    if (entry.status !== "draft" || entry.activeVersionId !== null || entry.id !== draft.recipeId) throw new Error("Expected new draft metadata.");
+    await this.db.transaction(async tx => {
+      // Plain inserts deliberately reject collisions; no existing recipe can be demoted.
+      await tx.insert(recipeVersions).values({ id: draft.id, recipeId: draft.recipeId, version: draft.version, snapshot: draft });
+      await tx.insert(recipes).values(entry);
+      await tx.insert(recipeDrafts).values({ versionId: draft.id, ownerEmail: owner.userId, workspaceId: owner.workspaceId,
+        evidence: { demonstrationId: result.demonstrationId, ambiguities: result.ambiguities } });
+    });
+  }
+  async getDraft(owner: DemonstrationOwner, versionId: string): Promise<RecipeDraft | null> {
+    const [row] = await this.db.select({ evidence: recipeDrafts.evidence, snapshot: recipeVersions.snapshot,
+      recipe: { id: recipes.id, name: recipes.name, status: recipes.status, activeVersionId: recipes.activeVersionId } })
+      .from(recipeDrafts).innerJoin(recipeVersions, eq(recipeDrafts.versionId, recipeVersions.id))
+      .innerJoin(recipes, eq(recipeVersions.recipeId, recipes.id))
+      .where(and(eq(recipeDrafts.versionId, versionId), eq(recipeDrafts.ownerEmail, owner.userId), eq(recipeDrafts.workspaceId, owner.workspaceId)));
+    return row ? structuredClone({ ...row.evidence, recipe: catalogSchema.parse(row.recipe), draft: parseRecipeVersion(row.snapshot) }) : null;
+  }
   saveVersion(version: RecipeVersion): Promise<void> { return persistRecipeVersion(this.db, version); }
   async save(entry: Recipe): Promise<void> {
     const value = catalogSchema.parse(entry);

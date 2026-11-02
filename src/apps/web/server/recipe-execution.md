@@ -136,8 +136,8 @@ primary keys and CHECK constraints remain. Legacy alphanumeric IDs are untouched
 executor's immutable snapshot checks. `save` writes metadata; a composite FK ensures
 an active version exists and belongs to that recipe. Drafts have a null pointer.
 An ad hoc run can still persist a version without adding it to the catalog.
-The catalog does not yet publish skills, draft recipes, expose editing/activation
-UI, or auto-install the test fixtures. Later tasks build those workflows on top.
+The catalog does not yet publish skills, expose editing/activation UI, or
+auto-install the test fixtures. TASK-11 drafting builds on this catalog below.
 
 An intake lock, separate from the run lock, serializes repeated request events.
 `request_processing` reserves one run ID before matching, then checkpoints the
@@ -256,6 +256,62 @@ Late results remain pinned to their original demonstration; cancelled traces dis
 them, and results after Stop cannot turn an incomplete trace back into completed.
 Raw persistence/provider errors are never returned in capture-failure reasons.
 
+
+## Drafting demonstrations (TASK-11)
+
+`draft-recipe-from-demonstration({demonstrationId})` calls the pure engine
+`DraftRecipeFromDemonstration` through composition. Only the authenticated
+operator/workspace's completed stored demonstrations are eligible, across browser
+tabs or agent/MCP/CLI calls. Recording, incomplete, cancelled and empty traces
+are rejected. Action metadata comes from the installed registry's `describe`;
+drafting never invokes an action, extraction or a model.
+
+The response is `{demonstrationId, recipe, draft, ambiguities}`. `draft` is a
+validated immutable executable version; `recipe` has draft status and a null
+active pointer. `get-recipe-draft({versionId: draft.id})` is the shared read-only
+GET action and returns the same review evidence (null for absent/foreign drafts).
+Each draft call creates a fresh recipe/version; retrying is not idempotent.
+Keep the returned version ID for retrieval. Neither action activates a recipe.
+Recipe Studio and crystallization remain TASK-13/TASK-12.
+
+`DrizzleRecipeCatalog.createDraft` inserts version, metadata and owner/workspace
+review evidence in one non-retrying transaction. Plain inserts reject collisions
+without changing existing active recipes. The additive named TASK-11 migration
+adds `recipe_drafts`; immutable version triggers and catalog constraints remain
+unchanged. Review evidence records the source demonstration ID without a foreign
+key, so ordinary shop reset/reseed can clear traces while preserving the draft
+and its doubts. `--all` removes review evidence before version deletion.
+
+Inference consumes the recorded intake-shaped trigger and ordered trace. Drafts
+match `request.created` on `trigger.type`, without pinning customer/order IDs.
+Unused lookups and lookup chains are pruned after inference. Copied mutation
+input values can be rebound to their inferred input bindings, with an additional
+review ambiguity, so a refund/reply dry-run does not need invented refund output.
+Generated outputs still block dependent dry-run steps. Literal reply templates
+with derived placeholders use DSL `cat`; native `send-reply` template/variables
+retain their action placeholders and inferred variables. Inference also derives
+first-name and formatted-money tokens with the allowlisted `firstWord` and `money`
+operators. Item prices and currency use a bounded `find` keyed by `trigger.productId`,
+so line reordering cannot change the selected product. Positional fallbacks are
+flagged. Unsourced/partial detail phrases stay literal with a `request-specific-text`
+ambiguity for crystallization; they are never rewritten by a model during drafting.
+
+The real-action PGlite regression records `req_0001`'s broken Ember platter,
+refunds 14000 (half its 28000 unit price), replies and tags `damaged`. Stored
+fixtures in `server/fixtures/broken-platter-*.json` include the EXACT browser trace
+`demo_de81093c7e515f12`, with unchanged inputs, outputs, identities, timing and
+navigation, plus its resulting draft (only generated recipe/version IDs normalized).
+The trace's plain reply begins "Hi Maya" and includes "$140.00". Tests draft/retrieve
+it, prune five lookups to one, and dry-run a different seeded damaged request after
+moving its damaged product behind a decoy line in the isolated database. Refund,
+currency, first name and formatted amount rebind with no shop writes or tokens.
+Inference identifies the refund output as the reply amount source; copied-input
+rebasing retains that candidate while making the proposed dry-run independent of
+unexecuted mutation output. Literal "Ember serving platter" remains explicitly flagged. The
+opt-in `scripts/teach-mode-smoke.ts` exercises this through authenticated frontend
+action transport on an isolated seeded dev app, including persisted draft readback.
+
+## Demonstration read identity (TASK-9 review)
 
 Reviewer round 1: demonstration read identity is the action name plus structural
 JSON equality (object key order ignored; arrays/types preserved). The engine skips

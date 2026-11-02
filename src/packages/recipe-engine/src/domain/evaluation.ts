@@ -14,6 +14,24 @@ export function pathSegments(path: string): readonly string[] {
   return parts;
 }
 
+export const MAX_FIND_ITEMS = 1024;
+export const MAX_DERIVED_TEXT_LENGTH = 4096;
+const currencySymbols: Readonly<Record<string, string>> = { USD: "$", EUR: "€", GBP: "£", CAD: "CA$", AUD: "A$" };
+
+/** Static relative paths only; find never evaluates property names or methods. */
+function relativeSegments(path: string): readonly string[] {
+  if (path === "") return [];
+  return pathSegments(`trigger.${path}`).slice(1);
+}
+function ownRelative(value: JsonValue, path: string): JsonValue | undefined {
+  let found: JsonValue | undefined = value;
+  for (const part of relativeSegments(path)) {
+    if (found === null || typeof found !== "object" || !hasOwn(found, part)) return undefined;
+    found = (found as JsonObject)[part];
+  }
+  return found;
+}
+
 export function readPath(context: BindingContext, path: string): JsonValue | undefined {
   let value: unknown = context;
   for (const part of pathSegments(path)) {
@@ -42,6 +60,7 @@ const arities: Readonly<Record<string, readonly [number, number]>> = {
   min: [1, 64], max: [1, 64], and: [1, 64], or: [1, 64], "!": [1, 1], "!!": [1, 1],
   if: [3, 63], cat: [1, 64], in: [2, 2],
   round: [1, 1], floor: [1, 1], ceil: [1, 1],
+  find: [4, 4], firstWord: [1, 1], money: [2, 3],
 };
 
 /** Validates both shape and operator/path allowlists, and returns all dependencies. */
@@ -68,6 +87,11 @@ export function expressionPaths(expression: unknown): readonly string[] {
     const args = Array.isArray(raw) ? raw : [raw];
     const [min, max] = arities[operator]!;
     if (args.length < min || args.length > max || (operator === "if" && args.length % 2 === 0)) throw new EvaluationError(`Invalid arity for ${operator}`);
+    if (operator === "find") {
+      if (typeof args[1] !== "string" || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(args[1]) || !isSafeKey(args[1]) || typeof args[3] !== "string") throw new EvaluationError("find expects a static safe key and relative return path");
+      relativeSegments(args[3]);
+    }
+    if (operator === "money" && args.length === 3 && args[2] !== "decimal" && args[2] !== "symbol") throw new EvaluationError("money format must be symbol or decimal");
     args.forEach((v) => visit(v, depth + 1));
   };
   visit(expression, 0);
@@ -122,6 +146,27 @@ export function evaluateExpression(expression: Expression, context: BindingConte
     const a = values[0]!;
     const b = values[1]!;
     switch (operator) {
+      case "find": {
+        if (a === null) return null;
+        if (!Array.isArray(a) || a.length > MAX_FIND_ITEMS) throw new EvaluationError("find expects a bounded array");
+        const wanted = values[2]!;
+        if (wanted !== null && typeof wanted === "object") throw new EvaluationError("find key must be a scalar");
+        const matches = a.filter(item => item !== null && typeof item === "object" && !Array.isArray(item) && hasOwn(item, b as string) && (item as JsonObject)[b as string] === wanted);
+        // Missing and duplicate keys fail closed; never select by array order.
+        const result = matches.length === 1 ? ownRelative(matches[0]!, values[3] as string) ?? null : null;
+        if (!isJsonValue(result)) throw new EvaluationError("find result must be bounded finite JSON");
+        return result;
+      }
+      case "firstWord": {
+        if (typeof a !== "string" || a.length > MAX_DERIVED_TEXT_LENGTH) throw new EvaluationError("firstWord expects bounded text");
+        return a.trim().split(/\s+/, 1)[0] ?? "";
+      }
+      case "money": {
+        if (typeof a !== "number" || !Number.isSafeInteger(a) || typeof b !== "string" || !hasOwn(currencySymbols, b)) throw new EvaluationError("money expects safe integer minor units and an allowlisted currency");
+        const absolute = Math.abs(a);
+        const decimal = `${Math.floor(absolute / 100)}.${String(absolute % 100).padStart(2, "0")}`;
+        return `${a < 0 ? "-" : ""}${values[2] === "decimal" ? "" : currencySymbols[b]}${decimal}`;
+      }
       // Loose equality is restricted to JSON scalars; no JS object coercion/hooks.
       case "==": case "!=": {
         const isScalar = (v: JsonValue): boolean => v !== null && typeof v !== "object";

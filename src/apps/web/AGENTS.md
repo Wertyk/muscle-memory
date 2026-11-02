@@ -170,6 +170,31 @@ five first lookup snapshots + three mutations despite refetches, a 50%-platter
 refund and trigger shape, tests overlap/cancellation/isolation, then
 stops the server and removes its temporary database. No model is called.
 
+## Draft recipes (TASK-11)
+
+| Action | Input | Result / use |
+| --- | --- | --- |
+| `draft-recipe-from-demonstration` | `demonstrationId` from a completed Teach recording | `{demonstrationId, recipe, draft, ambiguities}`; saves a new immutable version and draft catalog entry without a model or activation |
+| `get-recipe-draft` | `versionId: draft.id` | Owned saved draft and ambiguity evidence, or null; read-only GET for UI, agent, MCP and CLI |
+
+Draft only after Stop and saved-trace readback. Recording, incomplete, cancelled,
+empty or foreign demonstrations cannot be drafted. Each call creates a new draft;
+keep `draft.id` and retrieve it for review. Inspect every ambiguity before later
+crystallization/activation. Unused lookups are removed; trigger matches the recorded
+request type, with IDs rebound from intake fields. Native reply templates infer
+variables; plain replies infer first names and formatted money from recorded sources
+and prior outputs. Keyed lookups select the trigger product independently of line order,
+and currency follows the same money object. Inspect `positional-array` fallbacks and
+`request-specific-text` warnings (including literal partial product descriptions).
+Drafts do not appear in active intake
+matching. `run-recipe({recipe:draft, trigger:<other intake-shaped payload>, dryRun:true})`
+shows rebound arguments without shop writes; generated mutation outputs can still
+block later steps. No Recipe Studio or activation UI is introduced here.
+
+The Teach HTTP smoke now also drafts, reads the saved version and dry-runs another
+damaged request, asserting zero tokens and unchanged target activity. See
+`server/recipe-execution.md` and the engine README for persistence/pruning details.
+
 
 ### Menu-launched dialogs (TASK-8 regression fixed in TASK-9)
 

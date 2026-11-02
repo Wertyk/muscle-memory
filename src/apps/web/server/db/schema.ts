@@ -1,7 +1,7 @@
 import type {
   Customer, Order, Product, Refund, Reply, Request, RequestType, Shipment,
 } from "@muscle-memory/shop-domain";
-import type { Demonstration, DemonstrationStep, HandoffContext, Recipe, RecipeVersion, RequestMatch, Run } from "@muscle-memory/recipe-engine";
+import type { Demonstration, DemonstrationStep, HandoffContext, Recipe, RecipeDraft, RecipeVersion, RequestMatch, Run } from "@muscle-memory/recipe-engine";
 import { sql } from "drizzle-orm";
 import { bigint, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, uniqueIndex, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
 
@@ -101,6 +101,14 @@ export const recipes = pgTable("recipes", {
   status: text("status", { enum: ["draft", "active"] }).$type<Recipe["status"]>().notNull(),
   activeVersionId: varchar("active_version_id", { length: 31 }),
 }, (table) => [foreignKey({ columns: [table.id, table.activeVersionId], foreignColumns: [recipeVersions.recipeId, recipeVersions.id] })]);
+
+// Review evidence survives a shop rehearsal reset alongside the immutable version.
+export const recipeDrafts = pgTable("recipe_drafts", {
+  versionId: varchar("version_id", { length: 31 }).primaryKey().references(() => recipeVersions.id),
+  ownerEmail: text("owner_email").notNull(),
+  workspaceId: text("workspace_id").notNull(),
+  evidence: jsonb("evidence").$type<Pick<RecipeDraft, "demonstrationId" | "ambiguities">>().notNull(),
+});
 
 export const requestProcessing = pgTable("request_processing", {
   requestId: varchar("request_id", { length: 31 }).$type<Request["id"]>().primaryKey().references(() => requests.id, { onDelete: "cascade" }),

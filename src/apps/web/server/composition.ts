@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { ActionRunContext } from "@agent-native/core/action";
-import { Demonstrations, MatchRequest, RunRecipe, type RunRecipeDependencies, type TextExtractor } from "@muscle-memory/recipe-engine";
+import { Demonstrations, DraftRecipeFromDemonstration, MatchRequest, RunRecipe, type RunRecipeDependencies, type TextExtractor } from "@muscle-memory/recipe-engine";
 import {
   ClassifyRequest, CreateRequest, ValidateRequestFields, CreateReplacementOrder, Escalate, GenerateReturnLabel, GetCustomer, GetOrder,
   GetRequest, GetRequestActivity, GetShipmentStatus, ID_PREFIXES, IssueRefund, ListRequests, SendReply,
@@ -41,6 +41,13 @@ export function createTeachUseCases(db: ShopDb) {
 export function getTeachUseCases() {
   return createTeachUseCases(getDb());
 }
+export function createDraftRecipeUseCases(db: ShopDb, registry = new RegistryActionInvoker()) {
+  return new DraftRecipeFromDemonstration({
+    traces: new DrizzleTraceStore(db), recipes: new DrizzleRecipeCatalog(db), actions: registry,
+    nextId: kind => `${kind === "version" ? "ver" : "recipe"}_${randomBytes(8).toString("hex")}`,
+  });
+}
+export function getDraftRecipeUseCases() { return createDraftRecipeUseCases(getDb()); }
 export const shopTraceCapture = createShopTraceCapture(
   () => getTeachUseCases().demonstrations,
 );

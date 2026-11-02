@@ -48,6 +48,13 @@ export const recipeMigrations: MigrationEntry[] = [{
       match JSONB
     );
   `,
+}, {
+  version: 3,
+  name: "task11-draft-review-evidence",
+  sql: `CREATE TABLE IF NOT EXISTS recipe_drafts (
+    version_id VARCHAR(31) PRIMARY KEY REFERENCES recipe_versions(id),
+    owner_email TEXT NOT NULL, workspace_id TEXT NOT NULL, evidence JSONB NOT NULL
+  );`,
 }];
 
 export const migrateRecipes = runMigrations(recipeMigrations, { table: "_muscle_memory_recipe_migrations" });

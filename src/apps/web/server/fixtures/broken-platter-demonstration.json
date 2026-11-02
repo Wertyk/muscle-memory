@@ -1,0 +1,349 @@
+{
+  "id": "demo_de81093c7e515f12",
+  "scope": {
+    "userId": "dev@local.test",
+    "sessionId": "1256c09e-6738-403c-9365-613557874cad",
+    "workspaceId": "18cb11fa7b0449a3a59734063cc4ba9a"
+  },
+  "status": "completed",
+  "pending": [],
+  "trigger": {
+    "type": "damaged_item",
+    "orderId": "ord_1001",
+    "subject": "A chip in my new ceramic",
+    "quantity": 1,
+    "productId": "prd_0023",
+    "requestId": "req_0001",
+    "customerId": "cus_0001",
+    "description": "One piece arrived with a chip along the rim. Could you refund half of its price?"
+  },
+  "startedAt": 1793576365436,
+  "stoppedAt": 1793576390444,
+  "subjectId": "req_0001",
+  "references": {
+    "orderId": "ord_1001",
+    "requestId": "req_0001",
+    "customerId": "cus_0001"
+  },
+  "nextSequence": 9,
+  "incompleteReason": null,
+  "steps": [
+    {
+      "id": "step_1",
+      "input": {
+        "requestId": "req_0001"
+      },
+      "action": "get-request",
+      "caller": "frontend",
+      "output": {
+        "id": "req_0001",
+        "tags": [
+          "priority"
+        ],
+        "status": "open",
+        "content": {
+          "fields": {
+            "type": "damaged_item",
+            "orderId": "ord_1001",
+            "quantity": 1,
+            "productId": "prd_0023",
+            "description": "One piece arrived with a chip along the rim. Could you refund half of its price?"
+          },
+          "source": "structured"
+        },
+        "orderId": "ord_1001",
+        "subject": "A chip in my new ceramic",
+        "createdAt": "2026-11-01T23:22:00.000Z",
+        "updatedAt": "2026-11-01T23:22:00.000Z",
+        "customerId": "cus_0001",
+        "escalation": null
+      },
+      "sequence": 1,
+      "startedAt": 1793576365476,
+      "durationMs": 1,
+      "navigation": {
+        "path": "/requests/req_0001",
+        "view": "request",
+        "requestId": "req_0001",
+        "publicPath": "/requests/req_0001"
+      }
+    },
+    {
+      "id": "step_2",
+      "input": {
+        "orderId": "ord_1001"
+      },
+      "action": "get-order",
+      "caller": "frontend",
+      "output": {
+        "id": "ord_1001",
+        "paid": {
+          "currency": "USD",
+          "amountMinor": 119200
+        },
+        "items": [
+          {
+            "name": "Ember Large Serving Platter",
+            "quantity": 4,
+            "productId": "prd_0023",
+            "unitPrice": {
+              "currency": "USD",
+              "amountMinor": 28000
+            }
+          },
+          {
+            "name": "Chalk Mug",
+            "quantity": 3,
+            "productId": "prd_0001",
+            "unitPrice": {
+              "currency": "USD",
+              "amountMinor": 2400
+            }
+          }
+        ],
+        "total": {
+          "currency": "USD",
+          "amountMinor": 119200
+        },
+        "status": "delivered",
+        "createdAt": "2026-10-26T23:22:00.000Z",
+        "customerId": "cus_0001",
+        "deliveredAt": "2026-10-29T23:22:00.000Z",
+        "returnLabel": null,
+        "shippingAddress": {
+          "city": "Alder Glen",
+          "name": "Maya Ashcombe",
+          "line1": "418 Willowmere Drive",
+          "line2": "Apt 2",
+          "region": "OR",
+          "postalCode": "97418",
+          "countryCode": "US"
+        },
+        "replacementForOrderId": null
+      },
+      "sequence": 2,
+      "startedAt": 1793576365479,
+      "durationMs": 5,
+      "navigation": {
+        "path": "/requests/req_0001",
+        "view": "request",
+        "requestId": "req_0001",
+        "publicPath": "/requests/req_0001"
+      }
+    },
+    {
+      "id": "step_3",
+      "input": {
+        "orderId": "ord_1001"
+      },
+      "action": "get-shipment-status",
+      "caller": "frontend",
+      "output": {
+        "shipment": {
+          "id": "shp_1001",
+          "status": "delivered",
+          "carrier": "Northline Parcel",
+          "orderId": "ord_1001",
+          "shippedAt": "2026-10-28T23:22:00.000Z",
+          "deliveredAt": "2026-10-29T23:22:00.000Z",
+          "trackingNumber": "NP10017310",
+          "estimatedDeliveryAt": "2026-10-29T23:22:00.000Z"
+        },
+        "orderStatus": "delivered"
+      },
+      "sequence": 3,
+      "startedAt": 1793576365497,
+      "durationMs": 3,
+      "navigation": {
+        "path": "/requests/req_0001",
+        "view": "request",
+        "requestId": "req_0001",
+        "publicPath": "/requests/req_0001"
+      }
+    },
+    {
+      "id": "step_4",
+      "input": {
+        "requestId": "req_0001"
+      },
+      "action": "get-request-activity",
+      "caller": "frontend",
+      "output": [
+        {
+          "at": "2026-11-01T23:22:00.000Z",
+          "id": "req_0001",
+          "kind": "request_received"
+        },
+        {
+          "at": "2026-11-01T23:22:00.000Z",
+          "id": "state_req_0001",
+          "kind": "recorded_state",
+          "tags": [
+            "priority"
+          ],
+          "status": "open"
+        },
+        {
+          "at": "2026-10-29T23:22:00.000Z",
+          "id": "del_ord_1001",
+          "kind": "delivered"
+        },
+        {
+          "at": "2026-10-28T23:22:00.000Z",
+          "id": "shp_1001",
+          "kind": "dispatched",
+          "carrier": "Northline Parcel"
+        },
+        {
+          "at": "2026-10-26T23:22:00.000Z",
+          "id": "ord_1001",
+          "kind": "order_placed",
+          "orderId": "ord_1001"
+        }
+      ],
+      "sequence": 4,
+      "startedAt": 1793576365500,
+      "durationMs": 2,
+      "navigation": {
+        "path": "/requests/req_0001",
+        "view": "request",
+        "requestId": "req_0001",
+        "publicPath": "/requests/req_0001"
+      }
+    },
+    {
+      "id": "step_5",
+      "input": {
+        "customerId": "cus_0001"
+      },
+      "action": "get-customer",
+      "caller": "frontend",
+      "output": {
+        "id": "cus_0001",
+        "name": "Maya Ashcombe",
+        "email": "maya.ashcombe@example.com",
+        "shippingAddress": {
+          "city": "Alder Glen",
+          "name": "Maya Ashcombe",
+          "line1": "418 Willowmere Drive",
+          "line2": "Apt 2",
+          "region": "OR",
+          "postalCode": "97418",
+          "countryCode": "US"
+        }
+      },
+      "sequence": 5,
+      "startedAt": 1793576365508,
+      "durationMs": 1,
+      "navigation": {
+        "path": "/requests/req_0001",
+        "view": "request",
+        "requestId": "req_0001",
+        "publicPath": "/requests/req_0001"
+      }
+    },
+    {
+      "id": "step_6",
+      "input": {
+        "amount": {
+          "currency": "USD",
+          "amountMinor": 14000
+        },
+        "reason": "One platter arrived chipped - refund 50% of its price",
+        "orderId": "ord_1001"
+      },
+      "action": "issue-refund",
+      "caller": "frontend",
+      "output": {
+        "id": "ref_682be2a56d5c1a40",
+        "amount": {
+          "currency": "USD",
+          "amountMinor": 14000
+        },
+        "reason": "One platter arrived chipped - refund 50% of its price",
+        "orderId": "ord_1001",
+        "createdAt": "2026-11-01T23:39:33.150Z"
+      },
+      "sequence": 6,
+      "startedAt": 1793576373148,
+      "durationMs": 2,
+      "navigation": {
+        "path": "/requests/req_0001",
+        "view": "request",
+        "requestId": "req_0001",
+        "publicPath": "/requests/req_0001"
+      }
+    },
+    {
+      "id": "step_7",
+      "input": {
+        "template": "Hi Maya, I am so sorry your Ember serving platter arrived chipped. We have refunded $140.00, half of its price. Warmly, Kiln & Co.",
+        "requestId": "req_0001",
+        "variables": {}
+      },
+      "action": "send-reply",
+      "caller": "frontend",
+      "output": {
+        "id": "rpl_02a9507c8d73a1b1",
+        "to": "maya.ashcombe@example.com",
+        "body": "Hi Maya, I am so sorry your Ember serving platter arrived chipped. We have refunded $140.00, half of its price. Warmly, Kiln & Co.",
+        "template": "Hi Maya, I am so sorry your Ember serving platter arrived chipped. We have refunded $140.00, half of its price. Warmly, Kiln & Co.",
+        "createdAt": "2026-11-01T23:39:38.490Z",
+        "requestId": "req_0001",
+        "variables": {},
+        "customerId": "cus_0001"
+      },
+      "sequence": 7,
+      "startedAt": 1793576378488,
+      "durationMs": 4,
+      "navigation": {
+        "path": "/requests/req_0001",
+        "view": "request",
+        "requestId": "req_0001",
+        "publicPath": "/requests/req_0001"
+      }
+    },
+    {
+      "id": "step_8",
+      "input": {
+        "tag": "damaged",
+        "requestId": "req_0001"
+      },
+      "action": "tag-request",
+      "caller": "frontend",
+      "output": {
+        "id": "req_0001",
+        "tags": [
+          "priority",
+          "damaged"
+        ],
+        "status": "open",
+        "content": {
+          "fields": {
+            "type": "damaged_item",
+            "orderId": "ord_1001",
+            "quantity": 1,
+            "productId": "prd_0023",
+            "description": "One piece arrived with a chip along the rim. Could you refund half of its price?"
+          },
+          "source": "structured"
+        },
+        "orderId": "ord_1001",
+        "subject": "A chip in my new ceramic",
+        "createdAt": "2026-11-01T23:22:00.000Z",
+        "updatedAt": "2026-11-01T23:39:45.853Z",
+        "customerId": "cus_0001",
+        "escalation": null
+      },
+      "sequence": 8,
+      "startedAt": 1793576385852,
+      "durationMs": 4,
+      "navigation": {
+        "path": "/requests/req_0001",
+        "view": "request",
+        "requestId": "req_0001",
+        "publicPath": "/requests/req_0001"
+      }
+    }
+  ]
+}

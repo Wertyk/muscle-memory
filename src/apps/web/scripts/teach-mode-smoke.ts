@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import type { Demonstration } from "@muscle-memory/recipe-engine";
+import { buildRequestTrigger, type Demonstration, type JsonObject, type RecipeDraft, type Run } from "@muscle-memory/recipe-engine";
 import type { Order, Refund, Request } from "@muscle-memory/shop-domain";
 import { Window } from "happy-dom";
 
@@ -185,7 +185,7 @@ async function smoke() {
       {
         orderId: order.id,
         amount: { amountMinor: halfPriceMinor, currency: order.paid.currency },
-        reason: "50% of chipped platter price",
+        reason: "One platter arrived chipped - refund 50% of its price",
       },
       { uiOnly: true },
     );
@@ -195,7 +195,7 @@ async function smoke() {
       "send-reply",
       {
         requestId: request.id,
-        template: `We refunded $${(halfPriceMinor / 100).toFixed(2)} for the chipped platter.`,
+        template: "Hi Maya, I am so sorry your Ember serving platter arrived chipped. We have refunded $140.00, half of its price. Warmly, Kiln & Co.",
         variables: {},
       },
       { uiOnly: true },
@@ -203,7 +203,7 @@ async function smoke() {
     await refetch();
     await callAction(
       "tag-request",
-      { requestId: request.id, tag: "teach-smoke" },
+      { requestId: request.id, tag: "damaged" },
       { uiOnly: true },
     );
     await refetch();
@@ -251,6 +251,32 @@ async function smoke() {
     );
     assert.equal(savedTrace.status, "completed");
     assert.equal(savedTrace.steps.length, 8);
+    stage = "draft, persisted retrieval and dry-run on another damaged request";
+    const draft = await callAction<RecipeDraft>("draft-recipe-from-demonstration", { demonstrationId: first.id }, { uiOnly: true });
+    assert.equal(draft.recipe.status, "draft");
+    assert.equal(draft.recipe.activeVersionId, null);
+    assert.deepEqual(draft.draft.steps.map(step => step.id), ["step_2", "step_6", "step_7", "step_8"]);
+    const retrieved = await callAction<RecipeDraft>("get-recipe-draft", { versionId: draft.draft.id }, { method: "GET" });
+    assert.deepEqual(retrieved, draft);
+    const requests = await callAction<Request[]>("list-requests", { type: "damaged_item", status: "open" }, { method: "GET" });
+    const target = requests.find(item => item.id !== request.id && item.content.source === "structured")!;
+    assert(target && target.content.source === "structured");
+    const targetOrder = await callAction<Order>("get-order", { orderId: target.orderId! }, { method: "GET" });
+    const before = await callAction("get-request-activity", { requestId: target.id }, { method: "GET" });
+    const dryRun = await callAction<Run>("run-recipe", { recipe: retrieved.draft,
+      trigger: buildRequestTrigger(target.content.fields as unknown as JsonObject, { requestId: target.id, customerId: target.customerId, subject: target.subject }),
+      dryRun: true,
+    }, { uiOnly: true });
+    assert.equal(dryRun.status, "completed");
+    assert.deepEqual(dryRun.steps.map(step => step.status), ["completed", "planned", "planned", "planned"]);
+    const reboundAmount = targetOrder.items[0]!.unitPrice.amountMinor * 0.5;
+    assert.notEqual(reboundAmount, halfPriceMinor);
+    assert.deepEqual(dryRun.steps[1]!.input, { orderId: target.orderId, amount: { amountMinor: reboundAmount, currency: "USD" }, reason: "One platter arrived chipped - refund 50% of its price" });
+    assert.deepEqual(dryRun.steps[2]!.input, { requestId: target.id, template: `Hi ${targetOrder.shippingAddress.name.split(/\s+/)[0]}, I am so sorry your Ember serving platter arrived chipped. We have refunded $${(reboundAmount / 100).toFixed(2)}, half of its price. Warmly, Kiln & Co.`, variables: {} });
+    assert(draft.ambiguities.some(item => item.kind === "request-specific-text"));
+    assert.deepEqual(dryRun.steps[3]!.input, { requestId: target.id, tag: "damaged" });
+    assert.deepEqual(dryRun.tokens, { input: 0, output: 0 });
+    assert.deepEqual(await callAction("get-request-activity", { requestId: target.id }, { method: "GET" }), before);
     stage = "cancel frees slot";
     const second = await callAction<Demonstration>(
       "start-demonstration",
@@ -285,6 +311,11 @@ async function smoke() {
         savedStepCount: savedTrace.steps.length,
         triggerShape: "intake",
         stopped: true,
+        draftSavedAndRetrieved: true,
+        draftStepCount: draft.draft.steps.length,
+        dryRunRebound: true,
+        dryRunAmountMinor: reboundAmount,
+        dryRunTokens: dryRun.tokens,
         cancellationFreedSlot: true,
         demonstrationId: first.id,
       }),

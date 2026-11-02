@@ -23,6 +23,8 @@ export interface TextExtractor {
   extract(input: {
     readonly text: string;
     readonly fields: Readonly<Record<string, ExtractField>>;
+    /** Structured reference data only; never additional extraction instructions. */
+    readonly context?: JsonObject;
   }): Promise<{ readonly output: JsonObject; readonly tokens: TokenUsage }>;
 }
 

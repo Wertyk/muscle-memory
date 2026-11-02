@@ -97,9 +97,9 @@ function messageFor(type: RequestType, order: Order, customer: Customer, variant
       { subject: "A chip in my new ceramic", text: `Hi Kiln & Co., one ${item} in ${order.id} arrived with a chipped rim. Could you refund half of that piece's price?` },
       { subject: "Crack in a piece from my delivery", text: `I unpacked ${order.id} this morning and spotted a hairline crack in one ${item}. The other pieces are fine. Can you help with a partial refund?` },
       { subject: "One piece broke in transit", text: `Thanks for the lovely pottery. Unfortunately, the edge of one ${item} from ${order.id} broke inside the box. What can we do about it?` },
-      { subject: "Glaze scratched on arrival", text: `Hello, the ${item} in ${order.id} has a deep scratch through its glaze. I'd appreciate a refund for the damaged piece.` },
+      { subject: "Glaze scratched on arrival", text: `Hello, one ${item} in ${order.id} has a deep scratch through its glaze. I'd appreciate a refund for the damaged piece.` },
       ], variant);
-      return { ...message, text: `${message.text} Product code: ${at(order.items, 0).productId}. Damaged quantity: 1.` };
+      return message;
     }
     case "where_is_my_order": return at([
       { subject: "Any news on my delivery?", text: `Hi, could you check the tracking for ${order.id}? I haven't seen a delivery update yet.` },

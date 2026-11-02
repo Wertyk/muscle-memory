@@ -98,13 +98,16 @@ describe("rehearsal fixtures", () => {
     expect(data.products.filter((p) => p.price.amountMinor >= 21000 && p.price.amountMinor <= 38000)).toHaveLength(5);
   });
 
-  it("provides explicit product IDs and quantities for free-text damaged history without a field oracle", () => {
-    const freeText = damagedHistory.filter((request) => request.content.source === "free_text");
-    expect(freeText).toHaveLength(5);
+  it("uses natural product names and quantities without internal product codes in free text", () => {
+    const freeText = data.requests.filter((request) => request.content.source === "free_text");
+    expect(damagedHistory.filter((request) => request.content.source === "free_text")).toHaveLength(5);
     for (const request of freeText) {
       if (request.content.source !== "free_text") throw new Error("Expected free text");
-      expect(request.content.text).toContain(`Product code: ${present(orderFor(request).items[0]).productId}.`);
-      expect(request.content.text).toContain("Damaged quantity: 1.");
+      expect(request.content.text).not.toMatch(/prd_|Product code|Damaged quantity/i);
+      if (requestType(request) === "damaged_item") {
+        expect(request.content.text).toContain(present(orderFor(request).items[0]).name);
+        expect(request.content.text).toMatch(/\bone\b|\b1\b/i);
+      }
     }
   });
 

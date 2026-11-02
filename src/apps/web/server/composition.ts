@@ -203,7 +203,7 @@ export function createRecipeBacktests(
     const cases = new ShopHistoricalCaseSource(
       db,
       (request) =>
-        new ShopRequestExtractor(extractor, validator, request.customerId),
+        new ShopRequestExtractor(extractor, validator, request.customerId, { orderId: request.orderId, shop: new DrizzleShopRepository(db) }),
     );
     return {
       cases,
@@ -249,6 +249,7 @@ export function createRequestIntake(
           extractor,
           shop.validateRequestFields,
           request.customerId,
+          { orderId: request.orderId, shop: new DrizzleShopRepository(db) },
         ),
       }),
     executor: (runId) =>

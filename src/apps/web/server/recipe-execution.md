@@ -200,6 +200,11 @@ are passed through the exact intake `MatchRequest` path; free text uses
 `buildRequestTrigger(fields,{requestId,customerId,subject})` inside `MatchRequest`.
 There is no extra source/envelope field, classification write, synthetic field
 default, or seed-specific extraction oracle. The original customer text is used.
+Free-text extraction receives only the linked owned order's lines (name, SKU,
+productId and quantity) as JSON reference data beside sourceText, never as
+instructions. New intake can resolve one explicit owned order reference first.
+Damaged products require a quoted name/SKU mention identifying exactly one line;
+missing or ambiguous mentions and products outside that order fail closed.
 If extraction cannot produce complete validated fields, the operation rejects
 instead of silently dropping that case or presenting an incomplete cohort.
 Provider details are sanitized at the action boundary; failed operations may

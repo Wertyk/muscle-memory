@@ -69,7 +69,8 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     if (text === "Recipe extraction probe") return { output: { fraction: 0.5 }, tokens: { input: 2, output: 1 } };
     const request = historical.find((r) => r.content.source === "free_text" && r.content.text === text);
     if (!request) throw new Error("Unexpected test extraction");
-    return { output: extracted(request), tokens: { input: 8, output: 4 } };
+    return { output: { ...extracted(request), ...(request.content.source === "free_text" && request.content.type === "damaged_item"
+      ? { productMention: data.orders.find((o) => o.id === request.orderId)!.items[0]!.name } : {}) }, tokens: { input: 8, output: 4 } };
   });
   const registry = new RegistryActionInvoker(async () => loadActionsFromStaticRegistry({
     "get-order": { default: getOrder }, "get-customer": { default: getCustomer },
@@ -135,6 +136,13 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     expect(changed("req_0040").reasons.map((r) => r.message).join(" ")).toContain("packaging");
     expect(changed("req_0039").run?.steps.find((s) => s.stepId === "refund")).toMatchObject({ status: "planned", approvalRequired: true });
     expect(extract).toHaveBeenCalledTimes(5);
+    for (const [input] of extract.mock.calls) {
+      const request = historical.find((r) => r.content.source === "free_text" && r.content.text === input.text)!;
+      const order = data.orders.find((o) => o.id === request.orderId)!;
+      expect(input.context).toEqual({ orderId: order.id, lines: order.items.map(({ name, productId, quantity }) => ({
+        name, sku: data.products.find((p) => p.id === productId)!.sku, productId, quantity,
+      })) });
+    }
     expect(new Set(invoke.mock.calls.map(([name]) => name))).toEqual(new Set(["get-order", "get-customer"]));
     expect(await tableCounts()).toEqual(counts);
     expect(await shopSnapshot()).toEqual(before);

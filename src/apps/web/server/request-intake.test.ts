@@ -244,6 +244,27 @@ describe("request.created intake: real actions/event bus/executor on PGlite, off
     expect(await db.select().from(tables.replies).where(eq(tables.replies.requestId, checkpoint!.requestId))).toHaveLength(1);
   });
 
+  it("matches a naturally named damaged product with only its order context and reuses the saved match", async () => {
+    const cases = await activateFixtures();
+    const shop = new DrizzleShopRepository(db);
+    const order = (await shop.getOrder("ord_1006"))!;
+    const line = order.items[0]!;
+    const text = `Hi, one ${line.name} from ${order.id} arrived chipped. Could you arrange a partial refund?`;
+    extract.mockResolvedValue({ output: { type: "damaged_item", orderId: order.id, productId: line.productId,
+      productMention: line.name, quantity: 1, description: "Chipped rim" }, tokens: { input: 30, output: 15 } });
+    const request = await cases.intake.create({ customerId: order.customerId, subject: "Chipped bowl", content: { source: "free_text", text } });
+    expect(request.content).toEqual({ source: "free_text", text, type: "damaged_item" });
+    expect(extract).toHaveBeenCalledWith(expect.objectContaining({ text, context: {
+      orderId: order.id, lines: await Promise.all(order.items.map(async ({ name, productId, quantity }) => ({
+        name, sku: (await shop.getProduct(productId))!.sku, productId, quantity,
+      }))),
+    } }));
+    expect((await cases.processing.list([request.id]))[0]).toMatchObject({ state: "auto_handled", tokens: { input: 30, output: 15 } });
+    await create().intake.events.emit(request.id);
+    expect(extract).toHaveBeenCalledTimes(1);
+    expect(await db.select().from(tables.replies).where(eq(tables.replies.requestId, request.id))).toHaveLength(1);
+  });
+
   it.each(["provider", "incomplete", "wrong_customer"])("hands extraction %s failure to existing AgentHandoff, preserving known usage", async (failure) => {
     const cases = await activateFixtures();
     if (failure === "provider") extract.mockRejectedValue(new Error("Private details"));

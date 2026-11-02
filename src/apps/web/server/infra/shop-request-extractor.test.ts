@@ -1,5 +1,5 @@
 import type { JsonObject } from "@muscle-memory/recipe-engine";
-import { REQUEST_TYPES, ValidateRequestFields } from "@muscle-memory/shop-domain";
+import { REQUEST_TYPES, ValidateRequestFields, type Order } from "@muscle-memory/shop-domain";
 import { describe, expect, it, vi } from "vitest";
 import { createShopDemoData } from "../db/shop-demo-data.js";
 import { ShopRequestExtractor, requestExtractionFields } from "./shop-request-extractor.js";
@@ -50,5 +50,70 @@ describe("shop request extraction mapping (no model/network)", () => {
   it("declares exactly shop-domain categories in the extraction contract", () => {
     for (const type of REQUEST_TYPES) expect(requestExtractionFields.type?.description).toContain(type);
     expect(requestExtractionFields.quantity).toMatchObject({ type: "number", required: false });
+  });
+
+  const platterOrder: Order = { ...order, items: [
+    { ...order.items[0]!, productId: "prd_0023", name: "Ember Large Serving Platter", quantity: 2 },
+    { ...order.items[0]!, productId: "prd_0024", name: "Moss Large Serving Platter", quantity: 3 },
+  ] };
+  function contextual(output: JsonObject, linkedOrder: Order = platterOrder, orderId: Order["id"] | null = order.id) {
+    const shop = {
+      getCustomer: async (id: string) => data.customers.find((row) => row.id === id) ?? null,
+      getOrder: vi.fn(async (id: string) => id === linkedOrder.id ? linkedOrder : null),
+      getProduct: async (id: string) => data.products.find((row) => row.id === id) ?? null,
+    };
+    const fake = vi.fn(async () => ({ output, tokens }));
+    return { extractor: new ShopRequestExtractor({ extract: fake }, new ValidateRequestFields(shop), order.customerId, { orderId, shop }), fake, shop };
+  }
+  const damage = { type: "damaged_item", orderId: order.id, productId: "prd_0023", quantity: 1, description: "Chipped rim", productMention: "large Ember platters" };
+  const message = "Hi, one of the large Ember platters arrived chipped. Could you help?";
+
+  it("offers only linked order lines and validates a natural product mention and word quantity", async () => {
+    const { extractor, fake } = contextual(damage);
+    const { productMention: _mention, ...fields } = damage;
+    expect(await extractor.extract(message)).toEqual({ fields, tokens });
+    expect(fake).toHaveBeenCalledExactlyOnceWith({ text: message, fields: requestExtractionFields, context: {
+      orderId: order.id, lines: [
+        { name: "Ember Large Serving Platter", sku: "KILN-023", productId: "prd_0023", quantity: 2 },
+        { name: "Moss Large Serving Platter", sku: "KILN-024", productId: "prd_0024", quantity: 3 },
+      ],
+    } });
+  });
+
+  it("resolves one explicit owned order reference for new unlinked intake", async () => {
+    const { extractor, fake, shop } = contextual(damage, platterOrder, null);
+    expect((await extractor.extract(`${message} Order ${order.id}.`)).fields).not.toBeNull();
+    expect(shop.getOrder).toHaveBeenCalledWith(order.id);
+    expect(fake.mock.calls[0]).toEqual([expect.objectContaining({ context: expect.objectContaining({ orderId: order.id }) })]);
+  });
+
+  it.each([
+    { output: { ...damage, productId: "prd_0001" }, text: message },
+    { output: { ...damage, productId: "prd_0024" }, text: message },
+    { output: { ...damage, orderId: "ord_1002" }, text: message },
+    { output: { ...damage, quantity: 3 }, text: message },
+    { output: { ...damage, productMention: "platters" }, text: "One of the platters arrived chipped." },
+    { output: damage, text: "One piece arrived chipped." },
+    { output: { ...damage, productMention: "" }, text: message },
+    { output: { ...damage, productMention: "Ember" }, text: "One piece arrived chipped." },
+    { output: { ...damage, productMention: "Ember" }, text: "One piece arrived chipped. Please remember to reply." },
+  ])("fails closed for wrong-order IDs, guesses, absent or ambiguous product mentions: %j", async ({ output, text }) => {
+    expect(await contextual(output).extractor.extract(text)).toEqual({ fields: null, tokens });
+  });
+
+  it("rejects identically named lines even if the model selects one", async () => {
+    const sameNames = { ...platterOrder, items: platterOrder.items.map((line) => ({ ...line, name: "Ember Large Serving Platter" })) };
+    expect(await contextual(damage, sameNames).extractor.extract(message)).toEqual({ fields: null, tokens });
+  });
+
+  it("never offers an unowned order or multiple unlinked order references", async () => {
+    for (const [linkedOrder, orderId, text] of [
+      [{ ...platterOrder, customerId: "cus_0001" }, order.id, message],
+      [platterOrder, null, `Orders ${order.id} and ord_1002: ${message}`],
+    ] as const) {
+      const { extractor, fake } = contextual({ ...damage, productId: "prd_9999" }, linkedOrder, orderId);
+      expect((await extractor.extract(text)).fields).toBeNull();
+      expect(fake.mock.calls[0]).toEqual([{ text, fields: requestExtractionFields }]);
+    }
   });
 });

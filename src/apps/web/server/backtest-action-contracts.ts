@@ -4,7 +4,7 @@ import { REQUEST_TYPES } from "@muscle-memory/shop-domain";
 import { z } from "zod";
 import { BacktestInputError, type ShopBacktestResult, type ShopBacktestComparison } from "./infra/shop-recipe-backtests.js";
 import { recipeJsonSchema, runOutputSchema } from "./recipe-action-contracts.js";
-import { HistoricalReconstructionError } from "./infra/shop-historical-cases.js";
+import { HistoricalDataError, HistoricalReconstructionError } from "./infra/shop-historical-cases.js";
 
 export const backtestErrors = defineActionErrors("VERSION_NOT_FOUND", "INVALID_BACKTEST", "BACKTEST_FAILED");
 export const recipeReferenceSchema = z.union([
@@ -14,20 +14,21 @@ export const backtestRequestTypeSchema = z.enum(REQUEST_TYPES).describe("Histori
 const count = z.number().int().nonnegative();
 const tokens = z.object({ input: count, output: count });
 const mutation = z.object({ action: z.string(), input: z.custom<JsonObject>((v) => recipeJsonSchema.safeParse(v).success && v !== null && typeof v === "object" && !Array.isArray(v)) });
+const classification = z.enum(["outcome", "wording", "bookkeeping"]);
 const diff = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("added"), path: z.string(), intended: recipeJsonSchema }),
-  z.object({ kind: z.literal("removed"), path: z.string(), historical: recipeJsonSchema }),
-  z.object({ kind: z.literal("changed"), path: z.string(), historical: recipeJsonSchema, intended: recipeJsonSchema }),
+  z.object({ kind: z.literal("added"), classification, path: z.string(), intended: recipeJsonSchema }),
+  z.object({ kind: z.literal("removed"), classification, path: z.string(), historical: recipeJsonSchema }),
+  z.object({ kind: z.literal("changed"), classification, path: z.string(), historical: recipeJsonSchema, intended: recipeJsonSchema }),
 ]);
 const status = z.enum(["identical", "different", "not_handled"]);
 export const backtestOutputSchema: z.ZodType<ShopBacktestResult> = z.object({
   recipeVersionId: z.string(), readData: z.literal("current"), limitations: z.array(z.string()),
-  summary: z.object({ total: count, identical: count, different: count, notHandled: count,
-    tokens, totalTokens: count, requestExtractionTokens: tokens, recipeExtractionTokens: tokens }),
+  summary: z.object({ total: count, sameOutcome: count, differentOutcome: count, notHandled: count, nonOutcomeOnly: count,
+    tokens, totalTokens: count.nullable(), unknownUsageCases: count, requestExtractionTokens: tokens, recipeExtractionTokens: tokens }),
   cases: z.array(z.object({
     caseId: z.string(), status,
     reasons: z.array(z.object({
-      code: z.enum(["identical", "different", "trigger-mismatch", "trigger-error", "execution-error", "failed", "blocked", "handoff", "no-mutations"]),
+      code: z.enum(["identical", "different", "wording", "bookkeeping", "reconstruction-failed", "trigger-mismatch", "trigger-error", "execution-error", "failed", "blocked", "handoff", "no-mutations"]),
       message: z.string(), stepId: z.string().optional(), blockedBy: z.array(z.string()).readonly().optional(),
     }).transform(({ stepId, blockedBy, ...reason }) => ({
       ...reason, ...(stepId === undefined ? {} : { stepId }), ...(blockedBy === undefined ? {} : { blockedBy }),
@@ -37,8 +38,8 @@ export const backtestOutputSchema: z.ZodType<ShopBacktestResult> = z.object({
 });
 export const compareBacktestOutputSchema: z.ZodType<ShopBacktestComparison> = z.object({
   baseline: backtestOutputSchema, candidate: backtestOutputSchema,
-  summary: z.object({ tokens, totalTokens: count, sharedRequestExtractionTokens: tokens }),
-  cases: z.array(z.object({ caseId: z.string(), baselineStatus: status, candidateStatus: status, changed: z.boolean(), diff: z.array(diff) })),
+  summary: z.object({ tokens, totalTokens: count.nullable(), unknownUsageCases: count, sharedRequestExtractionTokens: tokens }),
+  cases: z.array(z.object({ caseId: z.string(), baselineStatus: status, candidateStatus: status, changed: z.boolean(), nonOutcomeOnly: z.boolean(), diff: z.array(diff) })),
 });
 
 function validationContext(value: unknown, path: readonly PropertyKey[]) {
@@ -59,7 +60,7 @@ export async function backtestOperation<T>(work: () => Promise<T>, output?: z.Zo
   catch (error) {
     // Raw errors can contain SQL parameters, provider credentials and customer text.
     // Retain safe class diagnostics and identifiers, never serialize the error object.
-    const known = error instanceof BacktestInputError || error instanceof HistoricalReconstructionError;
+    const known = error instanceof BacktestInputError || error instanceof HistoricalReconstructionError || error instanceof HistoricalDataError;
     console.error("[recipe-backtest]", {
       name: known ? error.name : error instanceof z.ZodError ? "ZodError"
         : error instanceof Error && ["TypeError", "RangeError", "SyntaxError"].includes(error.name) ? error.name : "Error",
@@ -70,7 +71,7 @@ export async function backtestOperation<T>(work: () => Promise<T>, output?: z.Zo
       ...(error instanceof z.ZodError ? validationContext(result, error.issues[0]?.path ?? []) : {}),
     });
     if (error instanceof BacktestInputError) return backtestErrors.noWrite(error.message, error.code, { statusCode: error.code === "VERSION_NOT_FOUND" ? 404 : 400 });
-    const message = error instanceof HistoricalReconstructionError && !error.unexpectedFailure ? error.message
+    const message = error instanceof HistoricalDataError || (error instanceof HistoricalReconstructionError && !error.unexpectedFailure) ? error.message
       : error instanceof z.ZodError ? "Backtest data could not be validated. Review the saved recipe and try again."
         : "Backtest could not finish. Check the historical request fields and recipe, then retry.";
     return backtestErrors.noWrite(message, "BACKTEST_FAILED", { statusCode: 409 });

@@ -16,6 +16,16 @@ export const requestExtractionFields: Readonly<Record<string, ExtractField>> = {
 };
 
 const words = (value: string) => value.toLowerCase().match(/[a-z0-9_]+/g)?.map((word) => word.replace(/s$/, "")) ?? [];
+const diagnosticFields = new Set([...strings, "type", "quantity", "address", "name", "line1", "line2", "city", "region", "postalCode", "countryCode"]);
+function fieldDiagnostic(value: unknown, issues: readonly { path: readonly PropertyKey[] }[]): string {
+  const fields = issues.flatMap(({ path }) => {
+    if (!path.length || !path.every((key) => typeof key === "string" && diagnosticFields.has(key))) return [];
+    let actual = value;
+    for (const key of path) actual = actual && typeof actual === "object" ? Reflect.get(actual, key) : undefined;
+    return [`${actual === undefined ? "missing" : "invalid"} ${path.join(".")}`];
+  });
+  return [...new Set(fields)].slice(0, 6).join(", ") || "invalid request fields";
+}
 
 /** Flatten primitives only at the TextExtractor boundary, then recover the exact
  * shop discriminated union. Missing required fields fail closed, never get defaults. */
@@ -35,11 +45,12 @@ export class ShopRequestExtractor implements RequestExtractor {
       }))),
     } : undefined;
     const result = await this.text.extract({ text, fields: requestExtractionFields, ...(context ? { context } : {}) });
+    const fail = (failureReason: string) => ({ fields: null, tokens: result.tokens, failureReason });
     const parsed = flatSchema.safeParse(result.output);
-    if (!parsed.success) return { fields: null, tokens: result.tokens };
+    if (!parsed.success) return fail(fieldDiagnostic(result.output, parsed.error.issues));
     const flat = parsed.data;
     if (this.linked && "orderId" in flat && flat.orderId !== undefined && orderId && flat.orderId !== orderId)
-      return { fields: null, tokens: result.tokens };
+      return fail("invalid orderId: does not match the linked order");
     if (context && flat.type === "damaged_item") {
       const mention = flat.productMention?.trim();
       const tokens = words(mention ?? "");
@@ -47,7 +58,7 @@ export class ShopRequestExtractor implements RequestExtractor {
         ? context.lines.filter((line) => line.productId === mention || line.sku?.toLowerCase() === mention.toLowerCase()
           || tokens.every((token) => words(line.name).includes(token))) : [];
       if (matches.length !== 1 || matches[0]!.productId !== flat.productId)
-        return { fields: null, tokens: result.tokens };
+        return fail(mention ? "invalid productMention or productId: no unique matching product in the message" : "missing productMention");
     }
     let candidate: unknown;
     switch (flat.type) {
@@ -61,8 +72,8 @@ export class ShopRequestExtractor implements RequestExtractor {
       } }; break;
     }
     const fields = structuredRequestFieldsSchema.safeParse(candidate);
-    if (!fields.success) return { fields: null, tokens: result.tokens };
+    if (!fields.success) return fail(fieldDiagnostic(candidate, fields.error.issues));
     const valid = await this.validator.execute({ customerId: this.customerId, fields: fields.data });
-    return { fields: valid.ok ? valid.value as unknown as JsonObject : null, tokens: result.tokens };
+    return valid.ok ? { fields: valid.value as unknown as JsonObject, tokens: result.tokens } : fail("request fields failed shop validation");
   }
 }

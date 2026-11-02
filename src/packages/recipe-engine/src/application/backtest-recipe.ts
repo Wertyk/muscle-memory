@@ -1,5 +1,5 @@
 import type {
-  BacktestCaseResult, BacktestReason, BacktestResult, BacktestVersionComparison, HistoricalCase, Mutation,
+  BacktestCaseResult, BacktestReason, BacktestResult, BacktestVersionComparison, ClassifiedDifference, HistoricalCase, Mutation,
 } from "../domain/backtest.js";
 import { evaluateCondition } from "../domain/evaluation.js";
 import { diffJson } from "../domain/json-diff.js";
@@ -58,9 +58,10 @@ export class BacktestRecipe {
       cases: cases.map((historical, index) => {
         const a = before[index]!;
         const b = after[index]!;
-        const diff = diffJson(mutationJson(a.normalizedIntended), mutationJson(b.normalizedIntended));
+        const diff = this.differences(a.normalizedIntended, b.normalizedIntended);
+        const changed = a.result.status !== b.result.status || diff.some((entry) => entry.classification === "outcome");
         return { caseId: historical.id, baselineStatus: a.result.status, candidateStatus: b.result.status,
-          changed: a.result.status !== b.result.status || diff.length > 0, diff };
+          changed, nonOutcomeOnly: !changed && diff.length > 0, diff };
       }),
     });
   }
@@ -76,14 +77,25 @@ export class BacktestRecipe {
       ids.add(historical.id);
       if (!isJsonValue(historical.trigger)) throw new Error(`Invalid historical trigger: ${historical.id}`);
       validateMutations(historical.outcome);
+      if (historical.reconstructionFailure !== undefined && (typeof historical.reconstructionFailure !== "string" ||
+        !historical.reconstructionFailure.trim() || historical.reconstructionFailure.length > 1000)) throw new Error("Invalid reconstruction diagnostic");
     }
-    return immutableSnapshot(cases.map(({ id, trigger, outcome }) => ({ id, trigger, outcome })));
+    return immutableSnapshot(cases.map(({ id, trigger, outcome, reconstructionFailure }) => ({ id, trigger, outcome,
+      ...(reconstructionFailure === undefined ? {} : { reconstructionFailure }) })));
   }
 
   private normalize(mutations: readonly Mutation[]): readonly Mutation[] {
     const normalized = this.deps.normalizer ? this.deps.normalizer.normalize(immutableSnapshot(mutations)) : mutations;
     validateMutations(normalized);
     return immutableSnapshot(normalized);
+  }
+
+  private differences(historical: readonly Mutation[], intended: readonly Mutation[]): readonly ClassifiedDifference[] {
+    return immutableSnapshot(diffJson(mutationJson(historical), mutationJson(intended)).map((difference) => {
+      const classification = this.deps.classifier?.classify(difference.path, historical, intended) ?? "outcome";
+      if (!["outcome", "wording", "bookkeeping"].includes(classification)) throw new Error("Invalid difference classification");
+      return { ...difference, classification };
+    }));
   }
 
   private async evaluate(recipe: RecipeVersion, cases: readonly HistoricalCase[]): Promise<readonly EvaluatedCase[]> {
@@ -93,6 +105,10 @@ export class BacktestRecipe {
   }
 
   private async evaluateCase(recipe: RecipeVersion, historical: HistoricalCase): Promise<EvaluatedCase> {
+    if (historical.reconstructionFailure) return { normalizedIntended: [], result: immutableSnapshot({
+      caseId: historical.id, status: "not_handled", reasons: [{ code: "reconstruction-failed", message: historical.reconstructionFailure }],
+      historicalMutations: historical.outcome, intendedMutations: [], diff: [], run: null,
+    }) };
     const reasons: BacktestReason[] = [];
     let run: Run | null = null;
     let matches = false;
@@ -116,19 +132,24 @@ export class BacktestRecipe {
       reasons.push({ code: "no-mutations", message: "Recipe planned no mutations" });
     }
     const normalizedIntended = this.normalize(intended);
-    const diff = diffJson(mutationJson(this.normalize(historical.outcome)), mutationJson(normalizedIntended));
-    const status = reasons.length > 0 ? "not_handled" : diff.length > 0 ? "different" : "identical";
+    const diff = this.differences(this.normalize(historical.outcome), normalizedIntended);
+    const status = reasons.length > 0 ? "not_handled" : diff.some((entry) => entry.classification === "outcome") ? "different" : "identical";
     if (status !== "not_handled") reasons.push({ code: status,
       message: status === "identical" ? "Intended mutations match the historical outcome" : "Intended mutations differ from the historical outcome" });
+    if (diff.some((entry) => entry.classification === "wording")) reasons.push({ code: "wording",
+      message: status === "identical" ? "Same outcome; wording differs from the recorded handling" : "Wording also differs from the recorded handling" });
+    if (diff.some((entry) => entry.classification === "bookkeeping")) reasons.push({ code: "bookkeeping",
+      message: "Internal bookkeeping differs from the recorded handling" });
     return { normalizedIntended, result: immutableSnapshot({ caseId: historical.id, status, reasons,
       historicalMutations: historical.outcome, intendedMutations: intended, diff, run }) };
   }
 
   private report(recipe: RecipeVersion, results: readonly EvaluatedCase[]): BacktestResult {
     return immutableSnapshot({ recipeVersionId: recipe.id,
-      summary: { total: results.length, identical: results.filter(({ result }) => result.status === "identical").length,
-        different: results.filter(({ result }) => result.status === "different").length,
-        notHandled: results.filter(({ result }) => result.status === "not_handled").length },
+      summary: { total: results.length, sameOutcome: results.filter(({ result }) => result.status === "identical").length,
+        differentOutcome: results.filter(({ result }) => result.status === "different").length,
+        notHandled: results.filter(({ result }) => result.status === "not_handled").length,
+        nonOutcomeOnly: results.filter(({ result }) => result.status === "identical" && result.diff.length > 0).length },
       cases: results.map(({ result }) => result) });
   }
 

@@ -1,7 +1,7 @@
 import type { Demonstration, DemonstrationOwner, DemonstrationScope } from "../domain/demonstration.js";
 import type { ExtractField, JsonObject, JsonValue, RecipeVersion } from "../domain/model.js";
 import type { ActionEffect, HandoffContext, Run, TokenUsage } from "../domain/run.js";
-import type { HistoricalCase, Mutation } from "../domain/backtest.js";
+import type { DifferenceClassification, HistoricalCase, Mutation } from "../domain/backtest.js";
 import type { RecipeDraft } from "./draft-recipe-from-demonstration.js";
 
 export interface RecipeRepository {
@@ -36,7 +36,7 @@ export interface ActiveRecipeSource {
 export interface RequestExtractor {
   /** One narrow extraction call. Null fields means invalid/incomplete app fields;
    * preserve known usage even when validation fails. Never guess missing fields. */
-  extract(text: string): Promise<{ readonly fields: JsonObject | null; readonly tokens: TokenUsage }>;
+  extract(text: string): Promise<{ readonly fields: JsonObject | null; readonly tokens: TokenUsage; readonly failureReason?: string }>;
 }
 
 export interface AgentHandoff {
@@ -80,6 +80,11 @@ export interface MutationNormalizer {
   normalize(mutations: readonly Mutation[]): readonly Mutation[];
 }
 
+export interface DifferenceClassifier {
+  /** Pure field policy over a JSON Pointer and both normalized mutation lists. */
+  classify(path: string, historical: readonly Mutation[], intended: readonly Mutation[]): DifferenceClassification;
+}
+
 export interface BacktestRecipeDependencies {
   readonly cases: HistoricalCaseSource;
   /** Reads must use historical snapshots; effect metadata must fail closed, as for RunRecipe. */
@@ -89,6 +94,8 @@ export interface BacktestRecipeDependencies {
   /** Fresh IDs also prevent read adapters from sharing idempotency keys across cases. */
   readonly ids: IdGenerator;
   readonly normalizer?: MutationNormalizer;
+  /** Omission conservatively classifies every difference as outcome. */
+  readonly classifier?: DifferenceClassifier;
 }
 
 /** All operations in the callback commit atomically under an exclusive DB lock.

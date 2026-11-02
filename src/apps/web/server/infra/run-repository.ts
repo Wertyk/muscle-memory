@@ -1,12 +1,29 @@
 import { parseRecipeVersion, type Run, type RunRepository } from "@muscle-memory/recipe-engine";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { summarizeRun, type RunFilters, type RunSummary } from "../../shared/recipe-runs.js";
 import type { ShopDb } from "../db/index.js";
-import { recipeRuns } from "../db/schema.js";
+import { recipeRuns, requests } from "../db/schema.js";
 import { persistRecipeVersion } from "./recipe-catalog.js";
 import { assertRunLockActive, withRunLock } from "./run-lock.js";
 
 export class DrizzleRunRepository implements RunRepository {
   constructor(private readonly db: ShopDb) {}
+
+  /** App read projection; execution's generic RunRepository port stays unchanged. */
+  async list(filters: RunFilters = {}): Promise<readonly RunSummary[]> {
+    const checkpoint = recipeRuns.checkpoint;
+    const requestId = sql<string>`coalesce(${checkpoint}->'trigger'->>'requestId', ${checkpoint}->'trigger'->>'id')`;
+    const rows = await this.db.select({ checkpoint, subject: requests.subject }).from(recipeRuns)
+      .leftJoin(requests, eq(requests.id, requestId))
+      .where(and(
+        filters.status ? sql`${checkpoint}->>'status' = ${filters.status}` : undefined,
+        filters.requestId ? eq(requestId, filters.requestId) : undefined,
+        filters.recipeId ? sql`${checkpoint}->'recipe'->>'recipeId' = ${filters.recipeId}` : undefined,
+        filters.mode ? sql`${checkpoint}->>'mode' = ${filters.mode}` : undefined,
+      ))
+      .orderBy(desc(sql`(${checkpoint}->>'createdAt')::double precision`), desc(recipeRuns.id));
+    return rows.map(row => summarizeRun(row.checkpoint, row.subject));
+  }
 
   async create(run: Run): Promise<void> {
     assertRunLockActive();

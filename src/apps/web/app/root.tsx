@@ -38,6 +38,7 @@ import { isLiveShopPath } from "@/lib/shop-workspace";
 import { i18nCatalog } from "./i18n";
 
 import stylesheet from "./global.css?url";
+import "./components/runs/RunChatCard";
 
 configureTracking({
   getDefaultProps: (_name, properties) => ({

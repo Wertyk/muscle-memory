@@ -6,6 +6,8 @@ import { loadActionsFromStaticRegistry } from "@agent-native/core/server";
 import { parseRecipeVersion, type Step } from "@muscle-memory/recipe-engine";
 import { asc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { recipeVersionInputSchema, recipeJsonInputSchema, booleanFlagSchema } from "./recipe-action-contracts.js";
 import getOrder from "../actions/get-order.js";
 import issueRefund from "../actions/issue-refund.js";
 import sendReply from "../actions/send-reply.js";
@@ -13,6 +15,8 @@ import tagRequest from "../actions/tag-request.js";
 import runRecipe from "../actions/run-recipe.js";
 import resumeRecipeRun from "../actions/resume-recipe-run.js";
 import getRecipeRun from "../actions/get-recipe-run.js";
+import listRecipeRuns from "../actions/list-recipe-runs.js";
+import { APPROVAL_CARD_RENDERER, RUN_CARD_RENDERER } from "../shared/recipe-runs.js";
 import * as composition from "./composition.js";
 import { getDb, type ShopDb } from "./db/index.js";
 import * as tables from "./db/schema.js";
@@ -263,12 +267,45 @@ describe("recipe execution against REAL seeded shop actions on PGlite", () => {
     const paused = await runRecipe.run({ recipe: recipe(gated), trigger, dryRun: false }, { ...context, actionName: "run-recipe" });
     expect(paused.status).toBe("awaiting_approval");
     expect(await getRecipeRun.run({ runId: paused.id }, context)).toEqual(paused);
+    expect(runRecipe.chatUI?.renderer).toBe(RUN_CARD_RENDERER);
+    expect(getRecipeRun.chatUI?.renderer).toBe(RUN_CARD_RENDERER);
+    expect(resumeRecipeRun.chatUI?.renderer).toBe(APPROVAL_CARD_RENDERER);
     const done = await resumeRecipeRun.run({ runId: paused.id, approval: { stepId: "reply", decision: "approve" }, retry: false }, context);
     expect(done.status).toBe("completed");
     expect(await refunds()).toHaveLength(1);
     expect(await replies()).toHaveLength(1);
     await expect(getRecipeRun.run({ runId: "run_absent" }, context)).rejects.toMatchObject({ errorCode: "RUN_NOT_FOUND" });
     await expect(resumeRecipeRun.run({ runId: "run_absent", retry: false }, context)).rejects.toMatchObject({ errorCode: "RUN_NOT_FOUND" });
+  });
+
+  it("keeps run-recipe discoverable as an agent tool without weakening DSL / trigger validation", () => {
+    const schema = z.object({ recipe: recipeVersionInputSchema, trigger: recipeJsonInputSchema, dryRun: booleanFlagSchema.default(false) });
+    expect(() => z.toJSONSchema(schema, { io: "input" })).not.toThrow();
+    expect(schema.parse({ recipe: recipe(), trigger }).recipe).toEqual(recipe());
+    expect(schema.safeParse({ recipe: { ...recipe(), steps: [{ id: "bad", kind: "action", action: "tag-request", args: { tag: { mode: "path", path: "steps.missing.output.tag" } } }] }, trigger }).success).toBe(false);
+    expect(schema.safeParse({ recipe: recipe(), trigger: { invalid: Number.POSITIVE_INFINITY } }).success).toBe(false);
+    expect(schema.safeParse({ recipe: recipe(), trigger: JSON.parse('{"__proto__":{}}') }).success).toBe(false);
+  });
+
+  it("lists detached run summaries with combined filters, linked request subjects and stable newest ordering", async () => {
+    vi.spyOn(composition, "getRecipeUseCases").mockImplementation(() => create());
+    const gated = await create().runRecipe.execute({ recipe: recipe([{ ...steps[0]!, approval: true }], "ver_list_gate"), trigger });
+    const dry = await create().runRecipe.execute({ recipe: recipe(steps, "ver_list_dry"), trigger: { id: request.id, orderId: order.id }, mode: "dry-run" });
+    const generic = await create().runRecipe.execute({ recipe: recipe([steps[0]!], "ver_list_generic"), trigger: { orderId: order.id } });
+    const rows = await listRecipeRuns.run({}, context);
+    expect(listRecipeRuns.readOnly).toBe(true);
+    expect(listRecipeRuns.http).toMatchObject({ method: "GET" });
+    expect(rows.map(run => run.id)).toEqual([generic.id, dry.id, gated.id]);
+    expect(rows.find(run => run.id === gated.id)).toMatchObject({ requestId: request.id, requestSubject: request.subject, recipeId: gated.recipe.recipeId, recipeVersionId: gated.recipe.id, version: 1, status: "awaiting_approval", tokens: { input: 0, output: 0 } });
+    expect(rows.find(run => run.id === generic.id)?.requestId).toBeNull();
+    expect(rows.find(run => run.id === dry.id)?.requestId).toBe(request.id);
+    expect(rows[0]).not.toHaveProperty("steps");
+    expect(await listRecipeRuns.run({ requestId: request.id, recipeId: gated.recipe.recipeId, status: "awaiting_approval", mode: "execute" }, context)).toEqual([rows.find(run => run.id === gated.id)]);
+    expect(await create().runs.list({ status: "completed", requestId: "req_absent" })).toEqual([]);
+    expect((await create().runs.list({ mode: "dry-run" }))[0]?.durationMs).toBe(dry.steps.reduce((sum, step) => sum + step.durationMs, 0));
+    const summary = rows.find(run => run.id === gated.id)!;
+    summary.tokens = { input: 99, output: 0 };
+    expect((await create().runs.get(gated.id))?.tokens.input).toBe(0);
   });
 
   it("runs additive migrations repeatedly without altering recorded checkpoints", async () => {

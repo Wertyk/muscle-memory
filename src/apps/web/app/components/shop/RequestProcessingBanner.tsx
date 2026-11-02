@@ -5,6 +5,8 @@ import type { JsonValue, Run } from "@muscle-memory/recipe-engine";
 import type { RequestProcessing } from "@shared/request-processing";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import { Link } from "react-router";
+import { runPath } from "@/lib/recipe-runs";
 
 import { Button } from "@/components/ui/button";
 import { moneyText } from "@/lib/shop-workspace";
@@ -25,8 +27,14 @@ export function RequestProcessingBanner({ requestId }: { requestId: string }) {
   const processing = useActionQuery<readonly RequestProcessing[]>("list-request-processing", { requestIds: [requestId] });
   if (processing.isError) return <QueryError error={processing.error} retry={() => void processing.refetch()} />;
   const row = processing.data?.find((item) => item.requestId === requestId);
-  if (!row || (row.state !== "with_agent" && row.state !== "awaiting_approval")) return null;
+  if (!row) return null;
+  if (row.state !== "with_agent" && row.state !== "awaiting_approval") return <ProcessingRunLink row={row} />;
   return <ProcessingAttention key={`${requestId}:${row.runId}`} row={row} />;
+}
+
+function ProcessingRunLink({ row }: { row: RequestProcessing }) {
+  const t = useT();
+  return <section className="shop-panel mb-5" aria-label={t("shop.processingAttention")}><div className="flex flex-wrap items-center gap-3"><ProcessingChip state={row.state} /><Link to={runPath(row.runId)} className="shop-record-link text-sm underline underline-offset-4">{t("runs.viewRun")}</Link></div></section>;
 }
 
 function ProcessingAttention({ row }: { row: RequestProcessing }) {
@@ -63,6 +71,7 @@ function ProcessingAttention({ row }: { row: RequestProcessing }) {
     <section className="shop-panel mb-5" aria-label={t("shop.processingAttention")} aria-busy={settling}>
       <div className="flex flex-wrap items-center gap-3">
         <ProcessingChip state={row.state} />
+        <Link to={runPath(row.runId)} className="shop-record-link text-sm underline underline-offset-4">{t("runs.viewRun")}</Link>
         {run.isPending ? <span role="status" className="flex items-center gap-2 text-sm"><PendingMark />{t("shop.loadingProcessing")}</span> : current && (
           row.state === "awaiting_approval" ? (
             <>
@@ -81,7 +90,7 @@ function ProcessingAttention({ row }: { row: RequestProcessing }) {
                 </Button>
               </div>
             </>
-          ) : (
+          ) : row.state === "with_agent" ? (
             <>
               <div className="min-w-0 flex-1 text-sm">
                 <p className="font-medium">{t(current.handoff?.context.to === "human" ? "shop.queuedForHuman" : "shop.queuedForAgent")}</p>
@@ -94,7 +103,7 @@ function ProcessingAttention({ row }: { row: RequestProcessing }) {
                 openSidebar: true,
               })}>{t("shop.openHandoff")}</Button>
             </>
-          )
+          ) : null
         )}
       </div>
       {run.isError && <div className="mt-3"><QueryError error={run.error} stale={Boolean(current)} retry={() => void run.refetch()} /></div>}

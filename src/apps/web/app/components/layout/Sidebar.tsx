@@ -16,6 +16,7 @@ import { AgentNativeIcon } from "@agent-native/toolkit/app/shared/AgentNativeIco
 import {
   IconEdit,
   IconInbox,
+  IconTimeline,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
   IconLoader2,
@@ -302,6 +303,17 @@ function ChatThreadsSection({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function RunsNavLink({ collapsed }: { collapsed: boolean }) {
+  const t = useT();
+  const { pathname } = useLocation();
+  const active = pathname === "/runs" || pathname.startsWith("/runs/");
+  const link = <Link to="/runs" aria-current={active ? "page" : undefined} aria-label={t("runs.title")}
+    className={cn("flex items-center text-sidebar-accent-foreground transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring", active && "bg-sidebar-accent", collapsed ? "size-8 justify-center rounded-md" : "mb-3 h-10 w-full gap-3 rounded-lg px-3 text-sm font-medium")}>
+    <IconTimeline className="size-4 shrink-0" strokeWidth={1.8} /><span className={collapsed ? "sr-only" : "truncate"}>{t("runs.title")}</span>
+  </Link>;
+  return collapsed ? <Tooltip><TooltipTrigger asChild>{link}</TooltipTrigger><TooltipContent side="right">{t("runs.title")}</TooltipContent></Tooltip> : <div className="px-2">{link}</div>;
+}
+
 export function Sidebar({
   collapsed = false,
   collapsible = true,
@@ -406,6 +418,7 @@ export function Sidebar({
         )}
       >
         <InboxNavLink collapsed={collapsed} />
+        <RunsNavLink collapsed={collapsed} />
         <ChatThreadsSection collapsed={collapsed} />
       </nav>
 

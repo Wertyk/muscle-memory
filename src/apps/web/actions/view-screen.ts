@@ -7,9 +7,11 @@ import {
   getRequestIntake,
   getShopUseCases,
   getCurrentDemonstration,
+  getRecipeUseCases,
 } from "../server/composition.js";
 import { PROCESSING_STATES } from "../shared/request-processing.js";
 import { shopId, shopResult } from "../server/shop-action-contracts.js";
+import { runFiltersSchema } from "../server/recipe-action-contracts.js";
 
 export default defineAction({
   description:
@@ -23,7 +25,14 @@ export default defineAction({
     const screen: Record<string, unknown> = {};
     if (navigation) screen.navigation = navigation;
     if (selection) screen.selection = selection;
-    if (
+    if (navigation?.view === "run" && typeof navigation.runId === "string") {
+      screen.run = await getRecipeUseCases().runs.get(navigation.runId);
+    } else if (navigation?.view === "runs") {
+      const url = await readAppStateForCurrentTab("__url__");
+      const filters = runFiltersSchema.parse(url?.searchParams ?? {});
+      screen.activeFilters = filters;
+      screen.runs = await getRecipeUseCases().runs.list(filters);
+    } else if (
       navigation?.view === "request" &&
       typeof navigation.requestId === "string"
     ) {

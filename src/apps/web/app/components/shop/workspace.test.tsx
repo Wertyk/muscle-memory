@@ -649,7 +649,9 @@ describe("shop workspace with real framework action hooks and an offline action 
     await click(byText("Reject"));
     expect(writes("resume-recipe-run")).toHaveLength(1);
     await act(async () => { holdWrite = undefined; release(); });
-    await settle(() => expect(container.querySelector('[aria-label="Request processing"]')).toBeNull());
+    await settle(() => expect(container.querySelector('[data-processing="done"]')).not.toBeNull());
+    expect(container.querySelector('[aria-label="Request processing"] a[href="/runs/run_ui"]')?.textContent).toBe("View run");
+    expect(container.querySelector('[aria-label="Request processing"] button')).toBeNull();
     expect(writes("resume-recipe-run")[0]?.input).toEqual({ runId: "run_ui", approval: { stepId: "refund", decision } });
     expect(writes("issue-refund")).toHaveLength(0);
   });
@@ -677,6 +679,8 @@ describe("shop workspace with real framework action hooks and an offline action 
   it("limits live sync to shop work routes", () => {
     expect(isLiveShopPath("/inbox")).toBe(true);
     expect(isLiveShopPath("/requests/req_0001")).toBe(true);
+    expect(isLiveShopPath("/runs")).toBe(true);
+    expect(isLiveShopPath("/runs/run_0001")).toBe(true);
     for (const path of ["/", "/sign-in", "/chat", "/settings", "/inbox/public", "/requests"]) expect(isLiveShopPath(path)).toBe(false);
   });
 

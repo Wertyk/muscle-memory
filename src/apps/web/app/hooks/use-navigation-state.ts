@@ -20,6 +20,7 @@ import {
   requestPath,
 } from "@/lib/shop-workspace";
 import { TAB_ID } from "@/lib/tab-id";
+import { runIdFromPath, runPath } from "@/lib/recipe-runs";
 
 export interface NavigationState {
   view?: string;
@@ -27,6 +28,7 @@ export interface NavigationState {
   publicPath?: string;
   threadId?: string;
   requestId?: string;
+  runId?: string;
 }
 
 export function useNavigationState() {
@@ -85,18 +87,22 @@ function matchesPathPrefix(pathname: string, prefix: string): boolean {
 export function navigationStateForPath(pathname: string): NavigationState {
   const threadId = threadIdFromPath(pathname);
   const requestId = requestIdFromPath(pathname);
+  const runId = runIdFromPath(pathname);
   return {
     view: viewForPath(pathname),
     path: pathname,
     publicPath: appPathFromLocalRoute(pathname),
     ...(threadId ? { threadId } : {}),
     ...(requestId ? { requestId } : {}),
+    ...(runId ? { runId } : {}),
   };
 }
 
 function viewForPath(pathname: string): string {
   if (pathname === INBOX_PATH) return "inbox";
   if (requestIdFromPath(pathname)) return "request";
+  if (runIdFromPath(pathname)) return "run";
+  if (pathname === "/runs") return "runs";
   if (isChatPathname(pathname)) return "chat";
   if (pathname === HOME_PATH) return "home";
   if (pathname.startsWith("/database")) return "database";
@@ -112,6 +118,9 @@ function viewForPath(pathname: string): string {
 
 function pathForView(view?: string): string {
   switch (view) {
+    case "runs":
+    case "run":
+      return "/runs";
     case "inbox":
     case "request":
       return INBOX_PATH;
@@ -138,6 +147,7 @@ function pathForView(view?: string): string {
 }
 
 export function pathForCommand(command: any): string {
+  if (command?.view === "run" && typeof command.runId === "string" && command.runId.trim()) return runPath(command.runId.trim());
   if (
     command?.view === "request" &&
     typeof command.requestId === "string" &&

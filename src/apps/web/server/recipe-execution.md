@@ -439,3 +439,86 @@ The shared shop lookup classification is verified against action readOnly metada
 The Teach bar numbers mutations and shows compact lookup chips and separate counts;
 Inspect and the retrieval action retain the full ordered trace. Historical traces
 are not rewritten.
+
+## Run history and chat cards (TASK-16)
+
+`/runs` reads `list-recipe-runs` (GET, read-only), over the existing
+`DrizzleRunRepository`. Optional `status`, `requestId`, `recipeId`, and `mode`
+filters combine. Results are newest first (run ID breaks time ties) and contain
+request subjects/IDs, immutable recipe/version identity, status, mode, start
+and update times, summed active step duration, and execution tokens. No second
+status/metrics store or engine port was added.
+
+`/runs/:runId` reads `get-recipe-run`. Its timeline preserves every attempt,
+including failed attempts, gates, planned dry-run mutations and blocked steps.
+Step labels reuse Teach's human action labels. Summaries show actual resolved
+values; disclosures retain complete saved inputs/outputs and the immutable
+recipe/trigger. Duration excludes approval waiting; execution tokens exclude
+intake extraction and the chat agent's own usage. Handoff means queued review,
+and failure reasons remain visible alongside handoff disposition. Recipe links
+use Studio's `/recipes/:recipeId` route (with the version identity in the URL);
+the exact executed snapshot is also always available on run detail.
+
+Both run detail and chat use `RunApproval`: an exact saved step ID plus
+Approve/Reject through `resume-recipe-run`, never a direct shop call. Initial
+reads, refetches, pending decisions and read failures disable decisions. A failed
+response always causes checkpoint readback before another decision. The engine
+remains the authority for concurrent/stale decisions and completed effects.
+`RequestProcessingBanner` retains View run for completed outcomes as well as
+approvals/handoffs. Runs routes alone are added to the private shop sync gate;
+they use the existing shared SSE/poll transport, with no feature polling loop.
+`navigate` and `view-screen` include Runs and the selected run ID.
+
+The app root registers `muscle-memory.recipe-run` (run-recipe/get-recipe-run)
+and `muscle-memory.recipe-approval` (resume-recipe-run), using action `chatUI` and
+`registerActionChatRenderer` from the installed Toolkit. Both render a compact
+current run, with check marks, execution tokens and a live approval card when
+needed. Tool output is historical, so cards re-read the durable checkpoint and
+remove resolved gates. Registration is shared by sidebar and full-page chat.
+The input-side `run-recipe` transport schemas are JSON Schema representable and
+apply the original strict DSL/bounded-JSON validators; unsafe keys, cycles,
+non-finite numbers and invalid bindings are still rejected before execution.
+This fixes core 0.222.2 excluding the original custom-schema action from agent
+discovery; the execution model and output contract are unchanged.
+
+### Manual rehearsal and verification
+
+On a disposable shop database, run `pnpm -C src seed:shop`, then
+`pnpm -C src/apps/web exec tsx scripts/seed-runs.ts`. The explicit seed executes
+`server/fixtures/run-recipes.ts` through real registry actions: completed shipment
+reply/tag, a $140 refund awaiting approval, a rejected tag, a queued wholesale
+handoff, and a failed lookup with queued handoff. Fixture catalog entries stay
+drafts and never participate in intake. No LLM runs. Repeated installation is
+rejected until the shop is reseeded; effects/checkpoints are real. Approval of
+the refund creates an actual synthetic shop refund. Shop reset retains catalog
+versions, as usual. Production and the inbox demo never install these fixtures.
+
+For an isolated authenticated HTTP/DOM smoke, use a **fresh temporary database**
+for both seed commands and the dev server, set `AUTH_DISABLED=false`,
+`NODE_ENV=development`, `BETTER_AUTH_URL=http://localhost:5193`, and start
+`pnpm -C src dev --port 5193`. Then run
+`pnpm -C src/apps/web exec tsx scripts/runs-smoke.tsx`.
+`--origin=http://localhost:<port>` selects another local server. The script expects
+the normal one-time development sign-in on the fresh DB, verifies both routes,
+combined filters and resolved $140 input, mounts the actual registered cards in
+`CoreAgentKitRoot`/`AgentKitChat`, clicks Approve/Reject over real HTTP, then reads
+back completed/aborted checkpoints and the single completed refund step. It
+consumes the pending fixture, so use a fresh database for another full smoke.
+The smoke exits after DOM/controller cleanup because framework client helpers
+retain Node session timers (same convention as the Teach smoke).
+
+Optional `--live-agent` additionally uses the configured chat provider to
+run, inspect and reject a harmless gated tag recipe. It uses `createAgentNativeAgentKitTransport` and the same AgentKit controller,
+transcript and widget slot as the sidebar. All three real streamed action cards
+mount directly in the DOM, both renderer IDs are present in the protocol store,
+and normal local chat invalidation reconciles every card with the saved rejection. This opt-in manual check
+spends chat tokens; unit/integration tests remain offline and never call a model.
+No raw provider response, session credential or customer message is saved.
+
+Offline tests cover mounted interactive AgentKit transcript rendering for all
+three actions/both renderer IDs, both decisions, duplicate clicks, stale cards,
+failed responses/readback, resolved evidence, filters, retries, handoff reasons,
+and JSON Schema discovery. The live smoke passed with all three real agent tools.
+Visual camera/narrow-browser and actual sidebar verification remains a reviewer
+check: this session's browser host was unavailable and native Chrome control was
+not approved. DOM tests and the HTTP smoke are not screenshot evidence.

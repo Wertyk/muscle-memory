@@ -1,7 +1,9 @@
 import { shopMessages } from "./shop-en";
+import { runMessages } from "./runs-en";
 
 const messages = {
   shop: shopMessages,
+  runs: runMessages,
   composer: {
     removeAttachment: "Remove {{name}}",
     removeReference: "Remove {{name}} reference",

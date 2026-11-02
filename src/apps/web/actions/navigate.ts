@@ -9,6 +9,7 @@ export default defineAction({
     view: z.string().optional().describe("View name to navigate to"),
     path: z.string().optional().describe("URL path to navigate to"),
     threadId: z.string().optional().describe("Chat thread ID to open"),
+    runId: z.string().optional().describe("Saved run ID to open with view=run; view=runs opens /runs"),
     requestId: z
       .string()
       .optional()
@@ -25,6 +26,7 @@ export default defineAction({
     if (args.view) nav.view = args.view;
     if (args.path) nav.path = args.path;
     if (args.threadId) nav.threadId = args.threadId;
+    if (args.runId) nav.runId = args.runId;
     if (args.requestId) nav.requestId = args.requestId;
     nav._writeId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await writeAppStateForCurrentTab("navigate", nav);

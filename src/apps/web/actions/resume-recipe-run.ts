@@ -1,5 +1,6 @@
 import { defineAction } from "@agent-native/core/action";
 import { z } from "zod";
+import { APPROVAL_CARD_RENDERER } from "../shared/recipe-runs.js";
 import { getRecipeUseCases } from "../server/composition.js";
 import { booleanFlagSchema, recipeErrors, recipeOperation, runIdSchema, runOutputSchema } from "../server/recipe-action-contracts.js";
 
@@ -14,6 +15,7 @@ export default defineAction({
     retry: booleanFlagSchema.default(false).describe("Default false; true retries only safe failed reads/extraction/evaluation, never uncertain mutations"),
   }).refine((input) => !(input.approval && input.retry), "Choose approval or retry, not both"),
   outputSchema: runOutputSchema,
+  chatUI: { renderer: APPROVAL_CARD_RENDERER, title: "Recipe approval" },
   errors: recipeErrors,
   run: async (input, context) => {
     const cases = getRecipeUseCases(context);

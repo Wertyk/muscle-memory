@@ -936,3 +936,248 @@
   outline: 2px solid hsl(var(--ring));
   outline-offset: -2px;
 }
+
+/* Recipe runs: the saved execution is the visual spine. */
+.run-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: hsl(var(--muted) / 0.45);
+}
+.run-status > span {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+.run-status[data-status="completed"],
+.run-zero-tokens {
+  color: hsl(var(--shop-resolved));
+}
+.run-status[data-status="completed"] {
+  background: hsl(var(--shop-resolved-surface));
+  border-color: hsl(var(--shop-resolved) / 0.22);
+}
+.run-status[data-status="awaiting_approval"],
+.run-gate {
+  color: hsl(var(--shop-pending));
+}
+.run-status[data-status="failed"],
+.run-status[data-status="rejected"],
+.run-status[data-status="aborted"] {
+  color: hsl(var(--shop-escalated));
+}
+.run-zero-tokens {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.run-table-wrap {
+  overflow-x: auto;
+  border-block: 1px solid hsl(var(--border));
+}
+.run-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: start;
+  font-size: 0.8rem;
+}
+.run-table th {
+  padding: 0.8rem 1rem;
+  text-align: start;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+.run-table td {
+  padding: 1.25rem 1rem;
+  vertical-align: top;
+  border-top: 1px solid hsl(var(--border));
+}
+.run-table td:first-child {
+  min-width: 13rem;
+  max-width: 24rem;
+}
+.run-table td:nth-child(2) {
+  min-width: 12rem;
+}
+.run-table tbody tr:hover {
+  background: hsl(var(--muted) / 0.3);
+}
+.run-page {
+  max-width: 70rem;
+}
+.run-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 3rem;
+  margin-block: 2rem;
+  padding-block: 1.25rem;
+  border-block: 1px solid hsl(var(--border));
+}
+.run-metrics dt {
+  font-size: 0.7rem;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 0.4rem;
+}
+.run-metrics dd {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+.run-timeline-panel {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+.run-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.run-timeline > li {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-bottom: 2rem;
+}
+.run-timeline > li:last-child {
+  padding-bottom: 0;
+}
+.run-timeline > li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0.9rem;
+  top: 1.8rem;
+  bottom: 0;
+  width: 1px;
+  background: hsl(var(--border));
+}
+.run-step-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 50%;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--background));
+}
+.run-timeline > li[data-status="completed"] > .run-step-mark {
+  color: hsl(var(--shop-resolved));
+  background: hsl(var(--shop-resolved-surface));
+  border-color: hsl(var(--shop-resolved) / 0.3);
+}
+.run-timeline > li[data-status="awaiting_approval"] > .run-step-mark {
+  color: hsl(var(--shop-pending));
+  border-color: currentColor;
+}
+.run-timeline > li[data-status="failed"] > .run-step-mark,
+.run-timeline > li[data-status="rejected"] > .run-step-mark {
+  color: hsl(var(--shop-escalated));
+}
+.run-timeline > li[data-status="pending"] {
+  opacity: 0.65;
+}
+.run-step-values {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.run-step-values dt {
+  margin-bottom: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+.run-step-values dd {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+.run-evidence {
+  font-size: 0.75rem;
+}
+.run-evidence summary {
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  padding-block: 0.75rem;
+}
+.run-evidence summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+  border-radius: 0.25rem;
+}
+.run-json {
+  max-height: 22rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: hsl(var(--muted) / 0.5);
+  font-size: 0.7rem;
+  line-height: 1.6;
+}
+.run-approval,
+.run-notice {
+  border: 1px solid hsl(var(--border));
+  border-inline-start: 3px solid hsl(var(--shop-pending));
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: hsl(var(--card));
+  overflow-wrap: anywhere;
+}
+.run-notice {
+  border-inline-start-color: hsl(var(--muted-foreground));
+}
+.run-chat-card {
+  width: 100%;
+  min-width: 0;
+  padding: 0.25rem;
+}
+.run-chat-card .run-notice,
+.run-chat-card .run-approval {
+  margin-top: 1rem;
+}
+.run-chat-card .run-status {
+  white-space: normal;
+}
+.run-chat-card .run-zero-tokens {
+  white-space: normal;
+}
+.run-chat-card .run-timeline-compact {
+  margin-top: 1.25rem;
+  font-size: 0.8rem;
+}
+.run-timeline-compact > li {
+  padding-bottom: 1rem;
+  gap: 0.65rem;
+}
+@media (max-width: 600px) {
+  .run-step-values {
+    grid-template-columns: 1fr;
+    gap: 0.6rem;
+  }
+  .run-timeline-panel {
+    padding: 1rem;
+  }
+  .run-metrics {
+    gap: 1rem 2rem;
+  }
+}

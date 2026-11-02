@@ -61,6 +61,21 @@ afterEach(() => {
 });
 
 describe("agent workspace context", () => {
+  it("reads run detail and filtered Runs context through the existing repository", async () => {
+    const run = { id: "run_screen" };
+    const get = vi.fn(async () => run);
+    const list = vi.fn(async () => [run]);
+    vi.spyOn(composition, "getRecipeUseCases").mockReturnValue({ runs: { get, list } } as unknown as ReturnType<typeof composition.getRecipeUseCases>);
+    state.navigation = { view: "run", runId: run.id };
+    expect(await viewScreen.run({}, { caller: "tool" })).toMatchObject({ run });
+    expect(get).toHaveBeenCalledExactlyOnceWith(run.id);
+    state.navigation = { view: "runs", path: "/runs" };
+    state.__url__ = { searchParams: { status: "awaiting_approval", requestId: "req_0001", mode: "execute" } };
+    expect(await viewScreen.run({}, { caller: "tool" })).toMatchObject({ activeFilters: state.__url__.searchParams, runs: [run] });
+    expect(list).toHaveBeenCalledExactlyOnceWith(state.__url__.searchParams);
+    await navigate.run({ view: "run", runId: run.id }, { caller: "tool" });
+    expect(writeAppStateForCurrentTab).toHaveBeenCalledWith("navigate", expect.objectContaining({ view: "run", runId: run.id }));
+  });
   it("exposes processing and Teach context together for the current request", async () => {
     state.navigation = { view: "request", requestId: request.id };
     const context = { caller: "frontend" as const, userEmail: "operator@example.test" };

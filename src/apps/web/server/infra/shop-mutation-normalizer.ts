@@ -1,10 +1,31 @@
-import type { JsonObject, JsonValue, Mutation, MutationNormalizer } from "@muscle-memory/recipe-engine";
+import type { DifferenceClassifier, JsonObject, JsonValue, Mutation, MutationNormalizer } from "@muscle-memory/recipe-engine";
+import { isBookkeepingTag } from "../../shared/shop-mutation-comparison.js";
 
 const knownActions = new Set([
   "issue-refund", "send-reply", "tag-request", "create-replacement-order",
   "generate-return-label", "update-shipping-address", "set-request-status", "escalate",
 ]);
 const generated = new Set(["id", "createdAt", "updatedAt"]);
+
+/** Wording and internal tags are allowlists; customer operations and unknown fields are outcomes. */
+export class ShopDifferenceClassifier implements DifferenceClassifier {
+  classify(path: string, historical: readonly Mutation[], intended: readonly Mutation[]) {
+    const parts = path.split("/").slice(1).map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
+    if (!/^(0|[1-9][0-9]*)$/.test(parts[0] ?? "")) return "outcome";
+    const before = historical[Number(parts[0])];
+    const after = intended[Number(parts[0])];
+    const sidesAtIndex = [before, after].filter((mutation) => mutation !== undefined);
+    const tags = sidesAtIndex.length > 0 && sidesAtIndex.every(isBookkeepingTag);
+    if (tags && (parts.length === 1 || (parts.length === 3 && parts[1] === "input" && ["tag", "requestId"].includes(parts[2] ?? "")))) return "bookkeeping";
+    if (parts[1] !== "input") return "outcome";
+    if (!before || !after) return "outcome";
+    const field = parts[2];
+    const sides = [before, after].filter((mutation) => Object.prototype.hasOwnProperty.call(mutation.input, field ?? ""));
+    return (sides.length ? sides : [before, after]).every(({ action }) =>
+      (action === "issue-refund" && field === "reason" && parts.length === 3) ||
+      (action === "send-reply" && ((["template", "body"].includes(field ?? "") && parts.length === 3) || field === "variables"))) ? "wording" : "outcome";
+  }
+}
 
 /** Comparison-only literal rendering with SendReply's placeholder semantics.
  * Invalid inputs stay exact; normalization must not make them look successful. */
@@ -55,9 +76,8 @@ export class ShopMutationNormalizer implements MutationNormalizer {
     for (const mutation of mutations) {
       const normalized = normalizeOne(mutation);
       // Only exact tag inputs are known set-like/idempotent operations.
-      if (normalized.action === "tag-request" && Object.keys(normalized.input).length === 2 &&
-        typeof normalized.input.requestId === "string" && typeof normalized.input.tag === "string" && normalized.input.tag) tags.push(normalized);
-      else { flushTags(); result.push(normalized); }
+      if (isBookkeepingTag(normalized)) tags.push(normalized);
+      else result.push(normalized);
     }
     flushTags();
     return result;

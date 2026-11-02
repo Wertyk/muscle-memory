@@ -194,13 +194,13 @@ importers:
         version: 0.222.2
       '@agent-native/core':
         specifier: 0.222.2
-        version: 0.222.2(566b8f729bd0b7998220c6d86d37a860)
+        version: 0.222.2(f7c8ab96ecdd64d76df086128ecbc483)
       '@agent-native/otel':
         specifier: 0.1.29
-        version: 0.1.29(@agent-native/core@0.222.2(566b8f729bd0b7998220c6d86d37a860))
+        version: 0.1.29(@agent-native/core@0.222.2(f7c8ab96ecdd64d76df086128ecbc483))
       '@agent-native/toolkit':
         specifier: 0.222.2
-        version: 0.222.2(ed15b2de06bd56c31007746aa811b6b8)
+        version: 0.222.2(90fb0f04d570c37e1a908a9e8bbec623)
       '@ai-sdk/anthropic':
         specifier: 4.0.94
         version: 4.0.94(zod@4.6.7)
@@ -289,6 +289,9 @@ importers:
         specifier: 5.0.16
         version: 5.0.16(@types/react@19.3.0)(immer@11.2.9)(react@19.3.1)(use-sync-external-store@1.7.0(react@19.3.1))
     devDependencies:
+      '@playwright/test':
+        specifier: 1.64.1
+        version: 1.64.1
       '@radix-ui/react-accordion':
         specifier: 1.3.1
         version: 1.3.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -1639,6 +1642,11 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@playwright/test@1.64.1':
+    resolution: {integrity: sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@radix-ui/number@1.1.3':
     resolution: {integrity: sha512-Road2bidD0uu/1BGDOWNdPI06g0lIRy6IF9GZcIrDK2KGItfor8IQwQa+yM2ERgHM1MmHxaxpTzk0/Jp42lNfA==}
@@ -4945,6 +4953,16 @@ packages:
   pkg-types@2.4.0:
     resolution: {integrity: sha512-07Fys7iVx0X6TcviMOgogM1Lk33ZyqOezMnU79S+kffWqwolG/5W9V8EgQSeYCIfFTYVgssRbnH630Oa2+soBA==}
 
+  playwright-core@1.64.1:
+    resolution: {integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.64.1:
+    resolution: {integrity: sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   pngjs@7.0.0:
     resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
     engines: {node: '>=14.19.0'}
@@ -5877,10 +5895,10 @@ snapshots:
       '@ag-ui/core': 0.0.59
       '@noble/hashes': 2.4.0
 
-  '@agent-native/core@0.222.2(566b8f729bd0b7998220c6d86d37a860)':
+  '@agent-native/core@0.222.2(f7c8ab96ecdd64d76df086128ecbc483)':
     dependencies:
       '@agent-native/agentkit': 0.222.2
-      '@agent-native/recap-cli': 0.5.93
+      '@agent-native/recap-cli': 0.5.93(playwright@1.64.1)
       '@anthropic-ai/sdk': 0.90.0(zod@4.6.7)
       '@babel/parser': 8.0.7
       '@better-auth/core': 1.7.6(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.10.0)(better-call@1.4.0(zod@4.6.7))(jose@6.2.14)(kysely@0.29.7)(nanostores@1.5.5)
@@ -6003,9 +6021,9 @@ snapshots:
       - vitest
       - vue
 
-  '@agent-native/otel@0.1.29(@agent-native/core@0.222.2(566b8f729bd0b7998220c6d86d37a860))':
+  '@agent-native/otel@0.1.29(@agent-native/core@0.222.2(f7c8ab96ecdd64d76df086128ecbc483))':
     dependencies:
-      '@agent-native/core': 0.222.2(566b8f729bd0b7998220c6d86d37a860)
+      '@agent-native/core': 0.222.2(f7c8ab96ecdd64d76df086128ecbc483)
       '@opentelemetry/api': 1.10.0
       '@opentelemetry/context-async-hooks': 2.12.0(@opentelemetry/api@1.10.0)
       '@opentelemetry/exporter-metrics-otlp-proto': 0.222.0(@opentelemetry/api@1.10.0)
@@ -6014,9 +6032,11 @@ snapshots:
       '@opentelemetry/sdk-metrics': 2.12.0(@opentelemetry/api@1.10.0)
       '@opentelemetry/sdk-trace-base': 2.12.0(@opentelemetry/api@1.10.0)
 
-  '@agent-native/recap-cli@0.5.93': {}
+  '@agent-native/recap-cli@0.5.93(playwright@1.64.1)':
+    optionalDependencies:
+      playwright: 1.64.1
 
-  '@agent-native/toolkit@0.222.2(ed15b2de06bd56c31007746aa811b6b8)':
+  '@agent-native/toolkit@0.222.2(90fb0f04d570c37e1a908a9e8bbec623)':
     dependencies:
       '@agent-native/agentkit': 0.222.2
       '@assistant-ui/react': 0.12.28(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(ai@7.0.159(zod@4.6.7))(immer@11.2.9)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(use-sync-external-store@1.7.0(react@19.3.1))
@@ -6114,7 +6134,7 @@ snapshots:
       yjs: 13.6.33
       zod: 4.6.7
     optionalDependencies:
-      '@agent-native/core': 0.222.2(566b8f729bd0b7998220c6d86d37a860)
+      '@agent-native/core': 0.222.2(f7c8ab96ecdd64d76df086128ecbc483)
       '@xterm/addon-fit': 0.11.0
       '@xterm/addon-web-links': 0.12.0
       '@xterm/xterm': 6.0.0
@@ -6963,6 +6983,10 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.90.0':
     optional: true
+
+  '@playwright/test@1.64.1':
+    dependencies:
+      playwright: 1.64.1
 
   '@radix-ui/number@1.1.3': {}
 
@@ -10159,6 +10183,12 @@ snapshots:
       confbox: 0.3.2
       exsolve: 1.2.0
       pathe: 2.0.3
+
+  playwright-core@1.64.1: {}
+
+  playwright@1.64.1:
+    dependencies:
+      playwright-core: 1.64.1
 
   pngjs@7.0.0: {}
 

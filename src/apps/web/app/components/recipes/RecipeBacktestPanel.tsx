@@ -1,28 +1,31 @@
 import { actionErrorMessage, callAction } from "@agent-native/core/client/hooks";
 import { useT } from "@agent-native/core/client/i18n";
-import type { BacktestCaseResult, JsonDifference, JsonValue, Mutation, Run } from "@muscle-memory/recipe-engine";
+import type { BacktestCaseResult, ClassifiedDifference, JsonValue, Mutation, Run } from "@muscle-memory/recipe-engine";
 import type { RequestType } from "@muscle-memory/shop-domain";
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 
 import type { ShopBacktestComparison, ShopBacktestResult } from "@shared/recipe-backtests";
+import { isBookkeepingTag } from "@shared/shop-mutation-comparison";
 import { PendingMark } from "@/components/shop/WorkspaceParts";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { backtestRequestType } from "@/lib/recipe-backtests";
 import { moneyLabel } from "@/lib/recipe-money";
 import { argumentLabel, atPath, isObject, type RecipeDetail } from "@/lib/recipe-studio";
-import { actionLabel, mutationSummary, presentationContext, valueSummary } from "@/lib/recipe-presentation";
+import { actionLabel, backtestComparisonLabel, backtestSummary, mutationSummary, presentationContext, valueSummary } from "@/lib/recipe-presentation";
 import { useRecipePresentation } from "@/hooks/use-recipe-presentation";
 
 type Version = RecipeDetail["history"][number]["version"];
-export type RememberBacktests = (reports: readonly ShopBacktestResult[], type: RequestType, source: "backtest" | "comparison", totalTokens: number) => void;
+export type RememberBacktests = (reports: readonly ShopBacktestResult[], type: RequestType, source: "backtest" | "comparison", totalTokens: number | null) => void;
 
 export function BacktestSummary({ summary }: { summary: ShopBacktestResult["summary"] }) {
   const t = useT();
   return <p className="recipe-backtest-summary">
-    {t("recipes.backtests.counts", summary)}
-    <span className="block text-muted-foreground">{t("recipes.backtests.tokens", { count: summary.totalTokens })}</span>
+    {backtestSummary(summary, t)}
+    <span className="block text-muted-foreground">{summary.totalTokens === null
+      ? t("recipes.backtests.tokensUnknown", { known: summary.tokens.input + summary.tokens.output, count: summary.unknownUsageCases })
+      : t("recipes.backtests.tokens", { count: summary.totalTokens })}</span>
   </p>;
 }
 
@@ -42,11 +45,17 @@ function VersionSelect({ label, value, versions, onChange, disabled }: {
 
 /** Backtest-specific evidence display; use Studio's existing labels and money formatting. */
 function OutcomeDiff({ diff, before, after, run }: {
-  diff: readonly JsonDifference[]; before: readonly Mutation[]; after: readonly Mutation[]; run?: Run | null | undefined;
+  diff: readonly ClassifiedDifference[]; before: readonly Mutation[]; after: readonly Mutation[]; run?: Run | null | undefined;
 }) {
   const t = useT();
   const source = useRecipePresentation();
   const presentation = run ? presentationContext(run) : source;
+  const customerBefore = before.filter((mutation) => !isBookkeepingTag(mutation));
+  const customerAfter = after.filter((mutation) => !isBookkeepingTag(mutation));
+  const tagTargets = new Set([...before, ...after].filter((mutation) => mutation.action === "tag-request").map((mutation) => mutation.input.requestId));
+  const tags = (mutations: readonly Mutation[]) => mutations.filter((mutation) => mutation.action === "tag-request")
+    .map((mutation) => typeof mutation.input.tag === "string" ? tagTargets.size > 1 ? `${mutation.input.requestId}: ${mutation.input.tag}` : mutation.input.tag : null)
+    .filter((tag) => tag !== null).join(", ") || t("recipes.backtests.absent");
   function valueLabel(value: JsonValue | undefined, path: string[], mutations: readonly Mutation[]) {
     if (value === undefined) return t("recipes.backtests.absent");
     if (path[path.length - 1] === "amountMinor" && typeof value === "number") {
@@ -60,18 +69,22 @@ function OutcomeDiff({ diff, before, after, run }: {
     return valueSummary(value, presentation);
   }
   return <ul className="recipe-diff">
-    {diff.map((difference, index) => {
+    {diff.some((entry) => entry.classification === "bookkeeping") && <li>
+      <strong>{t("recipes.backtests.tags")}</strong> · {t("recipes.backtests.classification.bookkeeping")}
+      <div className="recipe-diff-transition"><del>{tags(before)}</del><span aria-hidden="true"> → </span><ins>{tags(after)}</ins></div>
+    </li>}
+    {diff.filter((entry) => entry.classification !== "bookkeeping").map((difference, index) => {
       const path = difference.path.split("/").slice(1).map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
       const historical = difference.kind === "added" ? undefined : difference.historical;
       const intended = difference.kind === "removed" ? undefined : difference.intended;
-      const action = after[Number(path[0])]?.action ?? before[Number(path[0])]?.action ?? "";
+      const action = customerAfter[Number(path[0])]?.action ?? customerBefore[Number(path[0])]?.action ?? "";
       const field = path[1] === "input" ? argumentLabel(path.slice(2).join("."), action) : t("recipes.backtests.operation");
       return <li key={index}>
-        <strong>{field}</strong>
+        <strong>{field}</strong> · {t(`recipes.backtests.classification.${difference.classification}`)}
         <div className="recipe-diff-transition">
-          <del>{valueLabel(historical, path, before)}</del>
+          <del>{valueLabel(historical, path, customerBefore)}</del>
           <span aria-hidden="true"> → </span>
-          <ins>{valueLabel(intended, path, after)}</ins>
+          <ins>{valueLabel(intended, path, customerAfter)}</ins>
         </div>
       </li>;
     })}
@@ -81,10 +94,13 @@ function OutcomeDiff({ diff, before, after, run }: {
 function CaseReasons({ item }: { item: BacktestCaseResult }) {
   const t = useT();
   return <ul className="my-2 grid gap-1 text-xs text-muted-foreground">
-    {item.reasons.filter((reason) => reason.code !== "different" || item.diff.length === 0).map((reason, index) =>
+    {item.reasons.filter((reason) => !["different", "wording", "bookkeeping"].includes(reason.code) || item.diff.length === 0).map((reason, index) =>
       <li key={index}>{reason.code === "blocked" ? t("recipes.backtests.blocked") : reason.message}</li>,
     )}
     {item.status === "different" && item.diff.length > 0 && <li>{t("recipes.backtests.differentReason")}</li>}
+    {item.status === "identical" && item.diff.length > 0 && <li>{t("recipes.backtests.nonOutcomeOnlyReason")}</li>}
+    {item.status !== "identical" && item.diff.some((entry) => entry.classification === "wording") && <li>{t("recipes.backtests.wordingReason")}</li>}
+    {item.status !== "identical" && item.diff.some((entry) => entry.classification === "bookkeeping") && <li>{t("recipes.backtests.bookkeepingReason")}</li>}
   </ul>;
 }
 
@@ -101,7 +117,7 @@ function BacktestCases({ report }: { report: ShopBacktestResult }) {
       {cases.map((item) => <li key={item.caseId}>
         <RequestLink id={item.caseId} />
         <span className="text-muted-foreground"> · {t(`recipes.backtests.status.${item.status}`)}</span>
-        <details open={item.status !== "identical"}>
+        <details open={item.status !== "identical" || item.diff.length > 0}>
           <summary>{t("recipes.backtests.reasonAndDiff")}</summary>
           <CaseReasons item={item} />
           <OutcomeDiff diff={item.diff} before={item.historicalMutations} after={item.intendedMutations} run={item.run} />
@@ -196,8 +212,10 @@ export function RecipeBacktestPanel({ detail, reports, remember }: {
       {error("comparison")}
       {paired && <div className="mt-3" aria-live="polite">
         <p className="text-xs">{t("recipes.backtests.paired", { baseline: baseline?.version, candidate: candidate?.version })}</p>
-        <p className="my-2 text-xs">{t("recipes.backtests.changed", { changed: paired.cases.filter((item) => item.changed).length, total: paired.cases.length })}</p>
-        <p className="text-xs">{t("recipes.backtests.combinedTokens", { count: paired.summary.totalTokens })}</p>
+        <p className="my-2 text-xs">{t("recipes.backtests.changed", { changed: paired.cases.filter((item) => item.changed).length, nonOutcomeOnly: paired.cases.filter((item) => item.nonOutcomeOnly).length, total: paired.cases.length })}</p>
+        <p className="text-xs">{paired.summary.totalTokens === null
+          ? t("recipes.backtests.tokensUnknown", { known: paired.summary.tokens.input + paired.summary.tokens.output, count: paired.summary.unknownUsageCases })
+          : t("recipes.backtests.combinedTokens", { count: paired.summary.totalTokens })}</p>
         <p className="mt-2 text-xs">v{baseline?.version}</p><BacktestSummary summary={paired.baseline.summary} />
         <p className="mt-2 text-xs">v{candidate?.version}</p><BacktestSummary summary={paired.candidate.summary} />
         <ul className="recipe-backtest-cases">
@@ -206,7 +224,7 @@ export function RecipeBacktestPanel({ detail, reports, remember }: {
             const after = paired.candidate.cases.find((entry) => entry.caseId === item.caseId);
             return <li key={item.caseId}>
               <RequestLink id={item.caseId} />
-              <p className="my-1">{t(`recipes.backtests.status.${item.baselineStatus}`)} → {t(`recipes.backtests.status.${item.candidateStatus}`)} · {t(item.changed ? "recipes.backtests.outcomeChanged" : "recipes.backtests.unchanged")}</p>
+              <p className="my-1">{t(`recipes.backtests.status.${item.baselineStatus}`)} → {t(`recipes.backtests.status.${item.candidateStatus}`)} · {backtestComparisonLabel(item, t)}</p>
               <details><summary>{t("recipes.backtests.reasonAndDiff")}</summary>
                 {before && <><p>v{baseline?.version}</p><CaseReasons item={before} /></>}
                 {after && <><p>v{candidate?.version}</p><CaseReasons item={after} /></>}

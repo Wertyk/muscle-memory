@@ -23,6 +23,8 @@
     "server/**/*",
     "shared/**/*",
     "scripts/**/*",
+    "e2e/**/*",
+    "playwright.config.ts",
     "../../scripts/llm/**/*.ts",
     "../../scripts/mechanisms/**/*.ts",
     "vite.config.ts",

@@ -1,4 +1,4 @@
-import type { Binding, JsonValue } from "@muscle-memory/recipe-engine";
+import type { BacktestResult, Binding, JsonValue } from "@muscle-memory/recipe-engine";
 
 export const words = (value: string) =>
   value
@@ -12,6 +12,13 @@ export function fieldLabel(value: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 type Translate = (key: string) => string;
+export function backtestSummary(summary: BacktestResult["summary"], t: (key: string, values: Record<string, number>) => string) {
+  return t("recipes.backtests.counts", { ...summary });
+}
+export function backtestComparisonLabel(item: { changed: boolean; nonOutcomeOnly: boolean }, t: Translate) {
+  return t(item.changed ? "recipes.backtests.outcomeChanged" : item.nonOutcomeOnly ? "recipes.backtests.nonOutcomeOnly" : "recipes.backtests.unchanged");
+}
+
 export function stepLabel(step: { kind: string; action?: string | null | undefined }, t?: Translate) {
   const key = step.action ? `shop.teachActions.${step.action}` : `recipes.kinds.${step.kind}`;
   const translated = t?.(key);

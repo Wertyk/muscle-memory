@@ -51,7 +51,7 @@ import { DrizzleRunRepository } from "./infra/run-repository.js";
 import { ShopDemonstrations } from "./infra/shop-demonstrations.js";
 import { AgentRunTraces } from "./infra/agent-run-traces.js";
 import { ShopHistoricalCaseSource } from "./infra/shop-historical-cases.js";
-import { ShopMutationNormalizer } from "./infra/shop-mutation-normalizer.js";
+import { ShopDifferenceClassifier, ShopMutationNormalizer } from "./infra/shop-mutation-normalizer.js";
 import { ShopRecipeBacktests } from "./infra/shop-recipe-backtests.js";
 import { AgentRequestUsage } from "./infra/agent-request-usage.js";
 import { DrizzleHandlingStats } from "./infra/handling-stats.js";
@@ -222,6 +222,7 @@ export function createRecipeBacktests(
       backtester: new BacktestRecipe({
         cases,
         normalizer: new ShopMutationNormalizer(),
+        classifier: new ShopDifferenceClassifier(),
         actions: new RecipeActionInvoker(
           options.registry ?? new RegistryActionInvoker(),
           options.context,

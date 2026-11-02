@@ -205,13 +205,17 @@ productId and quantity) as JSON reference data beside sourceText, never as
 instructions. New intake can resolve one explicit owned order reference first.
 Damaged products require a quoted name/SKU mention identifying exactly one line;
 missing or ambiguous mentions and products outside that order fail closed.
-If extraction cannot produce complete validated fields, the operation rejects
-instead of silently dropping that case or presenting an incomplete cohort.
-Provider details are sanitized at the action boundary; failed operations may
-still have spent tokens without producing a report.
+If extraction cannot produce complete validated fields, that request remains in
+the report as `not_handled`, with a safe missing/invalid field diagnostic. It is
+never matched, simulated, dropped or counted as same outcome. Typed provider,
+output and usage failures are also per-case. No automatic extraction retry is
+performed. Its extraction usage is unknown, even when a failed validation attempt
+returned usage; successful-case subtotals remain available.
 
-Missing extraction configuration and incomplete free-text fields retain the
-failing request ID in the public error. Server diagnostics log safe error names,
+Missing extraction configuration, DB failures and unexpected infrastructure
+errors still reject the whole operation. Configuration failures retain the
+request ID and specific message; DB snapshot failure has a safe database-specific
+message. Server diagnostics log safe error names,
 messages and request/step IDs when available; raw SQL, provider errors, model
 output and customer text are withheld. Output-schema failures are logged inside
 the same action boundary. The UI shows the reason and one usage caveat.
@@ -226,15 +230,17 @@ alone does not configure extraction. Never put key values in commands or notes.
 ```sh
 pnpm -C src seed:shop
 pnpm -C src/apps/web exec tsx scripts/seed-backtests.ts
-PORT=8094 pnpm -C src dev
+pnpm -C src dev --port 8099
 ```
 
 Open `/recipes/recipe_backtest_damaged`, named **Seeded damaged item: half refund**.
 Select saved **v1** (`ver_backtest_damaged`) and click **Run backtest**. Expected:
-**10 requests, 7 identical / 3 different / 0 not handled**. `req_0038` historically
-got a replacement instead of a refund; `req_0039` got $380 instead of the recipe's
-$190; `req_0040` has a different reply requesting packaging photos. The other
-seven intended outcomes match. Token usage is measured from five real free-text
+**10 requests, 8 same outcome / 2 different outcome / 0 not handled / 1 differs
+only in wording**. `req_0038` historically got a replacement and a `replacement`
+tag instead of the recipe's $21 refund; `req_0039` got $380 instead of the recipe's
+$190. `req_0040` has the same outcome with a different reply requesting packaging
+photos; its wording diff remains visible. The other seven cases match exactly.
+Token usage is measured from five real free-text
 extractions and varies by model; it must never be replaced with a fixture total.
 The script installs only the explicit immutable recipe fixture; it does not
 activate it, rewrite history or install a fake extractor. Reseed after upgrading
@@ -246,14 +252,15 @@ For the reviewer's exact constant-refund path, also run
 Open `/recipes/recipe_run_approval` (**Review damaged platter refund**), change
 **Only when** to `{"===":[{"var":"trigger.type"},"damaged_item"]}`, update the draft
 and save a new version. Select that newly saved version (v2 on a fresh catalog)
-and run the backtest. Expected: **0 identical / 10 different / 0 not handled**:
+and run the backtest. Expected: **0 same outcome / 10 different outcome / 0 not handled / 0 wording-only**:
 it plans a constant $140 refund with approval plus the `run-rehearsal` tag, while
 the recorded outcomes contain different reasons/amounts, replies and tags. The
 approval gate is planned in simulation; no real refund or tag is issued.
 
 To compare versions, save another version of the explicit backtest fixture in
 Studio. Choose v1 and the newly saved version, then click **Compare versions**.
-An unchanged copy has 7 identical / 3 different in both reports and zero paired
+An unchanged copy has 8 same outcome / 2 different outcome / 1 wording-only in
+both reports and zero paired
 outcome changes; combined usage counts the five shared request extractions once.
 No report action auto-runs on navigation, selection or save. Without extraction
 configuration, expect a specific configuration error and no fabricated report.
@@ -293,12 +300,129 @@ shop's one-pass `{{variable}}` substitution semantics. Equivalent template/varia
 layouts and unused variables compare equally; punctuation, spacing and line
 breaks stay significant. Invalid placeholders, missing variables and conflicting
 extra `body` fields retain their exact input. Refund/escalation reasons and tags
-are trimmed as their use-cases trim them. Contiguous exact `tag-request` operations
-are sorted/deduplicated as an idempotent set; tags are never moved past another
-action. All other mutation/array order remains significant. Omitted refund amounts
+are trimmed as their use-cases trim them. Exact valid `tag-request` operations
+are sorted/deduplicated as an idempotent set after the customer operations, so an
+inserted internal tag cannot shift their comparison indexes. Customer-operation
+and all other array order remains significant. Omitted refund amounts
 or replacement selections are **not** expanded: their defaults depend on data
 unavailable to a pure normalizer. No semantic similarity or reason-text synonym
 matching is performed.
+
+### Customer outcome, wording and bookkeeping policy (TASK-31)
+
+The domain-free engine accepts a pure `DifferenceClassifier` port. It receives a
+JSON Pointer and both normalized mutation lists, and returns `outcome`, `wording`
+or `bookkeeping`. Without a classifier every diff is an outcome difference. Generic
+`diffJson` and recipe-content version-history diffs remain literal and unchanged.
+The web composition supplies `ShopDifferenceClassifier`, alongside the normalizer.
+
+| Normalized mutation field | Classification |
+| --- | --- |
+| `issue-refund.input.reason` | wording |
+| `send-reply.input.template`, `.body`, `.variables` and variable descendants | wording |
+| Valid `tag-request` tag/target fields and added/removed whole tag operations | bookkeeping |
+| Operation/action, added/removed whole operations other than tags | outcome |
+| Customer-operation `orderId`/`requestId`, `amount.amountMinor`, `amount.currency`, items/product/quantity, status, addresses | outcome |
+| All other fields/actions/paths (including escalation reason) | outcome |
+
+The policy checks each side where the field exists. A replacement changing to a
+refund keeps the action, items and money changes as outcome evidence, while the
+newly added refund reason is wording. A field used by an unknown operation stays
+an outcome difference. No diff entry is silently ignored. The policy runs
+**after** symmetric normalization, so
+equivalent rendered replies still have no diff, while different rendered bodies
+retain their exact text and a `classification:"wording"` label. Wording is not
+semantic similarity: even a reply that promises a different amount remains
+wording; the actual refund's numeric money fields determine the outcome.
+Tags are internal bookkeeping, regardless of the operator's chosen vocabulary.
+Request status remains outcome because changing resolution/escalation changes
+whether and how customer handling continues. Internal tag target changes remain
+bookkeeping and display target IDs when they differ. Unknown/extra operation
+fields are not hidden as bookkeeping. Studio groups tag
+bookkeeping as a labeled value transition, e.g. `Tags: damaged_item, handled → damaged`.
+All classified entries remain in the action report.
+
+`summary` exposes `sameOutcome`, `differentOutcome`, `notHandled`, and
+`nonOutcomeOnly` (same-outcome cases with wording and/or bookkeeping differences),
+plus `total` and token usage. It replaces the earlier `wordingOnly` field. The legacy
+per-case wire statuses `identical`/`different` now mean same/different **outcome**;
+Studio labels them accordingly. Every diff is retained with its classification,
+including wording and bookkeeping on different-outcome cases. Reasons distinguish
+all three kinds. Failure, handoff, blocked steps and trigger mismatches still win
+over equality and stay `not_handled`.
+
+Paired version `changed` means a case status or an outcome diff changed;
+`nonOutcomeOnly` means no such change and at least one wording/bookkeeping diff.
+Both version reports and their comparison list keep all such evidence. Changing only reply
+text leaves the fixture at 8 same outcomes / 2 different outcomes, increases its
+wording-only historical matches to 8, and produces 0 paired outcome changes /
+10 paired wording-only changes. Shared extraction tokens are still counted once.
+
+### Real Teach rehearsal (TASK-31)
+
+After a pristine seed and fixture install, start dev on 8099 as shown above, then
+run `pnpm -C src/apps/web exec tsx scripts/backtest-outcomes-smoke.ts`. It uses the
+configured real extractor, with no fake or agent call. It starts Teach on
+`req_0001`, checks overlap rejection, captures the same five first lookups and
+refund/reply/tag actions as `teach-mode-smoke.ts` with refetch deduplication,
+refunds $140, stops and reads back eight saved steps, drafts the actual trace,
+and saves a new immutable version. An **agent-free `update-recipe-draft` edit**
+explicitly binds refund money to 50% of the order line selected by
+`trigger.productId`, matching `broken-platter-draft.json`'s keyed binding shape;
+the demonstrated reply and `damaged` tag are preserved. No fixture trace is
+inserted and the recipe is not activated.
+
+With complete reconstruction, the exact Teach recipe now yields **8 same outcome /
+2 different outcome / 0 not handled / 8 differing only in wording or tags**:
+
+- Every case `req_0031` through `req_0040` records `damaged_item` and `handled`
+  tags; Teach plans only `damaged`. These are bookkeeping differences on all ten.
+- `req_0038` records one replacement of `prd_0016` and a
+  `replacement` tag; Teach plans a $21 refund. The action,
+  items and refund fields differ together.
+- `req_0039` records a full $380 refund; Teach plans half, $190.
+- `req_0031`–`req_0037` and `req_0040` have no further outcome differences.
+  All ten retain reply and refund-reason wording diffs.
+
+The explicit `seed-backtests.ts` fixture uses the historical tags and confirms
+**8 same outcome / 2 different outcome / 0 not handled / 1 differing only in wording or tags**.
+It remains an independent authored fixture. Rehearsal output records actual
+token counts for each invocation; they vary even for the same five free-text
+requests. The script also saves a reply-only version and compares the two saved
+IDs, as Studio does, then checks cancellation frees the Teach slot. Run it once
+per pristine seed; it performs real demo shop
+mutations. Stop the server before reseeding or reinstalling DB fixtures.
+
+The Teach source is `demo_1097ac98f7d3cb1d` in
+`recipe_44c7701f9a83e618`, saved Teach version `ver_8775926610316a61`;
+these local records survive until the next reset. Round 1 runs use the same saved
+recipe and seeded history, without replaying its refund or changing its tags.
+Reproduce three independent passes **per recipe**, without retries or cohort
+filtering, using `pnpm -C src/apps/web exec tsx scripts/backtest-outcomes-smoke.ts --repeat ver_8775926610316a61`.
+Both recipes contain no extract steps; their recipe execution tokens are zero.
+
+Round 1 real-extractor measurements, 2026-11-02 (no retries or filtered cases):
+
+| Recipe / pass | Same / different / not handled | Wording or tags only | Input / output tokens | Total usage |
+| --- | --- | --- | --- | --- |
+| Teach 1 | 8 / 2 / 0 | 8 | 4,154 / 4,189 | 8,343 |
+| Fixture 1 | 8 / 2 / 0 | 1 | 4,154 / 3,989 | 8,143 |
+| Teach 2 | 8 / 2 / 0 | 8 | 4,154 / 3,745 | 7,899 |
+| Fixture 2 | 8 / 2 / 0 | 1 | 4,154 / 2,949 | 7,103 |
+| Teach 3 | 7 / 2 / 1 | 7 | 3,331 / 2,609 known | unknown (5,940 known) |
+| Fixture 3 | 8 / 2 / 0 | 1 | 4,154 / 3,964 | 8,118 |
+
+Teach pass 3 received invalid structured extractor output for `req_0034`. It
+returned the other nine results, retained that request as `not_handled` with a
+reconstruction reason, and reported `unknownUsageCases:1`, `totalTokens:null`.
+It never counted the failed attempt as zero tokens or a same outcome. The two
+customer outcome differences remained `req_0038` (replacement versus $21 refund)
+and `req_0039` ($380 versus $190); all other reconstructed Teach cases matched.
+
+Observed `not_handled` frequency: Teach **1/30 cases**, in **1/3 reports** (1/15
+free-text attempts); fixture **0/30 cases**, in **0/3 reports** (0/15 free-text
+attempts). Across both recipes: 1/60 cases, with all six reports completing.
+This is a small rehearsal sample, not an extractor reliability guarantee.
 
 ### Read and token semantics
 
@@ -313,7 +437,11 @@ Free-text preparation calls the real configured extractor, as do any recipe
 `extract` steps. `summary.requestExtractionTokens` reports cohort preparation;
 `summary.recipeExtractionTokens` sums actual case-local run usage, including
 schema-invalid extract output. `summary.tokens` adds input/output tokens from
-both sources and `summary.totalTokens` adds those two totals. Structured cases
+both sources as known subtotals. `summary.unknownUsageCases` counts unreconstructable
+requests; `summary.totalTokens` is **null** when this count is nonzero, otherwise
+it adds those measured totals. A failed request's usage is not counted as zero or
+invented. Studio shows known tokens plus the count with unknown usage; view-screen
+preserves the same nullable total. Structured cases
 with action/branch-only recipes consume zero tokens. Known provider usage is
 counted; usage unavailable after provider failures/process death is not invented.
 
@@ -322,15 +450,17 @@ case set as a per-operation cache. Each version's report attributes that shared
 request usage to its own scenario. The **combined** `summary.tokens` and
 `summary.totalTokens` count `sharedRequestExtractionTokens` once plus both versions'
 recipe extract-step usage. Use this combined summary for actual comparison cost;
-do not add the two scenario totals. Repeat action calls prepare/extract again.
+do not add the two scenario totals. Shared unknown-usage cases are counted once,
+and the combined total is also null when any are unknown. Repeat action calls prepare/extract again.
 No persistent extraction cache, run checkpoint, recipe snapshot or handoff is
 written by these backtest actions.
 
 PGlite tests seed the real 30 handled requests. The hand-written
 `fixtures/backtest-recipes.ts` damage fixture uses read/formula bindings and the
 seed's whole-dollar half-prices, avoiding invented mutation outputs. Ten damage
-cases yield seven identical and three different (replacement/no refund, full
-high-value refund, and distinct reply). Readable field reasons accompany exact
+cases yield eight same outcomes and two different outcomes (replacement/no refund
+and full high-value refund); one same-outcome case has distinct reply wording.
+Readable classified field reasons accompany exact
 JSON Pointer diffs. Tests assert every shop row and table count remains unchanged,
 including engine/teaching table counts; existing mutation-output-dependent intake
 fixtures remain conservatively `not_handled`.
@@ -506,6 +636,45 @@ Late results remain pinned to their original demonstration; cancelled traces dis
 them, and results after Stop cannot turn an incomplete trace back into completed.
 Raw persistence/provider errors are never returned in capture-failure reasons.
 
+
+## Browser teach-to-auto-handle regression (TASK-22)
+
+From the repository root, run **`pnpm -C src e2e`** with port **8098** free.
+No API key or `.env` file is needed. The runner copies only app sources/config
+without environment files into a disposable directory, shares installed packages
+but isolates Vite/Nitro caches, seeds a temporary PGlite with the real shop seed,
+and starts the app on 8098 with a restricted subprocess environment. A cookie-less
+HTML readiness probe primes the framework's one-time local dev account; a fresh
+Playwright context then clicks **Continue as local dev**.
+Authentication and all UI mutations use the normal framework handlers/actions.
+
+The spec teaches `req_0001`: refund $140 with a reason, save a reply, tag
+`damaged`, stop and verify **3 actions**. It drafts a recipe, checks visible
+binding wires and ambiguities, saves v2 without an agent, opens its history and
+activates it. A structured `create-request` call through the real frontend client
+introduces a damaged Sand Bowl on another seeded order. This deliberately avoids
+the demo batch's free-text request and extraction. The inbox must show that new
+request as **Auto-handled**. Its completed live run must pin v2, show a computed
+$22 refund (50% of $44, rather than the taught $140) in saved input/output, and
+report **0 LLM tokens**. Dashboard must include the same request as a measured
+zero-token recipe outcome, including zero intake/execution tokens.
+
+All UI interaction uses Playwright pointer clicks, including the refund dialog
+handoff and subsequent Stop click. Only the explicitly structured arrival uses
+`page.evaluate` to call the shared action; no DOM click is synthesized. Waits
+assert UI states without fixed sleeps. Browser external/model requests are
+blocked and fail the test; no provider credentials or extraction model are
+configured. No fixture recipes, saved sessions or precomputed outcomes are used.
+
+The runner prefers installed Google Chrome (`channel: "chrome"`), falling back
+to `playwright install chromium` if Chrome cannot launch. Native browser process
+launch must be permitted by the host. It stops its owned process groups and
+removes the disposable app/database after success/failure or SIGINT/SIGTERM.
+Failure screenshots and Playwright traces remain under
+`src/apps/web/node_modules/.cache/e2e-results/` (gitignored). The suite has one
+worker, no retries, and is excluded from `pnpm test`; config/spec are typechecked.
+For stability verification run the same command three consecutive times and
+record the reported durations; every invocation reseeds a fresh database.
 
 ## Drafting demonstrations (TASK-11)
 

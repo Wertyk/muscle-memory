@@ -23,6 +23,11 @@ export class HistoricalReconstructionError extends Error {
   }
 }
 
+export class HistoricalDataError extends Error {
+  override readonly name = "HistoricalDataError";
+  constructor() { super("Couldn't read historical requests from the database."); }
+}
+
 export const historicalSelectionSchema = z.object({
   event: z.literal("request.created"), requestType: z.enum(REQUEST_TYPES),
 }).strict();
@@ -50,16 +55,21 @@ export class ShopHistoricalCaseSource implements HistoricalCaseSource {
       const relatedRefunds = orderIds.length ? await tx.select().from(refunds).where(inArray(refunds.orderId, orderIds)) : [];
       const relatedReplies = selected.length ? await tx.select().from(replies).where(inArray(replies.requestId, selected.map((r) => r.id))) : [];
       return { selected, relatedOrders, relatedRefunds, relatedReplies };
-    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+    }, { isolationLevel: "repeatable read", accessMode: "read only" }).catch(() => { throw new HistoricalDataError(); });
 
     const cases: HistoricalCase[] = [];
     for (const { category: _category, ...request } of snapshot.selected) {
       let extractionError: unknown;
+      let failureReason: string | undefined;
       // Exactly the intake pipeline: validated extraction, trusted context and
       // buildRequestTrigger inside MatchRequest; no classification/persistence.
       const match = await new MatchRequest({
         recipes: { listActive: async () => [] }, extractor: { extract: async (text) => {
-          try { return await this.extractor(request).extract(text); }
+          try {
+            const result = await this.extractor(request).extract(text);
+            failureReason = result.failureReason;
+            return result;
+          }
           catch (error) {
             extractionError = error ?? new Error("Unexpected extraction failure");
             throw error;
@@ -72,8 +82,13 @@ export class ShopHistoricalCaseSource implements HistoricalCaseSource {
           ? { source: "structured", fields: request.content.fields as unknown as JsonObject }
           : { source: "free_text", text: request.content.text },
       });
-      this.usage = { input: this.usage.input + match.tokens.input, output: this.usage.output + match.tokens.output };
-      if (match.reason === "extraction_failed") throw new HistoricalReconstructionError(request.id, extractionError);
+      let reconstructionFailure: string | undefined;
+      if (match.reason === "extraction_failed") {
+        if (extractionError && (!(extractionError instanceof ExtractionError) || extractionError.code === "not-configured"))
+          throw new HistoricalReconstructionError(request.id, extractionError);
+        reconstructionFailure = `Couldn't reconstruct this request from its message: ${failureReason ??
+          (extractionError instanceof ExtractionError ? extractionError.message.replace(/\.$/, "") : "missing or invalid request fields")}. Extraction usage is unknown.`;
+      } else this.usage = { input: this.usage.input + match.tokens.input, output: this.usage.output + match.tokens.output };
 
       const effects: { at: string; rank: number; id: string; mutation: Mutation }[] = [];
       const withinRequest = (at: string) => at >= request.createdAt && at <= request.updatedAt;
@@ -104,7 +119,7 @@ export class ShopHistoricalCaseSource implements HistoricalCaseSource {
         } });
       }
       effects.sort((a, b) => a.at.localeCompare(b.at) || a.rank - b.rank || a.id.localeCompare(b.id));
-      cases.push({ id: request.id, trigger: match.trigger, outcome: [
+      cases.push({ id: request.id, trigger: match.trigger, ...(reconstructionFailure ? { reconstructionFailure } : {}), outcome: [
         ...effects.map((e) => e.mutation),
         ...request.tags.map((tag): Mutation => ({ action: "tag-request", input: { requestId: request.id, tag } })),
       ] });

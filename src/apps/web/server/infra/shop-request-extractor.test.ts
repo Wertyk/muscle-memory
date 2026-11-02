@@ -18,6 +18,11 @@ const extract = (output: JsonObject) => {
 };
 
 describe("shop request extraction mapping (no model/network)", () => {
+  it("reports safe missing-field diagnostics without returning customer text or model values", async () => {
+    const result = await extract({ type: "damaged_item", orderId: order.id, productId: order.items[0]!.productId, description: "Private text" }).extractor.extract("Private message");
+    expect(result).toEqual({ fields: null, tokens, failureReason: "missing quantity" });
+    expect(JSON.stringify(result)).not.toContain("Private");
+  });
   it.each([
     { type: "damaged_item", orderId: order.id, productId: order.items[0]!.productId, quantity: 1, description: "Broken handle" },
     { type: "where_is_my_order", orderId: order.id },
@@ -44,7 +49,7 @@ describe("shop request extraction mapping (no model/network)", () => {
     { type: "address_change", orderId: order.id, addressLine1: "Incomplete" },
   ] satisfies JsonObject[])("rejects unsupported, incomplete, extra or unowned fields while preserving usage: %j", async (fields) => {
     const { extractor, fake } = extract(fields);
-    expect(await extractor.extract("Message")).toEqual({ fields: null, tokens });
+    expect(await extractor.extract("Message")).toMatchObject({ fields: null, tokens });
     expect(fake).toHaveBeenCalledTimes(1);
   });
   it("declares exactly shop-domain categories in the extraction contract", () => {
@@ -98,12 +103,12 @@ describe("shop request extraction mapping (no model/network)", () => {
     { output: { ...damage, productMention: "Ember" }, text: "One piece arrived chipped." },
     { output: { ...damage, productMention: "Ember" }, text: "One piece arrived chipped. Please remember to reply." },
   ])("fails closed for wrong-order IDs, guesses, absent or ambiguous product mentions: %j", async ({ output, text }) => {
-    expect(await contextual(output).extractor.extract(text)).toEqual({ fields: null, tokens });
+    expect(await contextual(output).extractor.extract(text)).toMatchObject({ fields: null, tokens });
   });
 
   it("rejects identically named lines even if the model selects one", async () => {
     const sameNames = { ...platterOrder, items: platterOrder.items.map((line) => ({ ...line, name: "Ember Large Serving Platter" })) };
-    expect(await contextual(damage, sameNames).extractor.extract(message)).toEqual({ fields: null, tokens });
+    expect(await contextual(damage, sameNames).extractor.extract(message)).toMatchObject({ fields: null, tokens });
   });
 
   it("never offers an unowned order or multiple unlinked order references", async () => {

@@ -62,16 +62,16 @@ let compareResult: (input: { baseline: string; candidate: string; requestType: s
 function report(recipeVersionId: string): ShopBacktestResult {
   return {
     recipeVersionId, readData: "current", limitations: ["Uses current shop data."],
-    summary: { total: 10, identical: 7, different: 3, notHandled: 0, tokens: { input: 40, output: 20 }, totalTokens: 60,
+    summary: { total: 10, sameOutcome: 8, differentOutcome: 2, notHandled: 0, nonOutcomeOnly: 1, tokens: { input: 40, output: 20 }, totalTokens: 60, unknownUsageCases: 0,
       requestExtractionTokens: { input: 40, output: 20 }, recipeExtractionTokens: { input: 0, output: 0 } },
     cases: Array.from({ length: 10 }, (_, index) => ({
-      caseId: `req_00${31 + index}`, status: index < 7 ? "identical" : "different",
+      caseId: `req_00${31 + index}`, status: index < 7 || index === 9 ? "identical" : "different",
       reasons: [{ code: index < 7 ? "identical" : "different", message: index < 7 ? "Intended mutations match the historical outcome" : "Intended mutations differ from the historical outcome" }],
       historicalMutations: [{ action: index === 7 ? "create-replacement-order" : "issue-refund", input: { amount: { amountMinor: 38000, currency: "USD" } } }],
       intendedMutations: [{ action: "issue-refund", input: { amount: { amountMinor: 19000, currency: "USD" } } }],
-      diff: index < 7 ? [] : index === 7 ? [{ kind: "changed", path: "/0/action", historical: "create-replacement-order", intended: "issue-refund" }]
-        : index === 8 ? [{ kind: "changed", path: "/0/input/amount/amountMinor", historical: 38000, intended: 19000 }]
-          : [{ kind: "changed", path: "/1/input/body", historical: "Please send packaging photos", intended: "Your refund is on its way" }],
+      diff: index < 7 ? [] : index === 7 ? [{ kind: "changed", classification: "outcome", path: "/0/action", historical: "create-replacement-order", intended: "issue-refund" }]
+        : index === 8 ? [{ kind: "changed", classification: "outcome", path: "/0/input/amount/amountMinor", historical: 38000, intended: 19000 }]
+          : [{ kind: "changed", classification: "wording", path: "/1/input/body", historical: "Please send packaging photos", intended: "Your refund is on its way" }],
       run: null,
     })),
   };
@@ -154,10 +154,10 @@ beforeEach(() => {
   backtestResult = async ({ recipe }) => report(recipe);
   compareResult = async ({ baseline, candidate }) => ({
     baseline: report(baseline),
-    candidate: { ...report(candidate), summary: { ...report(candidate).summary, identical: 0, different: 10 } },
-    summary: { tokens: { input: 40, output: 20 }, totalTokens: 60, sharedRequestExtractionTokens: { input: 40, output: 20 } },
-    cases: report(baseline).cases.map((item) => ({ caseId: item.caseId, baselineStatus: item.status, candidateStatus: "different", changed: true,
-      diff: [{ kind: "changed", path: "/0/input/amount/amountMinor", historical: 19000, intended: 38000 }] })),
+    candidate: { ...report(candidate), summary: { ...report(candidate).summary, sameOutcome: 0, differentOutcome: 10, nonOutcomeOnly: 0 } },
+    summary: { tokens: { input: 40, output: 20 }, totalTokens: 60, unknownUsageCases: 0, sharedRequestExtractionTokens: { input: 40, output: 20 } },
+    cases: report(baseline).cases.map((item) => ({ caseId: item.caseId, baselineStatus: item.status, candidateStatus: "different", changed: true, nonOutcomeOnly: false,
+      diff: [{ kind: "changed", classification: "outcome", path: "/0/input/amount/amountMinor", historical: 19000, intended: 38000 }] })),
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   Element.prototype.scrollIntoView = vi.fn();
@@ -757,21 +757,26 @@ describe("Recipe Studio historical backtests", () => {
       { name: "backtest-recipe", method: "GET", input: { recipe: damagedItemFixture.id, requestType: "damaged_item" } },
     ]);
     await act(async () => finish(report(damagedItemFixture.id)));
-    await settle(() => expect(node.textContent).toContain("7 identical / 3 different / 0 not handled"));
+    await settle(() => expect(node.textContent).toContain("8 same outcome · 2 different outcome · 0 not handled"));
     expect(node.textContent).toContain("60 tokens spent");
     expect(node.textContent).toContain("$380.00");
     expect(node.textContent).toContain("$190.00");
     expect(node.textContent).toContain("Create replacement");
     expect(node.textContent).toContain("Please send packaging photos");
+    expect(node.textContent).toContain("1 differ only in wording or tags");
+    const wordingCase = node.querySelector('a[href="/requests/req_0040"]')?.closest("li");
+    expect(wordingCase?.textContent).toContain("Same outcome; only wording or tags differ");
+    expect(wordingCase?.textContent).toContain("Wording difference");
+    expect(wordingCase?.querySelector("details")?.open).toBe(true);
     expect(node.querySelector('a[href="/requests/req_0039"]')).not.toBeNull();
-    expect(node.querySelector('[aria-label="Backtest before activating v1"]')?.textContent).toContain("7 identical / 3 different");
+    expect(node.querySelector('[aria-label="Backtest before activating v1"]')?.textContent).toContain("8 same outcome · 2 different outcome");
     expect(setClientAppState).toHaveBeenLastCalledWith(expect.stringMatching(/^recipe-backtest:/), expect.objectContaining({
       recipeId: record.recipe.id, source: "backtest", requestType: "damaged_item", totalTokens: 60,
-      reports: [expect.objectContaining({ recipeVersionId: damagedItemFixture.id, version: 1, summary: expect.objectContaining({ identical: 7 }) })],
+      reports: [expect.objectContaining({ recipeVersionId: damagedItemFixture.id, version: 1, summary: expect.objectContaining({ sameOutcome: 8, nonOutcomeOnly: 1 }) })],
     }), expect.any(Object));
     await click(button("Save new version"));
     await settle(() => expect(node.querySelector('[aria-label="Backtest before activating v2"]')?.textContent).toContain("Run a backtest for this version"));
-    expect(node.querySelector('[aria-label="Backtest before activating v1"]')?.textContent).toContain("7 identical / 3 different");
+    expect(node.querySelector('[aria-label="Backtest before activating v1"]')?.textContent).toContain("8 same outcome · 2 different outcome");
     expect(node.querySelector('[aria-label="Backtest version"]')?.textContent).toContain("v2");
     expect(node.textContent).toContain("No backtest shown for this version");
     await choose("Backtest version", `v1 · ${damagedItemFixture.name}`);
@@ -785,9 +790,9 @@ describe("Recipe Studio historical backtests", () => {
       const item = result.cases[7]!;
       return { ...result, cases: [{ ...item,
         diff: [
-          { kind: "added", path: "/0/input/amount", intended: { currency: "USD", amountMinor: 2100 } },
-          { kind: "removed", path: "/0/input/items", historical: [{ productId: "prd_0016", quantity: 1 }] },
-          { kind: "added", path: "/1", intended: { action: "tag-request", input: { requestId: "req_0038", tag: "replacement" } } },
+          { kind: "added", classification: "outcome", path: "/0/input/amount", intended: { currency: "USD", amountMinor: 2100 } },
+          { kind: "removed", classification: "outcome", path: "/0/input/items", historical: [{ productId: "prd_0016", quantity: 1 }] },
+          { kind: "added", classification: "outcome", path: "/1", intended: { action: "tag-request", input: { requestId: "req_0038", tag: "replacement" } } },
         ],
         run: { trigger: {}, steps: [{ stepId: "order", input: {}, output: { items: [{ productId: "prd_0016", name: "Chalk Plate", quantity: 1 }] } }] } as any,
       }] };
@@ -802,6 +807,74 @@ describe("Recipe Studio historical backtests", () => {
     expect(diff.textContent).not.toContain("amountMinor");
     expect(diff.textContent).not.toContain("productId");
     expect(diff.textContent).not.toContain("requestId");
+  });
+  it("shows tag bookkeeping as a grouped transition without changing the customer outcome", async () => {
+    backtestResult = async ({ recipe }) => {
+      const result = report(recipe);
+      return { ...result, summary: { ...result.summary, nonOutcomeOnly: 2 }, cases: result.cases.map((item, index) => index ? item : {
+        ...item, historicalMutations: [
+          { action: "tag-request", input: { requestId: item.caseId, tag: "damaged_item" } },
+          { action: "tag-request", input: { requestId: item.caseId, tag: "handled" } },
+        ], intendedMutations: [{ action: "tag-request", input: { requestId: item.caseId, tag: "damaged" } }],
+        diff: [
+          { kind: "changed", classification: "bookkeeping", path: "/0/input/tag", historical: "damaged_item", intended: "damaged" },
+          { kind: "removed", classification: "bookkeeping", path: "/1", historical: { action: "tag-request", input: { requestId: item.caseId, tag: "handled" } } },
+        ],
+      }) };
+    };
+    await mount();
+    await click(button("Run backtest"));
+    await settle(() => expect(node.textContent).toContain("2 differ only in wording or tags"));
+    const item = node.querySelector('a[href="/requests/req_0031"]')?.closest("li");
+    expect(item?.textContent).toContain("Same outcome");
+    expect(item?.textContent).toContain("Tags · Bookkeeping difference");
+    expect(item?.querySelector("del")?.textContent).toBe("damaged_item, handled");
+    expect(item?.querySelector("ins")?.textContent).toBe("damaged");
+    expect(item?.querySelector("details")?.open).toBe(true);
+    const previous = backtestResult;
+    backtestResult = async (input) => {
+      const result = await previous(input);
+      return { ...result, cases: result.cases.map((entry, index) => index ? entry : { ...entry,
+        intendedMutations: [{ action: "tag-request", input: { requestId: "req_0002", tag: "damaged" } }],
+        diff: [...entry.diff, { kind: "changed", classification: "bookkeeping", path: "/0/input/requestId", historical: entry.caseId, intended: "req_0002" }],
+      }) };
+    };
+    await click(button("Run backtest"));
+    await settle(() => expect(node.querySelector('a[href="/requests/req_0031"]')?.closest("li")?.querySelector("ins")?.textContent).toBe("req_0002: damaged"));
+  });
+  it("renders a partial report with unknown total usage and retains it in the shown summary", async () => {
+    backtestResult = async ({ recipe }) => {
+      const result = report(recipe);
+      return { ...result, summary: { ...result.summary, sameOutcome: 7, notHandled: 1, unknownUsageCases: 1, totalTokens: null,
+        tokens: { input: 32, output: 16 } }, cases: result.cases.map((item, index) => index ? item : {
+        ...item, status: "not_handled", run: null, diff: [], intendedMutations: [],
+        reasons: [{ code: "reconstruction-failed", message: "Couldn't reconstruct this request from its message: missing quantity. Extraction usage is unknown." }],
+      }) };
+    };
+    await mount();
+    await click(button("Run backtest"));
+    await settle(() => expect(node.textContent).toContain("7 same outcome · 2 different outcome · 1 not handled"));
+    expect(node.textContent).toContain("missing quantity");
+    expect(node.textContent).toContain("48 known tokens · requests with unknown usage: 1");
+    expect(node.textContent).not.toContain("60 tokens spent");
+    expect(setClientAppState).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ totalTokens: null,
+      reports: [expect.objectContaining({ summary: expect.objectContaining({ unknownUsageCases: 1, totalTokens: null }) })],
+    }), expect.any(Object));
+  });
+  it("keeps customer diff labels and currency aligned when tags preceded the refund in the original trace", async () => {
+    backtestResult = async ({ recipe }) => {
+      const result = report(recipe);
+      const tag = { action: "tag-request", input: { requestId: "req_0039", tag: "handled" } };
+      return { ...result, cases: [{ ...result.cases[8]!,
+        historicalMutations: [tag, { action: "issue-refund", input: { amount: { amountMinor: 38000, currency: "EUR" } } }],
+        intendedMutations: [tag, { action: "issue-refund", input: { amount: { amountMinor: 19000, currency: "EUR" } } }],
+      }] };
+    };
+    await mount();
+    await click(button("Run backtest"));
+    await settle(() => expect(node.querySelector(".recipe-diff")?.textContent).toContain("€380.00"));
+    expect(node.querySelector(".recipe-diff")?.textContent).toContain("€190.00");
+    expect(node.querySelector(".recipe-diff")?.textContent).toContain("Refund amount");
   });
   it("shows a retryable error without inventing a report, spending totals, or retrying automatically", async () => {
     backtestResult = async () => { throw new Error("Request req_0039 could not be reconstructed: Extraction is not configured."); };
@@ -821,13 +894,13 @@ describe("Recipe Studio historical backtests", () => {
   it("explains not-handled mutation-output dependencies plainly while preserving real counts", async () => {
     backtestResult = async ({ recipe }) => {
       const value = report(recipe);
-      return { ...value, summary: { ...value.summary, identical: 0, different: 0, notHandled: 10 }, cases: value.cases.map((item) => ({
+      return { ...value, summary: { ...value.summary, sameOutcome: 0, differentOutcome: 0, notHandled: 10, nonOutcomeOnly: 0 }, cases: value.cases.map((item) => ({
         ...item, status: "not_handled", reasons: [{ code: "blocked", message: "Depends on an unavailable dry-run output", blockedBy: ["refund"] }],
       })) };
     };
     await mount();
     await click(button("Run backtest"));
-    await settle(() => expect(node.textContent).toContain("0 identical / 0 different / 10 not handled"));
+    await settle(() => expect(node.textContent).toContain("0 same outcome · 0 different outcome · 10 not handled"));
     expect(node.textContent).toContain("Backtests skip real changes, so that result is unavailable");
     expect(node.querySelector(".recipe-backtest-cases")?.textContent).toContain("Not handled");
     expect(button("Activate v1").disabled).toBe(false);
@@ -847,17 +920,36 @@ describe("Recipe Studio historical backtests", () => {
     expect(calls.find((call) => call.name === "compare-recipe-versions")).toEqual({ name: "compare-recipe-versions", method: "GET", input: { baseline: second.id, candidate: latest.id, requestType: "damaged_item" } });
     expect(comparison.textContent).toContain("10 of 10 request outcomes changed");
     expect(comparison.textContent).toContain("60 combined tokens spent · shared request extraction counted once");
-    expect(comparison.textContent).toContain("Identical → Different");
+    expect(comparison.textContent).toContain("Same outcome → Different outcome");
     expect(comparison.textContent).toContain("$190.00");
     expect(comparison.textContent).toContain("$380.00");
     expect(comparison.querySelector('a[href="/requests/req_0031"]')).not.toBeNull();
-    expect(node.querySelector('[aria-label="Backtest before activating v3"]')?.textContent).toContain("0 identical / 10 different");
+    expect(node.querySelector('[aria-label="Backtest before activating v3"]')?.textContent).toContain("0 same outcome · 10 different outcome");
     expect(setClientAppState).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ source: "comparison", totalTokens: 60, reports: expect.arrayContaining([
       expect.objectContaining({ recipeVersionId: second.id }), expect.objectContaining({ recipeVersionId: latest.id }),
     ]) }), expect.any(Object));
     await choose("Baseline version", `v1 · ${damagedItemFixture.name}`);
     expect(comparison.textContent).not.toContain("v2 → v3 on the same requests");
     expect(calls.filter((call) => call.name === "compare-recipe-versions")).toHaveLength(1);
+  });
+  it("shows wording-only version changes and retains their text without counting an outcome change", async () => {
+    const second = parseRecipeVersion({ ...damagedItemFixture, id: "ver_wording", version: 2 });
+    record = { ...record, versions: [damagedItemFixture, second] };
+    compareResult = async ({ baseline, candidate }) => ({
+      baseline: report(baseline), candidate: report(candidate),
+      summary: { tokens: { input: 40, output: 20 }, totalTokens: 60, unknownUsageCases: 0, sharedRequestExtractionTokens: { input: 40, output: 20 } },
+      cases: [{ caseId: "req_0040", baselineStatus: "identical", candidateStatus: "identical", changed: false, nonOutcomeOnly: true,
+        diff: [{ kind: "changed", classification: "wording", path: "/1/input/body", historical: "Earlier reply words", intended: "Revised reply words" }] }],
+    });
+    await mount();
+    await click(button("Compare versions"));
+    const comparison = node.querySelector<HTMLDetailsElement>(".recipe-backtest-comparison")!;
+    await settle(() => expect(comparison.textContent).toContain("0 of 1 request outcomes changed · 1 differ only in wording or tags"));
+    expect(comparison.textContent).toContain("8 same outcome · 2 different outcome · 0 not handled — 1 differ only in wording or tags");
+    expect(comparison.textContent).toContain("Same outcome → Same outcome · Only wording or tags changed");
+    expect(comparison.textContent).toContain("Wording difference");
+    expect(comparison.textContent).toContain("Earlier reply words");
+    expect(comparison.textContent).toContain("Revised reply words");
   });
   it("handles comparison pending/error and disallows mismatched cohorts or identical version choices", async () => {
     const second = parseRecipeVersion({ ...damagedItemFixture, id: "ver_other", version: 2 });

@@ -71,7 +71,7 @@ let recipeRun: Run;
 let remoteSync = false;
 
 function processingRow(state: RequestProcessing["state"], requestId = request.id): RequestProcessing {
-  return { requestId, runId: "run_ui", state, matchReason: "matched", tokens: { input: 0, output: 0 } };
+  return { requestId, runId: "run_ui", state, matchReason: "matched", tokens: { input: 0, output: 0 }, recipe: null, runStatus: null, mode: null, totalTokens: null, durationMs: null };
 }
 function awaitingRun(): Run {
   return {
@@ -315,7 +315,18 @@ beforeEach(() => {
         method === "GET"
           ? Object.fromEntries(parsed.searchParams)
           : JSON.parse(String(init.body ?? "{}"));
+      if (method === "GET") {
+        for (const key of new Set(parsed.searchParams.keys())) {
+          if (!key.endsWith("[]")) continue;
+          input[key.slice(0, -2)] = parsed.searchParams.getAll(key);
+          delete input[key];
+        }
+      }
       calls.push({ name, input, method });
+      if (name === "list-request-processing" && method !== "GET")
+        return Response.json({ error: "Method not allowed" }, { status: 405 });
+      if (failure === "intake-summary" && name === "list-request-processing" && input.requestIds)
+        return Response.json({ error: "Summary unavailable" }, { status: 503 });
       if (method === "POST") await holdWrite?.();
       if (method === "GET") await holdRead?.();
       if (failure === name)
@@ -476,6 +487,8 @@ beforeEach(() => {
                         : item.content.type) === input.type),
                 ),
           );
+        case "get-handling-stats":
+          return Response.json({ samples: [] });
         case "list-request-processing":
           return Response.json(processing);
         case "get-recipe-run":
@@ -591,6 +604,28 @@ describe("shop workspace with real framework action hooks and an offline action 
     expect(container.textContent).toContain("Processing…");
   });
 
+  it("shows a completed recipe's measured intake cost and never stamps a dry run", async () => {
+    processing = [{ ...processingRow("auto_handled"), recipe: { name: "Bowl care", version: 2 }, runStatus: "completed", mode: "execute", totalTokens: 20, durationMs: 17 }];
+    await mount("inbox");
+    await settle(() => expect(container.querySelector('.kiln-maker')?.getAttribute("aria-label")).toBe("Handled by recipe Bowl care v2, 20 LLM tokens"));
+    expect(container.querySelectorAll(".kiln-maker")).toHaveLength(1);
+    expect(container.textContent).toContain("20 tokens · 17 ms");
+    expect(container.querySelector(".shop-inbox-columns")?.textContent).toContain("Handled by");
+    const row = container.querySelector(".kiln-maker")!.closest("li")!;
+    expect(row.querySelector(".kiln-row-status [data-status]")).not.toBeNull();
+    expect(row.querySelector(".kiln-row-status [data-processing], .kiln-row-status .kiln-cost")).toBeNull();
+    expect(row.querySelector(".kiln-row-handling .kiln-recipe-name")?.getAttribute("title")).toBe("Bowl care");
+    expect(row.querySelector(".kiln-row-handling .shop-processing")).toBeNull();
+    expect(row.querySelector(".kiln-handling-recipe .kiln-cost")).toBeNull();
+    expect(row.querySelector(".kiln-row-handling .kiln-cost")).not.toBeNull();
+    expect(row.textContent).toContain("Auto-handled");
+    const seedRow = [...container.querySelectorAll(".shop-inbox-row")].find(item => !item.querySelector("[data-processing]"))!;
+    expect(seedRow.querySelector(".kiln-row-handling")?.textContent).toBe("");
+    processing = [{ ...processing[0]!, mode: "dry-run" }];
+    await act(async () => { await client.invalidateQueries({ queryKey: ["action"] }); });
+    await settle(() => expect(container.querySelector(".kiln-maker")).toBeNull());
+  });
+
   it("combines the processing URL filter with shop filters and updates membership after agent changes", async () => {
     processing = [processingRow("awaiting_approval")];
     const type = request.content.source === "structured" ? request.content.fields.type : request.content.type;
@@ -617,8 +652,31 @@ describe("shop workspace with real framework action hooks and an offline action 
     await act(async () => { holdWrite = undefined; release(); });
     await settle(() => expect(container.textContent).toContain("Incoming demo 4"));
     expect(writes("demo-intake")[0]?.input).toEqual({});
-    expect(container.textContent).toContain("5 requests added");
+    await settle(() => expect(container.textContent).toContain("5 arrived · 5 with agent"));
+    expect(calls.filter(call => call.name === "list-request-processing").every(call => call.method === "GET")).toBe(true);
+    expect(calls.find(call => call.name === "list-request-processing" && call.input.requestIds)?.input.requestIds).toEqual(incoming.map(item => item.id));
+    expect(container.querySelector("[role=alert]")).toBeNull();
+    expect(container.querySelectorAll("[data-arrival]")).toHaveLength(5);
+    const firstArrival = container.querySelector("[data-arrival]");
+    await act(async () => { await client.invalidateQueries({ queryKey: ["action"] }); });
+    expect(container.querySelectorAll("[data-arrival]")).toHaveLength(5);
+    expect(container.querySelector("[data-arrival]")).toBe(firstArrival);
     expect(container.querySelectorAll('[data-processing="with_agent"]')).toHaveLength(5);
+  });
+
+  it("keeps a successful batch successful when its GET summary read fails", async () => {
+    await mount("inbox");
+    failure = "intake-summary";
+    await click(byText("Demo · Simulate incoming requests"));
+    await settle(() => expect(byText("Demo · Simulate incoming requests").hasAttribute("disabled")).toBe(false));
+    expect(byText("5 arrived", "span")).toBeDefined();
+    expect(container.textContent).toContain("Incoming demo 4");
+    expect(container.textContent).not.toContain("The demo batch couldn't finish");
+    expect(container.textContent).not.toContain("still processing");
+    expect(container.querySelector("[role=alert]")).toBeNull();
+    expect(writes("demo-intake")).toHaveLength(1);
+    expect(writes("list-request-processing")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-arrival]")).toHaveLength(5);
   });
 
   it("reports demo failure with partial-batch guidance and rereads saved requests", async () => {
@@ -652,6 +710,8 @@ describe("shop workspace with real framework action hooks and an offline action 
     recipeRun = { ...recipeRun, status: "completed", awaitingApprovalStepId: null, steps: recipeRun.steps.map((step) => ({ ...step, status: "completed" })) };
     await mount();
     await settle(() => expect(byText("Replay")).toBeDefined());
+    expect(container.querySelector(".kiln-processing-banner .kiln-signature-label")?.textContent).toBe(`Handled by ${recipeRun.recipe.name} · v${recipeRun.recipe.version}`);
+    expect(container.querySelector(".kiln-processing-banner .kiln-maker")?.getAttribute("data-size")).toBe("compact");
     await click(byText("Replay"));
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Saved run checkpoint · Read-only replay");
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("$125.00");

@@ -1,4 +1,5 @@
 @import "@fontsource-variable/inter";
+@import "./kiln.css";
 
 @import "tailwindcss";
 @import "@agent-native/toolkit/styles.css";
@@ -306,7 +307,7 @@
   padding: 1.5rem 2rem 3.5rem;
 }
 .shop-serif {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-display);
   font-weight: 400;
   letter-spacing: -0.035em;
 }
@@ -329,7 +330,7 @@
   border-radius: 50%;
   color: hsl(var(--primary));
   font:
-    italic 1.25rem Georgia,
+    italic 1.25rem var(--font-display),
     serif;
 }
 .shop-page-heading {
@@ -454,12 +455,12 @@
 }
 .shop-processing[data-processing="auto_handled"],
 .shop-processing[data-processing="done"] {
-  --chip-text: var(--shop-resolved);
-  --chip-bg: var(--shop-resolved-surface);
+  --chip-text: var(--celadon);
+  --chip-bg: var(--celadon-surface);
 }
 .shop-processing[data-processing="with_agent"] {
-  --chip-text: var(--shop-escalated);
-  --chip-bg: var(--shop-escalated-surface);
+  --chip-text: var(--ember);
+  --chip-bg: var(--ember-surface);
 }
 .shop-empty {
   display: flex;
@@ -958,11 +959,11 @@
 }
 .run-status[data-status="completed"],
 .run-zero-tokens {
-  color: hsl(var(--shop-resolved));
+  color: hsl(var(--celadon));
 }
 .run-status[data-status="completed"] {
-  background: hsl(var(--shop-resolved-surface));
-  border-color: hsl(var(--shop-resolved) / 0.22);
+  background: hsl(var(--celadon-surface));
+  border-color: hsl(var(--celadon) / 0.22);
 }
 .run-status[data-status="awaiting_approval"],
 .run-gate {
@@ -1075,9 +1076,9 @@
   background: hsl(var(--background));
 }
 .run-timeline > li[data-status="completed"] > .run-step-mark {
-  color: hsl(var(--shop-resolved));
-  background: hsl(var(--shop-resolved-surface));
-  border-color: hsl(var(--shop-resolved) / 0.3);
+  color: hsl(var(--celadon));
+  background: hsl(var(--celadon-surface));
+  border-color: hsl(var(--celadon) / 0.3);
 }
 .run-timeline > li[data-status="awaiting_approval"] > .run-step-mark {
   color: hsl(var(--shop-pending));
@@ -1343,7 +1344,7 @@
   place-items: center;
   background: hsl(var(--background));
   border: 1px solid hsl(var(--primary) / 0.3);
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
   color: hsl(var(--primary));
   font-size: 0.7rem;
 }
@@ -1365,7 +1366,7 @@
   border-bottom: 1px solid hsl(var(--border) / 0.65);
 }
 .recipe-step-heading h3 {
-  font-family: Georgia, serif;
+  font-family: var(--font-display);
   font-size: 1.2rem;
 }
 .recipe-kind {

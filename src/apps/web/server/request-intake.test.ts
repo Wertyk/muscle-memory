@@ -188,6 +188,13 @@ describe("request.created intake: real actions/event bus/executor on PGlite, off
     expect(inOrder.map((row) => row.tokens)).toEqual([
       { input: 0, output: 0 }, { input: 0, output: 0 }, { input: 12, output: 8 }, { input: 0, output: 0 }, { input: 0, output: 0 },
     ]);
+    expect(inOrder[0]).toMatchObject({ recipe: { name: expect.any(String), version: 1 }, runStatus: "completed", mode: "execute", totalTokens: 0, durationMs: expect.any(Number) });
+    expect(inOrder[2]?.totalTokens).toBe(20);
+    const [checkpoint] = await db.select().from(tables.recipeRuns).where(eq(tables.recipeRuns.id, inOrder[2]!.runId));
+    const [intakeTiming] = await db.select().from(tables.requestProcessing).where(eq(tables.requestProcessing.requestId, created[2]!.id));
+    expect(inOrder[2]?.durationMs).toBe(intakeTiming!.matchDurationMs! + checkpoint!.checkpoint.steps.reduce((total, step) => total + step.durationMs, 0));
+    expect(inOrder[3]).toMatchObject({ runStatus: "awaiting_approval", totalTokens: null, durationMs: null });
+    expect(inOrder[4]).toMatchObject({ runStatus: "handed_off", totalTokens: null, durationMs: null });
     expect(extract).toHaveBeenCalledTimes(1);
     expect(await db.select().from(tables.refunds)).toHaveLength(originalRefunds.length + 2);
     expect(await db.select().from(tables.replies)).toHaveLength(originalReplies.length + 3);
@@ -272,7 +279,7 @@ describe("request.created intake: real actions/event bus/executor on PGlite, off
     if (failure === "wrong_customer") extract.mockResolvedValue({ output: { type: "where_is_my_order", orderId: "ord_1001" }, tokens: { input: 9, output: 3 } });
     const request = await cases.intake.create(demoIntakeScript[2]!);
     const [processing] = await cases.processing.list([request.id]);
-    expect(processing).toMatchObject({ state: "with_agent", matchReason: "extraction_failed", tokens: failure === "provider" ? { input: 0, output: 0 } : { input: 9, output: 3 } });
+    expect(processing).toMatchObject({ state: "with_agent", matchReason: "extraction_failed", totalTokens: null, durationMs: null, tokens: failure === "provider" ? { input: 0, output: 0 } : { input: 9, output: 3 } });
     expect(request.status).toBe("escalated");
     expect(request.content).toMatchObject({ source: "free_text", type: null });
     await cases.intake.events.emit(request.id);

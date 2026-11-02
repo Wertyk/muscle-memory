@@ -415,8 +415,8 @@ export function Sidebar({
                 aria-hidden="true"
                 className="h-3.5 w-6 shrink-0 text-sidebar-accent-foreground"
               />
-              <span className="truncate text-sm font-semibold text-sidebar-accent-foreground">
-                {APP_TITLE}
+              <span className="kiln-brand">
+                <span>Muscle Memory</span><small>Kiln &amp; Co.</small>
               </span>
             </Link>
           </>

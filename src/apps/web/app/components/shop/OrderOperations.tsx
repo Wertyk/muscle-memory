@@ -234,7 +234,7 @@ function OperationForm({
                 className="min-w-0 text-sm"
               >
                 {item.name}
-                <span className="mt-1 block text-xs text-muted-foreground">
+                <span className="kiln-data mt-1 block text-xs text-muted-foreground">
                   {moneyText(item.unitPrice)}
                 </span>
               </label>

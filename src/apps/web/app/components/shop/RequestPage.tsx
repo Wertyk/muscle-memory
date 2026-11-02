@@ -202,7 +202,7 @@ function OrderPanel({
               <p className="text-sm font-medium">{item.name}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {t("shop.quantity", { count: item.quantity })} ·{" "}
-                {moneyText(item.unitPrice)}
+                <span className="kiln-data">{moneyText(item.unitPrice)}</span>
               </p>
             </div>
             <span className="shrink-0 text-sm tabular-nums">
@@ -217,11 +217,11 @@ function OrderPanel({
       <dl className="shop-order-totals">
         <div>
           <dt>{t("shop.total")}</dt>
-          <dd>{moneyText(order.total)}</dd>
+          <dd className="kiln-data">{moneyText(order.total)}</dd>
         </div>
         <div>
           <dt>{t("shop.paid")}</dt>
-          <dd>{moneyText(order.paid)}</dd>
+          <dd className="kiln-data">{moneyText(order.paid)}</dd>
         </div>
       </dl>
       <details className="shop-disclosure mt-5">

@@ -9,6 +9,11 @@ export const requestProcessingSchema = z.object({
   requestId: shopId("request"), runId: runIdSchema,
   state: z.enum(PROCESSING_STATES).nullable(),
   matchReason: z.enum(["matched", "no_match", "extraction_failed", "ambiguous", "matching_failed"]).nullable(),
+  recipe: z.object({ name: z.string(), version: z.number().int().positive() }).nullable(),
+  runStatus: z.enum(["running", "awaiting_approval", "completed", "aborted", "handed_off", "failed"]).nullable(),
+  mode: z.enum(["execute", "dry-run"]).nullable(),
+  totalTokens: z.number().nonnegative().nullable(),
+  durationMs: z.number().nonnegative().nullable(),
   tokens: z.object({ input: z.number().int().nonnegative(), output: z.number().int().nonnegative() }),
 });
 

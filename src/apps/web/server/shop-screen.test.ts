@@ -170,6 +170,7 @@ describe("agent workspace context", () => {
       state: "awaiting_approval" as const,
       matchReason: "matched" as const,
       tokens: { input: 0, output: 0 },
+      recipe: null, runStatus: null, mode: null, totalTokens: null, durationMs: null,
     };
     vi.mocked(composition.getRequestIntake().processing.list).mockResolvedValue(
       [processing],
@@ -218,6 +219,7 @@ describe("agent workspace context", () => {
       state: "with_agent" as const,
       matchReason: "no_match" as const,
       tokens: { input: 0, output: 0 },
+      recipe: null, runStatus: null, mode: null, totalTokens: null, durationMs: null,
     };
     vi.mocked(composition.getRequestIntake().processing.list).mockResolvedValue(
       [row],

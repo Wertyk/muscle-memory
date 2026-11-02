@@ -8,7 +8,7 @@ import type {
   StepRun,
 } from "@muscle-memory/recipe-engine";
 import { runDuration, runRequestId } from "@shared/recipe-runs";
-import { IconCheck, IconClock, IconX } from "@tabler/icons-react";
+import { IconGitBranch, IconBolt, IconClock, IconDatabase, IconLock, IconSparkles } from "@tabler/icons-react";
 import { Link } from "react-router";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,7 +19,8 @@ import {
 import { presentationContext, stepLabel, valueSummary } from "@/lib/recipe-presentation";
 import { dateText, requestPath } from "@/lib/shop-workspace";
 
-import { PendingMark } from "../shop/WorkspaceParts";
+import { DataText } from "../kiln/DataText";
+import { waterfallKind, waterfallPercent } from "@/lib/kiln";
 
 export function RunStatusChip({
   status,
@@ -39,7 +40,7 @@ export function TokenCount({ tokens }: { tokens: Run["tokens"] }) {
   const count = tokens.input + tokens.output;
   return (
     <span
-      className={count === 0 ? "run-zero-tokens" : "tabular-nums"}
+      className={count === 0 ? "run-zero-tokens" : "kiln-data"}
       title={t("runs.tokenDetail", {
         input: tokens.input,
         output: tokens.output,
@@ -63,7 +64,7 @@ export function RunLinks({
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm">
       {showRequest && (requestId ? (
-        <Link className="shop-record-link" to={requestPath(requestId)}>
+        <Link className="shop-record-link kiln-data" to={requestPath(requestId)}>
           {requestId}
         </Link>
       ) : (
@@ -130,7 +131,7 @@ export function RunReason({ run }: { run: Run }) {
           </div>
         )}
         {run.handoff && (
-          <div className="run-notice">
+          <div className="run-notice kiln-handoff">
             <p className="font-medium">
               {t(
                 run.handoff.status === "pending"
@@ -155,12 +156,10 @@ export function RunReason({ run }: { run: Run }) {
   return null;
 }
 function StepMark({ step }: { step: StepRun }) {
-  if (step.status === "completed")
-    return <IconCheck aria-hidden="true" className="size-4" />;
-  if (step.status === "failed" || step.status === "rejected")
-    return <IconX aria-hidden="true" className="size-4" />;
-  if (step.status === "running") return <PendingMark />;
-  return <IconClock aria-hidden="true" className="size-4" />;
+  const kind = waterfallKind(step);
+  const Icon = kind === "approval" ? IconLock : kind === "handoff" || kind === "branch" ? IconGitBranch :
+    kind === "lookup" ? IconDatabase : kind === "extract" ? IconSparkles : IconBolt;
+  return <Icon aria-hidden="true" className="size-4" />;
 }
 export function JsonEvidence({
   title,
@@ -206,7 +205,7 @@ export function RunTimeline({
       aria-label={t("runs.timeline")}
     >
       {run.steps.map((step, index) => (
-        <li key={`${step.stepId}:${step.attempt}`} data-status={step.status}>
+        <li key={`${step.stepId}:${step.attempt}`} data-status={step.status} data-kind={waterfallKind(step)}>
           <span className="run-step-mark">
             <StepMark step={step} />
           </span>
@@ -220,11 +219,14 @@ export function RunTimeline({
               </h3>
               {!compact && <RunStatusChip status={step.status} />}
             </div>
+            <div className="kiln-waterfall" aria-label={`${durationText(step.durationMs)} · ${step.kind}`}>
+              <span className="kiln-waterfall-track" aria-hidden="true"><span className="kiln-waterfall-bar" style={{ width: `${waterfallPercent(step.durationMs, runDuration(run))}%` }} /></span>
+              <span className="kiln-waterfall-label kiln-data">{durationText(step.durationMs)}</span>
+            </div>
             {!compact && (
               <>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span className="font-mono">{step.stepId}</span>
-                  <span>{durationText(step.durationMs)}</span>
                   <TokenCount tokens={step.tokens} />
                   {step.attempt > 1 && (
                     <span>{t("runs.attempt", { attempt: step.attempt })}</span>
@@ -247,7 +249,7 @@ export function RunTimeline({
                     <dd>
                       {step.input === null
                         ? t("runs.noInput")
-                        : valueSummary(step.input, presentation)}
+                        : <DataText text={valueSummary(step.input, presentation)} />}
                     </dd>
                   </div>
                   <div>
@@ -255,7 +257,7 @@ export function RunTimeline({
                     <dd>
                       {step.output === null
                         ? t("runs.noOutput")
-                        : valueSummary(step.output, presentation)}
+                        : <DataText text={valueSummary(step.output, presentation)} />}
                     </dd>
                   </div>
                 </dl>
@@ -280,8 +282,8 @@ export function RunTimeline({
               </>
             )}
             {compact && <div className="mt-1 space-y-1 break-words text-xs text-muted-foreground">
-              {step.input !== null && <p>{valueSummary(step.input, presentation)}</p>}
-              {step.output !== null && <p>{valueSummary(step.output, presentation)}</p>}
+              {step.input !== null && <p><DataText text={valueSummary(step.input, presentation)} /></p>}
+              {step.output !== null && <p><DataText text={valueSummary(step.output, presentation)} /></p>}
             </div>}
             {compact && step.status !== "completed" && (
               <span className="text-xs text-muted-foreground">

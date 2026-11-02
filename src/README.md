@@ -8,8 +8,7 @@ the next matching structured request can run the same workflow with **0 LLM toke
 Approval gates keep consequential steps under human control, and unfamiliar work
 goes back to the agent.
 
-Built for the Builder.io Agent-Native Hackathon. **Deployment: local only**;
-production deployment is still open in TASK-4.
+Built for the Builder.io Agent-Native Hackathon. **Deployment: local only**.
 
 ## Problem and idea
 
@@ -34,24 +33,27 @@ before letting it handle another request.
    manual Studio edits do not call a model.
 4. **Backtest, then activate:** inspect the wires, conditions, approvals, and version
    diff in Studio. Explicitly backtest a saved version against resolved requests,
-   then choose which immutable version to activate. Backtesting never activates it.
+   reviewing **same outcome / different outcome / not handled** results. Wording
+   and tag differences stay visible without changing the outcome classification;
+   a request that cannot be reconstructed from its message is not handled.
+   Then choose which immutable version to activate. Backtesting never activates it.
 5. **Remember:** intake matches new requests to active versions and the executor
    runs their steps. Structured intake and recipes without extraction use 0 tokens.
    Free-text intake uses a model extraction; recipe `extract` steps also spend tokens.
    Approval gates pause execution. No match, ambiguity, or execution failure can
    hand off the request for agent assistance.
 
-**Learn from corrections (TASK-17).** Operator reply, refund, and tag corrections
+**Learn from corrections.** Operator reply, refund, and tag corrections
 within 30 minutes of the latest completed automatic intake run retain the original
 and corrected evidence. **Propose recipe update** sends that evidence to the agent,
 which saves a proposed version with a diff. The operator explicitly activates it
 or rejects it with a recorded reason. Additional refunds are additive shop effects.
 
-**Crystallize an agent run (TASK-19).** After an eligible request is resolved by the
+**Crystallize an agent run.** After an eligible request is resolved by the
 agent, **Crystallize this run** feeds its forward-recorded action trace into the
 same draft and Studio pipeline. It does not reconstruct a workflow from chat text.
 
-**Publish without a deploy (TASK-20).** Activation publishes a runtime recipe skill;
+**Publish without a deploy.** Activation publishes a runtime recipe skill;
 deactivation removes it. The agent discovers it on a later turn. MCP and CLI clients
 list and execute active recipes through the shared `list-recipes`, `run-recipe`, and
 `get-recipe-run` tools. Each recipe is data behind those tools, not a generated tool
@@ -63,9 +65,6 @@ demo savings. It shows tokens, active time, zero-token handling, approvals, and
 active recipes, with observed agent-versus-recipe comparisons for the same request type.
 
 ## Screenshots
-
-These paths are reserved for the reviewer's screenshots; the image files are not
-included in this documentation change.
 
 | Screen | Screenshot |
 | --- | --- |
@@ -249,14 +248,15 @@ saved v1, and click **Run backtest**. The script saves a draft catalog entry and
 immutable fixture version; it does not activate it or demonstrate recipe learning.
 The historical cohort includes free text, so configure extraction first. Backtests
 and comparisons may spend tokens; the result reports usage. Inspect the observed
-outcome diffs before activation. Detailed procedure:
-[backtest rehearsal](apps/web/server/recipe-execution.md#reproduce-a-studio-backtest-on-the-seed).
+outcome diffs before activation. Rehearsal numbers and the detailed procedure are
+documented in [server/recipe-execution.md](apps/web/server/recipe-execution.md#reproduce-a-studio-backtest-on-the-seed).
 
 ### Tests and checks
 
 ```sh
 pnpm -C src typecheck
 pnpm -C src test
+pnpm -C src e2e
 pnpm -C src lint
 pnpm -C src lint:arch
 pnpm -C src build
@@ -264,6 +264,9 @@ pnpm -C src build
 
 Tests use in-memory ports, fake extractors, UI components, and PGlite integration;
 they never call a real LLM. The test command also runs architecture regressions.
+The e2e suite covers Teach → Studio → activation → zero-token automatic handling
+and Dashboard using an isolated seeded database; it needs local Chrome or Chromium
+and permission to launch browser processes.
 The build produces local artifacts. Without production authentication and persistent
 PostgreSQL configuration, Core prints production-configuration errors even though
 the build exits successfully; a successful build alone does not establish deployment readiness.
@@ -301,7 +304,7 @@ installed packages:
 | dependency-cruiser | 18.7.0 | Import-boundary enforcement. |
 | `@fontsource-variable/inter` | 5.3.0 | Packaged font. |
 | `@tabler/icons-react` | 3.50.0 | Packaged icons. |
-| Playwright | Not installed | Only optional peer references appear in the lockfile. |
+| Playwright / `@playwright/test` | 1.64.1 | Browser e2e regression tests. |
 
 **Assets:** no third-party assets beyond template/library defaults. All tracked
 public SVG logos, favicons, and app icons match the bundled chat template; typography
@@ -337,24 +340,27 @@ Its filename uses UTC; the measurements were taken on 2026-11-02 in Moscow.
   Incomplete traces cannot be drafted. Agent crystallization requires a complete,
   eligible recorded resolution; there is no historical chat backfill.
 - **Current-state backtests:** historical inputs/outcomes are compared with reads
-  from current shop data, not time-travel snapshots. Missing mutation outputs can
-  block dependent simulated steps. A backtest is advisory and does not gate activation.
+  from current shop data, not time-travel snapshots. Results distinguish same
+  outcome, different outcome, and not handled; wording/tag differences remain
+  visible but do not change the outcome. Requests that cannot be reconstructed
+  from their messages, or whose simulated runs are blocked by missing mutation
+  outputs, are not handled.
+  A backtest is advisory and does not gate activation.
 - **Measured cost has boundaries:** the dashboard uses the latest 100 recorded
   handling outcomes, which can span sessions. Seed history, manual/unlinked
   resolutions, dry runs, queued handoffs, and pending approvals are excluded.
   Recipe totals include intake extraction and execution; active time excludes
-  approval waits. These are token/time observations, not dollar savings estimates.
-- **Agent attribution:** for the authenticated owner/workspace, charge full recorded
-  turns from the first request action (including reads/questions) through explicit
-  resolution, including intervening chat and prior intake/recipe work. Each run
-  counts once. Shared turns, overlapping request windows, missing traces, placeholder
-  zero usage, and external agents without local usage stay unmeasured. Unknown
-  extraction usage after failures stays unknown. Same-type means compare observed
-  requests, not paired counterfactuals; trace writes may require a later refresh.
+  approval waits. Unknown extraction usage stays unknown. These are token/time
+  observations, not dollar savings estimates; late trace writes may need a refresh.
+- **Agent attribution:** within your owner/workspace, costs include full turns from
+  the first request action through resolution, plus prior intake/recipe work; each
+  run counts once. Reads, questions, and intervening chat count too. Shared or
+  overlapping work, missing or placeholder-zero traces, and external agents without
+  local usage remain unmeasured.
 - **Handoff needs an operator:** it durably queues context and escalates the request;
   it does not automatically start a chat turn. The UI stages agent help through chat.
 - **Local MCP authentication:** the loopback `/mcp` endpoint requires the
   `X-Agent-Native-Owner-Email` header for the local owner context; a bare request is
   unauthorized. Do not treat the local development header as production authentication.
-- **Local only:** TASK-4's Netlify/Neon deployment is unfinished. PGlite supports one
+- **Local only:** production deployment is unfinished. PGlite supports one
   database-owning process; stop dev before running seed/rehearsal scripts.

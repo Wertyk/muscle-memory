@@ -6,7 +6,9 @@ import { recipeMessages } from "../i18n/recipes-en";
 describe("shared recipe presentation", () => {
   it("formats outcome counts and wording-only comparison labels with the shared catalog", () => {
     const t = (key: string, values: Record<string, number> = {}) => {
-      const message = recipeMessages.backtests[key.replace("recipes.backtests.", "") as keyof typeof recipeMessages.backtests];
+      const messages = recipeMessages.backtests;
+      const messageKey = key.replace("recipes.backtests.", "");
+      const message = messages[`${messageKey}_${values.count === 1 ? "one" : "other"}` as keyof typeof messages] ?? messages[messageKey as keyof typeof messages];
       if (typeof message !== "string") throw new Error("Expected a message");
       return message.replace(/\{\{(\w+)\}\}/g, (_match, field: string) => String(values[field]));
     };

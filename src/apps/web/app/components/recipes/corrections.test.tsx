@@ -56,11 +56,15 @@ describe("visible operational corrections", () => {
     await render(<CorrectionsPanel corrections={[{ ...correction, status, proposal: { version: { ...correction.recipe, id: "ver_2", version: 2 }, notes: {} }, decision: { at: 1200, by: correction.owner, reason: status === "rejected" ? "Keep existing policy" : null } }]} />);
     expect(node.textContent).toContain(status === "accepted" ? "Accepted → version 2" : "Rejected → Keep existing policy");
     expect(node.textContent).not.toContain("Propose recipe update");
+    expect(node.textContent).not.toContain("Review diff and activate in Studio");
+    expect(node.querySelector("a")?.textContent).toBe("View version 2 in Studio");
+    expect(node.textContent).not.toContain("Reject proposal");
     expect(node.querySelector("a")?.getAttribute("href")).toContain("ver_2");
   });
   it("records rejection through the shared action with a required reason and immediate pending feedback", async () => {
     const proposed: Correction = { ...correction, status: "proposed", proposal: { version: { ...correction.recipe, id: "ver_2", version: 2 }, notes: {} } };
     await render(<CorrectionsPanel corrections={[proposed]} />);
+    expect(node.querySelector("a")?.textContent).toBe("Review diff and activate in Studio");
     const input = node.querySelector("input")!;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Keep existing policy");

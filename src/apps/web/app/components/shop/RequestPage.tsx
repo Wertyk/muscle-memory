@@ -12,7 +12,6 @@ import {
 } from "@muscle-memory/shop-domain";
 import {
   IconArrowLeft,
-  IconCheck,
   IconMail,
   IconPackage,
   IconTruck,
@@ -30,6 +29,7 @@ import { OrderOperations } from "./OrderOperations";
 import { ReplyForm, RequestControls, TagForm } from "./RequestControls";
 import { RequestProcessingBanner } from "./RequestProcessingBanner";
 import { TeachBar } from "./TeachBar";
+import { ShopActionResult } from "./ShopActionResult";
 import { CrystallizeRunControl } from "./CrystallizeRunControl";
 import {
   QueryError,
@@ -242,6 +242,7 @@ function OrderPanel({
 export function RequestPage({ requestId }: { requestId: string }) {
   const t = useT();
   const [saved, setSaved] = useState<SavedResult | null>(null);
+  const [recording, setRecording] = useState(false);
   const query = useActionQuery<Request & CorrectionEvidence>(
     "get-request",
     { requestId },
@@ -276,7 +277,7 @@ export function RequestPage({ requestId }: { requestId: string }) {
       </div>
     );
   return (
-    <div className="shop-page shop-request-page">
+    <div className="shop-page shop-request-page" data-recording={recording}>
       <ShopMasthead />
       <Link className="shop-back-link" to={INBOX_PATH}>
         <IconArrowLeft className="size-4" aria-hidden="true" />
@@ -289,6 +290,7 @@ export function RequestPage({ requestId }: { requestId: string }) {
           retry={() => void query.refetch()}
         />
       )}
+      <TeachBar key={request.id} request={request} order={order.data} onRecordingChange={setRecording} />
       <header className="shop-request-heading">
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <span className="font-mono text-xs text-muted-foreground">
@@ -300,36 +302,14 @@ export function RequestPage({ requestId }: { requestId: string }) {
           <StatusChip status={request.status} />
         </div>
         <h1 className="shop-serif">{request.subject}</h1>
-        <div className="mt-5">
+        <div className="shop-request-actions mt-5">
           <RequestControls request={request} onSaved={setSaved} />
+          <ShopActionResult result={saved} onDismiss={() => setSaved(null)} />
         </div>
       </header>
       <RequestProcessingBanner requestId={requestId} />
       <CorrectionsPanel corrections={request.corrections} />
       <CrystallizeRunControl request={request} />
-      <TeachBar key={request.id} request={request} order={order.data} />
-      <div role="status" aria-live="polite">
-        {saved && (
-          <div className="shop-saved-result">
-            <IconCheck className="size-4 shrink-0" aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{saved.title}</p>
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm">
-                {saved.detail}
-              </p>
-            </div>
-            <Button
-              className="ms-auto shrink-0"
-              size="xs"
-              variant="ghost"
-              aria-label={t("shop.close")}
-              onClick={() => setSaved(null)}
-            >
-              ×
-            </Button>
-          </div>
-        )}
-      </div>
       <div className="shop-request-grid">
         <div className="shop-conversation">
           <section className="shop-panel shop-original-message">

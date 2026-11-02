@@ -1,0 +1,437 @@
+:root {
+  --rec: 348 68% 39%;
+  --rec-surface: 350 65% 97%;
+}
+.dark {
+  --rec: 349 86% 76%;
+  --rec-surface: 348 29% 15%;
+}
+
+.shop-request-page[data-recording="true"] {
+  border-radius: calc(var(--radius) + 0.5rem);
+  outline: 2px solid hsl(var(--rec));
+  outline-offset: -2px;
+}
+.shop-teach-bar {
+  position: relative;
+  min-width: 0;
+  margin-block: 1.25rem 1.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 0.25rem);
+  background: hsl(var(--card));
+}
+.shop-teach-bar:is([data-state="recording"], [data-state="completed"], [data-state="incomplete"]) {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 20;
+}
+.shop-teach-bar[data-state="recording"] {
+  border-color: hsl(var(--rec) / 0.5);
+}
+.shop-teach-bar[data-state="recording"] .shop-teach-topline {
+  background: hsl(var(--rec-surface));
+  border-radius: calc(var(--radius) + 0.25rem) calc(var(--radius) + 0.25rem) 0 0;
+}
+.shop-teach-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+}
+.shop-teach-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+.shop-teach-clock,
+.shop-teach-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+.shop-teach-dot {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: hsl(var(--rec));
+}
+.shop-teach-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.shop-teach-bar[data-state="recording"] .shop-teach-title,
+.shop-teach-elapsed {
+  color: hsl(var(--rec));
+}
+.shop-teach-elapsed,
+.shop-teach-count,
+.shop-teach-offset,
+.shop-teach-step-number,
+.shop-teach-step-args,
+.shop-teach-scope span {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+}
+.shop-teach-elapsed {
+  min-width: 4ch;
+  font-size: 0.8125rem;
+}
+.shop-teach-scope {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+.shop-teach-count {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+.shop-teach-caption {
+  margin-top: 0.15rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.shop-teach-emblem {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 50%;
+  color: hsl(var(--primary));
+  background: hsl(var(--muted));
+}
+.shop-teach-emblem svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.shop-teach-bar[data-state="completed"] .shop-teach-emblem {
+  color: hsl(var(--shop-resolved));
+  border-color: hsl(var(--shop-resolved) / 0.3);
+  background: hsl(var(--shop-resolved-surface));
+}
+.shop-teach-wait {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-inline: 0.5rem;
+  color: hsl(var(--muted-foreground));
+  min-width: 0;
+  background: hsl(var(--card));
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.shop-teach-wait > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shop-teach-timeline {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  background: hsl(var(--card));
+  border-top: 1px solid hsl(var(--rec) / 0.18);
+  border-radius: 0 0 calc(var(--radius) + 0.25rem) calc(var(--radius) + 0.25rem);
+}
+.shop-teach-track {
+  display: flex;
+  align-items: center;
+  position: relative;
+  isolation: isolate;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 7.25rem;
+  padding: 0.875rem 1rem;
+}
+.shop-teach-timeline .shop-teach-track::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 1px;
+  background: hsl(var(--rec) / 0.25);
+  z-index: -1;
+}
+/* Separate semantic groups share the same chronological flex track. */
+.shop-teach-strip,
+.shop-teach-lookups {
+  display: contents;
+  list-style: none;
+}
+.shop-teach-tile {
+  position: relative;
+  flex: 0 0 12.5rem;
+  width: 12.5rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--card));
+  scroll-snap-align: end;
+}
+.shop-teach-tile-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: hsl(var(--rec));
+}
+.shop-teach-step-number,
+.shop-teach-offset {
+  font-size: 0.625rem;
+  line-height: 1;
+}
+.shop-teach-offset {
+  margin-inline-start: auto;
+  color: hsl(var(--muted-foreground));
+}
+.shop-teach-step-action {
+  font-size: 0.75rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shop-teach-step-args {
+  margin-top: 0.25rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shop-teach-lookup {
+  display: grid;
+  place-items: center;
+  flex: 0 0 1.25rem;
+  height: 2rem;
+  border-radius: 0.25rem;
+}
+.shop-teach-lookup > span:first-child {
+  width: 2px;
+  height: 0.875rem;
+  border-radius: 1px;
+  background: hsl(var(--rec) / 0.6);
+}
+.shop-teach-tile:hover,
+.shop-teach-tile:focus-within {
+  border-color: hsl(var(--rec) / 0.5);
+}
+.shop-teach-lookup:hover {
+  background: hsl(var(--rec) / 0.1);
+}
+.shop-teach-mini {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}
+.shop-teach-mini .shop-teach-track {
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  gap: 0.375rem;
+}
+.shop-teach-mini .shop-teach-tile {
+  flex-basis: 1.875rem;
+  width: 1.875rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.shop-teach-mini-icon {
+  display: grid;
+  place-items: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 0.125rem);
+  color: hsl(var(--shop-resolved));
+  background: hsl(var(--card));
+}
+.shop-teach-mini-icon:hover {
+  border-color: hsl(var(--shop-resolved) / 0.6);
+  background: hsl(var(--shop-resolved-surface));
+}
+.shop-teach-inspect {
+  min-width: 0;
+  border-top: 1px solid hsl(var(--border));
+  font-size: 0.6875rem;
+  color: hsl(var(--muted-foreground));
+}
+.shop-teach-inspect summary {
+  cursor: pointer;
+  padding: 0.625rem 1rem;
+  border-radius: 0 0 calc(var(--radius) + 0.25rem) calc(var(--radius) + 0.25rem);
+}
+.shop-teach-inspect summary:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.5);
+}
+.shop-teach-inspect pre {
+  max-height: 22rem;
+  overflow: auto;
+  padding: 1rem;
+  border-top: 1px solid hsl(var(--border));
+  font-size: 0.6875rem;
+}
+.shop-teach-error {
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  color: hsl(var(--shop-escalated));
+  background: hsl(var(--shop-escalated-surface));
+  border-top: 1px solid hsl(var(--shop-escalated) / 0.25);
+}
+.shop-teach-bar :is(button, summary, [tabindex]):focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.shop-teach-bar .shop-teach-timeline:focus-visible,
+.shop-teach-bar .shop-teach-mini:focus-visible {
+  outline-offset: -2px;
+}
+.shop-teach-flight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: clip;
+}
+.shop-teach-flight {
+  position: absolute;
+  margin: 0;
+  transform-origin: top left;
+  list-style: none;
+}
+
+.shop-request-actions {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+.shop-action-result-slot {
+  min-width: 0;
+  max-width: 100%;
+  justify-self: end;
+}
+.shop-saved-result.shop-action-result {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+  max-width: 100%;
+  height: 2rem;
+  margin: 0;
+  padding: 0.125rem 0.25rem 0.125rem 0.625rem;
+  border: 1px solid hsl(var(--shop-resolved) / 0.2);
+  border-radius: var(--radius);
+  color: hsl(var(--shop-resolved));
+  background: hsl(var(--shop-resolved-surface));
+}
+.shop-action-result p {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+.shop-action-result strong {
+  font-weight: 500;
+}
+.shop-action-result button {
+  flex-shrink: 0;
+  width: 1.75rem;
+  padding-inline: 0;
+}
+
+@container (max-width: 58rem) {
+  .shop-teach-topline {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .shop-teach-identity,
+  .shop-teach-controls {
+    width: 100%;
+  }
+  .shop-teach-controls {
+    justify-content: flex-end;
+  }
+  .shop-teach-controls .shop-teach-count {
+    margin-inline-end: auto;
+  }
+}
+@container (max-width: 28rem) {
+  .shop-teach-topline {
+    padding: 0.75rem;
+  }
+  .shop-teach-clock,
+  .shop-teach-controls {
+    gap: 0.5rem;
+  }
+  .shop-teach-controls > button {
+    gap: 0.375rem;
+    padding-inline: 0.5rem;
+    font-size: 0.75rem;
+  }
+  .shop-teach-count {
+    font-size: 0.625rem;
+  }
+}
+@container (max-width: 44rem) {
+  .shop-request-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shop-action-result-slot {
+    justify-self: start;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .shop-teach-pulse {
+    animation: shop-rec-pulse 1.6s ease-in-out infinite;
+  }
+  .shop-teach-snap {
+    animation: shop-rec-snap 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .shop-teach-snap::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border: 2px solid hsl(var(--rec));
+    border-radius: inherit;
+    pointer-events: none;
+    animation: shop-rec-ring 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes shop-rec-pulse {
+    50% { opacity: 0.45; transform: scale(0.8); }
+  }
+  @keyframes shop-rec-snap {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes shop-rec-ring {
+    from { opacity: 0.7; }
+    to { opacity: 0; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shop-teach-bar button,
+  .shop-action-result button,
+  [data-agent-native-tooltip].shop-teach-tooltip {
+    animation: none;
+    transition: none;
+  }
+}

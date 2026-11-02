@@ -240,6 +240,22 @@ afterEach(async () => {
 });
 
 describe("run detail and list", () => {
+  it("offers Replay only for completed live runs and opens the saved checkpoint", async () => {
+    await detail();
+    await settle(() => expect(button("Approve").disabled).toBe(false));
+    expect([...element.querySelectorAll("button")].some((item) => item.textContent === "Replay")).toBe(false);
+    saved = { ...saved, status: "completed", awaitingApprovalStepId: null, pendingStepIds: [], steps: saved.steps.map((step) => ({ ...step, status: "completed" })) };
+    await act(async () => { await queries.invalidateQueries({ queryKey: ["action"] }); });
+    await settle(() => expect(button("Replay")).toBeDefined());
+    await click(button("Replay"));
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Saved run checkpoint · Read-only replay");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Looked up order ord_1001");
+    const exit = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent === "Exit replay")!;
+    await click(exit);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(calls.every((call) => ["get-recipe-run", "get-request"].includes(call.name))).toBe(true);
+  });
+
   it("shows an empty filtered list and recovers through clearing filters", async () => {
     await mount(<RunsPage />, "/runs?status=failed");
     await settle(() =>

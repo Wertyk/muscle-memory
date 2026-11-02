@@ -9,6 +9,7 @@ import { fieldLabel, isObject, valueSummary } from "@/lib/recipe-presentation";
 
 import { QueryError, ShopMasthead } from "../shop/WorkspaceParts";
 import { RunApproval } from "./RunApproval";
+import { ReplayButton } from "./GhostReplay";
 import {
   JsonEvidence,
   RunLinks,
@@ -54,7 +55,7 @@ export function RunPage() {
             <h1 className="shop-serif break-words">{requestId ? <Link className="shop-record-link" to={requestPath(requestId)}>
               {valueSummary(request.data?.subject ?? (isObject(run.trigger) && typeof run.trigger.subject === "string" ? run.trigger.subject : fieldLabel("request")))} · {requestId}
             </Link> : t("runs.details")}</h1>
-            <RunStatusChip status={run.status} />
+            <div className="flex items-center gap-3"><RunStatusChip status={run.status} /><ReplayButton key={run.id} run={run} /></div>
           </header>
           <RunLinks run={run} showRequest={false} />
           <RunMetrics run={run} />

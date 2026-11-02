@@ -9,6 +9,7 @@ import { Link } from "react-router";
 import { runPath } from "@/lib/recipe-runs";
 
 import { Button } from "@/components/ui/button";
+import { ReplayButton } from "../runs/GhostReplay";
 import { moneyText } from "@/lib/shop-workspace";
 import { ProcessingChip } from "./ProcessingChip";
 import { PendingMark, QueryError } from "./WorkspaceParts";
@@ -34,7 +35,8 @@ export function RequestProcessingBanner({ requestId }: { requestId: string }) {
 
 function ProcessingRunLink({ row }: { row: RequestProcessing }) {
   const t = useT();
-  return <section className="shop-panel mb-5" aria-label={t("shop.processingAttention")}><div className="flex flex-wrap items-center gap-3"><ProcessingChip state={row.state} /><Link to={runPath(row.runId)} className="shop-record-link text-sm underline underline-offset-4">{t("runs.viewRun")}</Link></div></section>;
+  const run = useActionQuery<Run>("get-recipe-run", { runId: row.runId });
+  return <section className="shop-panel mb-5" aria-label={t("shop.processingAttention")}><div className="flex flex-wrap items-center gap-3"><ProcessingChip state={row.state} /><Link to={runPath(row.runId)} className="shop-record-link text-sm underline underline-offset-4">{t("runs.viewRun")}</Link>{run.data && !run.isError && <ReplayButton key={row.runId} run={run.data} />}</div></section>;
 }
 
 function ProcessingAttention({ row }: { row: RequestProcessing }) {
@@ -72,6 +74,7 @@ function ProcessingAttention({ row }: { row: RequestProcessing }) {
       <div className="flex flex-wrap items-center gap-3">
         <ProcessingChip state={row.state} />
         <Link to={runPath(row.runId)} className="shop-record-link text-sm underline underline-offset-4">{t("runs.viewRun")}</Link>
+        {current && !run.isError && <ReplayButton key={row.runId} run={current} />}
         {run.isPending ? <span role="status" className="flex items-center gap-2 text-sm"><PendingMark />{t("shop.loadingProcessing")}</span> : current && (
           row.state === "awaiting_approval" ? (
             <>

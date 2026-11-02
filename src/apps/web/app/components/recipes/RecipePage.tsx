@@ -2,6 +2,7 @@ import {
   actionErrorMessage,
   useActionMutation,
   useActionQuery,
+  setClientAppState,
 } from "@agent-native/core/client/hooks";
 import { useT } from "@agent-native/core/client/i18n";
 import {
@@ -17,7 +18,7 @@ import {
   IconPlayerPlay,
   IconVersions,
 } from "@tabler/icons-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 
 import {
@@ -28,6 +29,8 @@ import {
   WorkspaceLoading,
 } from "@/components/shop/WorkspaceParts";
 import { Button } from "@/components/ui/button";
+import { RECIPE_BACKTEST_STATE, type ShownBacktest, type ShopBacktestResult } from "@shared/recipe-backtests";
+import { TAB_ID } from "@/lib/tab-id";
 import {
   expressionLabel,
   isObject,
@@ -43,9 +46,21 @@ import { RecipeField, WireLegend, type ChangeField } from "./RecipeField";
 import { RecipeStatus } from "./RecipesPage";
 import { RecipeSteps } from "./RecipeSteps";
 import { RecipeVersionDiff } from "./RecipeVersionDiff";
+import { BacktestSummary, RecipeBacktestPanel, type RememberBacktests } from "./RecipeBacktestPanel";
 export function RecipePage() {
   const { recipeId = "" } = useParams();
+  return <RecipeStudioPage key={recipeId} recipeId={recipeId} />;
+}
+function RecipeStudioPage({ recipeId }: { recipeId: string }) {
   const t = useT();
+  const [reports, setReports] = useState<Record<string, ShopBacktestResult>>({});
+  const [shown, setShown] = useState<ShownBacktest | null>(null);
+  useEffect(() => {
+    void setClientAppState(`${RECIPE_BACKTEST_STATE}:${TAB_ID}`, shown, { requestSource: TAB_ID }).catch(() => {});
+  }, [shown]);
+  useEffect(() => () => {
+    void setClientAppState(`${RECIPE_BACKTEST_STATE}:${TAB_ID}`, null, { requestSource: TAB_ID }).catch(() => {});
+  }, []);
   const detail = useActionQuery<RecipeDetail>("get-recipe", { recipeId });
   const draftQuery = useActionQuery<RecipeDraft>("get-recipe-draft", {
     recipeId,
@@ -112,6 +127,14 @@ export function RecipePage() {
     );
   const draft = draftQuery.data;
   const { recipe, history } = detail.data;
+  const remember: RememberBacktests = (results, requestType, source, totalTokens) => {
+    setReports((previous) => ({ ...previous, ...Object.fromEntries(results.map((result) => [result.recipeVersionId, result])) }));
+    setShown({ recipeId, source, requestType, totalTokens, reports: results.map((result) => ({
+      recipeVersionId: result.recipeVersionId,
+      version: history.find((entry) => entry.version.id === result.recipeVersionId)!.version.version,
+      summary: result.summary,
+    })) });
+  };
   const trigger = isObject(draft.content.trigger) ? draft.content.trigger : {};
   const labels: Record<string, string> = {};
   const collect = (steps: JsonValue | undefined) => {
@@ -293,10 +316,7 @@ export function RecipePage() {
         </div>
         <aside className="recipe-inspector" aria-label={t("recipes.review")}>
           <AmbiguitiesPanel draft={draft} labels={labels} />
-          <section className="recipe-panel recipe-backtest-slot">
-            <h2 className="shop-serif">{t("recipes.backtest")}</h2>
-            <p>{t("recipes.backtestSlot")}</p>
-          </section>
+          <RecipeBacktestPanel detail={detail.data} reports={reports} remember={remember} />
           <section className="recipe-panel">
             <h2 className="shop-serif">
               <IconHistory className="size-5" />
@@ -336,6 +356,12 @@ export function RecipePage() {
                         {JSON.stringify(recipeContent(version), null, 2)}
                       </pre>
                     </details>
+                    <div className="mt-3" aria-label={t("recipes.backtests.activation", { version: version.version })}>
+                      {reports[version.id] ? <>
+                        <p className="text-xs text-muted-foreground">{t("recipes.backtests.lastReport", { version: version.version })}</p>
+                        <BacktestSummary summary={reports[version.id]!.summary} />
+                      </> : <p className="text-xs text-muted-foreground">{t("recipes.backtests.activationNudge")}</p>}
+                    </div>
                     <Button
                       className="mt-3"
                       variant="outline"

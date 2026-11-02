@@ -118,6 +118,7 @@ describe("agent workspace context", () => {
     expect(await viewScreen.run({}, context)).toMatchObject({
       recipe: { recipe: { id: "recipe_care" } },
       draft: { revision: 3 },
+      backtest: null,
     });
     expect(getDraft).toHaveBeenCalledWith("recipe_care");
     expect(composition.getRecipeStudio).toHaveBeenCalledWith(context);
@@ -126,6 +127,35 @@ describe("agent workspace context", () => {
       "navigate",
       expect.objectContaining({ view: "recipe", recipeId: "recipe_care" }),
     );
+  });
+  it("returns only the last Studio backtest summary shown in this tab for the current recipe", async () => {
+    const backtests = vi.spyOn(composition, "getRecipeBacktests");
+    const detail = { recipe: { id: "recipe_care" }, history: [{ version: { id: "ver_care" } }, { version: { id: "ver_care2" } }] };
+    vi.spyOn(composition, "getRecipeStudio").mockReturnValue({
+      get: vi.fn(async () => detail), getDraft: vi.fn(async () => ({ revision: 1 })),
+    } as unknown as ReturnType<typeof composition.getRecipeStudio>);
+    state.navigation = { view: "recipe", recipeId: "recipe_care" };
+    const context = { caller: "tool" as const };
+    expect(await viewScreen.run({}, context)).toHaveProperty("backtest", null);
+    const summary = { total: 10, identical: 7, different: 3, notHandled: 0, totalTokens: 60 };
+    state["recipe-backtest"] = {
+      recipeId: "recipe_care", source: "backtest", requestType: "damaged_item", totalTokens: 60,
+      reports: [{ recipeVersionId: "ver_care", version: 1, summary }],
+    };
+    expect(await viewScreen.run({}, context)).toHaveProperty("backtest", state["recipe-backtest"]);
+    state["recipe-backtest"] = { ...state["recipe-backtest"], source: "comparison", reports: [
+      { recipeVersionId: "ver_care", version: 1, summary },
+      { recipeVersionId: "ver_care2", version: 2, summary: { ...summary, identical: 8, different: 2 } },
+    ] };
+    expect(await viewScreen.run({}, context)).toHaveProperty("backtest", state["recipe-backtest"]);
+    state["recipe-backtest"].recipeId = "recipe_elsewhere";
+    expect(await viewScreen.run({}, context)).toHaveProperty("backtest", null);
+    state["recipe-backtest"].recipeId = "recipe_care";
+    state["recipe-backtest"].reports = [{ recipeVersionId: "ver_missing", version: 3, summary }];
+    expect(await viewScreen.run({}, context)).toHaveProperty("backtest", null);
+    state["recipe-backtest"].reports = [{ recipeVersionId: "ver_care", version: 1, summary: { ...summary, totalTokens: -1 } }];
+    expect(await viewScreen.run({}, context)).toHaveProperty("backtest", null);
+    expect(backtests).not.toHaveBeenCalled();
   });
   it("exposes processing and Teach context together for the current request", async () => {
     state.navigation = { view: "request", requestId: request.id };

@@ -14,5 +14,5 @@ export default defineAction({
   errors: backtestErrors,
   http: { method: "GET" },
   readOnly: true,
-  run: (input, context) => backtestOperation(() => getRecipeBacktests(context).compare(input)),
+  run: (input, context) => backtestOperation(() => getRecipeBacktests(context).compare(input), compareBacktestOutputSchema),
 });

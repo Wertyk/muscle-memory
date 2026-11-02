@@ -98,6 +98,16 @@ describe("rehearsal fixtures", () => {
     expect(data.products.filter((p) => p.price.amountMinor >= 21000 && p.price.amountMinor <= 38000)).toHaveLength(5);
   });
 
+  it("provides explicit product IDs and quantities for free-text damaged history without a field oracle", () => {
+    const freeText = damagedHistory.filter((request) => request.content.source === "free_text");
+    expect(freeText).toHaveLength(5);
+    for (const request of freeText) {
+      if (request.content.source !== "free_text") throw new Error("Expected free text");
+      expect(request.content.text).toContain(`Product code: ${present(orderFor(request).items[0]).productId}.`);
+      expect(request.content.text).toContain("Damaged quantity: 1.");
+    }
+  });
+
   it("stores seven standard damaged-item outcomes and three distinct backtest deviations", () => {
     expect(damagedHistory).toHaveLength(10);
     const standardTemplate = replyFor(historyCase("req_0031")).template;

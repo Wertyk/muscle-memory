@@ -10,7 +10,9 @@ metadata:
 
 Read `view-screen` for the selected recipe. `navigate({view:"recipes"})` opens
 `/recipes`; `navigate({view:"recipe",recipeId})` opens a recipe. Do not write the
-UI-owned navigation key. The Backtest slot is reserved for TASK-18.
+UI-owned navigation key. `view-screen.backtest` is the latest backtest/comparison
+summary actually shown in this Studio tab, or null. It is session evidence,
+scoped to immutable saved versions; leaving Studio clears it.
 
 1. `list-recipes({})` returns status, latest saved version, runs and last result.
    `get-recipe({recipeId})` returns metadata and immutable history/diffs.
@@ -34,7 +36,18 @@ UI-owned navigation key. The Backtest slot is reserved for TASK-18.
 5. `save-recipe-version({recipeId,expectedRevision})` creates a NEW immutable
    version; it never activates or overwrites one. Read back on uncertain failure;
    the revision increments on a successful save, so stale retries fail closed.
-6. Review the history diff, then `activate-recipe({recipeId,versionId})` explicitly
+6. Use Run backtest on a saved version before activation. The Studio derives the
+   request type from that version's explicit trigger equality. It never runs on
+   page load: free-text history and extract steps may spend tokens. The same
+   `backtest-recipe({recipe:versionId,requestType})` action returns counts,
+   per-request reasons/diffs and tokens in chat. Preserve not_handled results;
+   unavailable mutation outputs mean a dry-run could not finish, not success.
+   `compare-recipe-versions({baseline:versionId,candidate:versionId,requestType})`
+   compares one shared cohort; combined tokens count request extraction once.
+   The Studio defaults to active vs latest saved and shows paired outcomes.
+   Chat action results are separate from the UI's last-shown session summary.
+7. Review the history diff and that version's session backtest summary (or the
+   nudge to run one), then `activate-recipe({recipeId,versionId})` explicitly
    selects that saved version for future intake. Invalid snapshots cannot activate.
    `deactivate-recipe({recipeId})` clears the active pointer, retaining history/runs.
 

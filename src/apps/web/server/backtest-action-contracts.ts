@@ -4,6 +4,7 @@ import { REQUEST_TYPES } from "@muscle-memory/shop-domain";
 import { z } from "zod";
 import { BacktestInputError, type ShopBacktestResult, type ShopBacktestComparison } from "./infra/shop-recipe-backtests.js";
 import { recipeJsonSchema, runOutputSchema } from "./recipe-action-contracts.js";
+import { HistoricalReconstructionError } from "./infra/shop-historical-cases.js";
 
 export const backtestErrors = defineActionErrors("VERSION_NOT_FOUND", "INVALID_BACKTEST", "BACKTEST_FAILED");
 export const recipeReferenceSchema = z.union([
@@ -40,10 +41,38 @@ export const compareBacktestOutputSchema: z.ZodType<ShopBacktestComparison> = z.
   cases: z.array(z.object({ caseId: z.string(), baselineStatus: status, candidateStatus: status, changed: z.boolean(), diff: z.array(diff) })),
 });
 
-export async function backtestOperation<T>(work: () => Promise<T>): Promise<T> {
-  try { return await work(); }
+function validationContext(value: unknown, path: readonly PropertyKey[]) {
+  const ids: { requestId?: string; stepId?: string } = {};
+  for (const key of [...path, ""]) {
+    if (!value || typeof value !== "object") break;
+    const row = value as Record<PropertyKey, unknown>;
+    if (typeof row.caseId === "string" && /^req_[A-Za-z0-9_-]{1,27}$/.test(row.caseId)) ids.requestId = row.caseId;
+    if (typeof row.stepId === "string" && /^[A-Za-z_][A-Za-z0-9_-]{0,30}$/.test(row.stepId)) ids.stepId = row.stepId;
+    value = Object.prototype.hasOwnProperty.call(row, key) ? row[key] : undefined;
+  }
+  return ids;
+}
+
+export async function backtestOperation<T>(work: () => Promise<T>, output?: z.ZodType<T>): Promise<T> {
+  let result: T | undefined;
+  try { result = await work(); return output ? output.parse(result) : result; }
   catch (error) {
+    // Raw errors can contain SQL parameters, provider credentials and customer text.
+    // Retain safe class diagnostics and identifiers, never serialize the error object.
+    const known = error instanceof BacktestInputError || error instanceof HistoricalReconstructionError;
+    console.error("[recipe-backtest]", {
+      name: known ? error.name : error instanceof z.ZodError ? "ZodError"
+        : error instanceof Error && ["TypeError", "RangeError", "SyntaxError"].includes(error.name) ? error.name : "Error",
+      message: known ? error.message : error instanceof z.ZodError ? "Backtest data failed schema validation." : "Unexpected backtest failure (private details withheld).",
+      ...(error instanceof HistoricalReconstructionError ? { requestId: error.requestId,
+        ...(error.extractionError ? { causeName: error.extractionError.name, causeMessage: error.extractionError.message } : {}),
+      } : {}),
+      ...(error instanceof z.ZodError ? validationContext(result, error.issues[0]?.path ?? []) : {}),
+    });
     if (error instanceof BacktestInputError) return backtestErrors.noWrite(error.message, error.code, { statusCode: error.code === "VERSION_NOT_FOUND" ? 404 : 400 });
-    return backtestErrors.noWrite("Backtest could not finish. Check the historical request fields and recipe, then retry. Extraction may have spent tokens.", "BACKTEST_FAILED", { statusCode: 409 });
+    const message = error instanceof HistoricalReconstructionError && !error.unexpectedFailure ? error.message
+      : error instanceof z.ZodError ? "Backtest data could not be validated. Review the saved recipe and try again."
+        : "Backtest could not finish. Check the historical request fields and recipe, then retry.";
+    return backtestErrors.noWrite(message, "BACKTEST_FAILED", { statusCode: 409 });
   }
 }

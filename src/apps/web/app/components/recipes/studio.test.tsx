@@ -1,4 +1,7 @@
 import {
+  setClientAppState,
+} from "@agent-native/core/client/hooks";
+import {
   parseRecipeVersion,
   RecipeStudio,
   type RecipeStudioStore,
@@ -14,11 +17,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import enUS from "@/i18n/en-US";
 import { atPath, expressionLabel } from "@/lib/recipe-studio";
+import { backtestRequestType } from "@/lib/recipe-backtests";
+import type { ShopBacktestResult, ShopBacktestComparison } from "@shared/recipe-backtests";
 
 import brokenPlatterDraft from "../../../server/fixtures/broken-platter-draft.json";
 import { damagedItemFixture } from "../../../server/fixtures/intake-recipes";
 import { RecipePage } from "./RecipePage";
 import { RecipesPage } from "./RecipesPage";
+vi.mock("@agent-native/core/client/hooks", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@agent-native/core/client/hooks")>(),
+  setClientAppState: vi.fn(async () => null),
+}));
 vi.mock("@agent-native/toolkit/app/chat", () => ({
   AgentToggleButton: () => <button>Agent sidebar</button>,
 }));
@@ -43,6 +52,25 @@ let root: Root,
   studio: RecipeStudio,
   record: StudioRecord;
 let calls: { name: string; input: Record<string, unknown>; method: string }[];
+let backtestResult: (input: { recipe: string; requestType: string }) => Promise<ShopBacktestResult>;
+let compareResult: (input: { baseline: string; candidate: string; requestType: string }) => Promise<ShopBacktestComparison>;
+function report(recipeVersionId: string): ShopBacktestResult {
+  return {
+    recipeVersionId, readData: "current", limitations: ["Uses current shop data."],
+    summary: { total: 10, identical: 7, different: 3, notHandled: 0, tokens: { input: 40, output: 20 }, totalTokens: 60,
+      requestExtractionTokens: { input: 40, output: 20 }, recipeExtractionTokens: { input: 0, output: 0 } },
+    cases: Array.from({ length: 10 }, (_, index) => ({
+      caseId: `req_00${31 + index}`, status: index < 7 ? "identical" : "different",
+      reasons: [{ code: index < 7 ? "identical" : "different", message: index < 7 ? "Intended mutations match the historical outcome" : "Intended mutations differ from the historical outcome" }],
+      historicalMutations: [{ action: index === 7 ? "create-replacement-order" : "issue-refund", input: { amount: { amountMinor: 38000, currency: "USD" } } }],
+      intendedMutations: [{ action: "issue-refund", input: { amount: { amountMinor: 19000, currency: "USD" } } }],
+      diff: index < 7 ? [] : index === 7 ? [{ kind: "changed", path: "/0/action", historical: "create-replacement-order", intended: "issue-refund" }]
+        : index === 8 ? [{ kind: "changed", path: "/0/input/amount/amountMinor", historical: 38000, intended: 19000 }]
+          : [{ kind: "changed", path: "/1/input/body", historical: "Please send packaging photos", intended: "Your refund is on its way" }],
+      run: null,
+    })),
+  };
+}
 async function settle(check: () => void) {
   await vi.waitFor(async () => {
     await act(async () => {
@@ -115,6 +143,15 @@ async function mount(path = `/recipes/${damagedItemFixture.recipeId}`) {
   await settle(() => expect(node.querySelector("h1")).not.toBeNull());
 }
 beforeEach(() => {
+  vi.mocked(setClientAppState).mockClear();
+  backtestResult = async ({ recipe }) => report(recipe);
+  compareResult = async ({ baseline, candidate }) => ({
+    baseline: report(baseline),
+    candidate: { ...report(candidate), summary: { ...report(candidate).summary, identical: 0, different: 10 } },
+    summary: { tokens: { input: 40, output: 20 }, totalTokens: 60, sharedRequestExtractionTokens: { input: 40, output: 20 } },
+    cases: report(baseline).cases.map((item) => ({ caseId: item.caseId, baselineStatus: item.status, candidateStatus: "different", changed: true,
+      diff: [{ kind: "changed", path: "/0/input/amount/amountMinor", historical: 19000, intended: 38000 }] })),
+  });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   Element.prototype.scrollIntoView = vi.fn();
   record = {
@@ -193,6 +230,12 @@ beforeEach(() => {
           case "deactivate-recipe":
             result = await studio.deactivate(input.recipeId);
             break;
+          case "backtest-recipe":
+            result = await backtestResult(input);
+            break;
+          case "compare-recipe-versions":
+            result = await compareResult(input);
+            break;
           default:
             return Response.json({ error: name }, { status: 404 });
         }
@@ -233,7 +276,7 @@ describe("Recipe Studio UI", () => {
     expect(
       node.querySelectorAll('[data-source="trigger"]').length,
     ).toBeGreaterThan(0);
-    expect(node.querySelector(".recipe-backtest-slot")?.textContent).toContain("Coming soon");
+    expect(button("Run backtest").disabled).toBe(false);
     expect(node.textContent).not.toContain("TASK-");
   });
   it("opens the accepted stored broken-platter draft and labels all derived bindings readably", async () => {
@@ -596,6 +639,141 @@ describe("Recipe Studio UI", () => {
     await settle(() =>
       expect(node.querySelector("h1")?.textContent).toBe("Agent edited care"),
     );
+  });
+});
+describe("Recipe Studio historical backtests", () => {
+  it("stays idle through load/refetch and allows activation with an honest nudge", async () => {
+    await mount();
+    expect(node.textContent).toContain("No backtest shown for this version");
+    expect(node.textContent).toContain("Resolved Damaged item requests");
+    expect(node.textContent).toContain("may spend tokens");
+    expect(node.querySelector('[aria-label="Backtest before activating v1"]')?.textContent).toContain("You can still activate without one");
+    await act(async () => { await client.invalidateQueries({ queryKey: ["action"] }); });
+    expect(calls.some((call) => call.name === "backtest-recipe" || call.name === "compare-recipe-versions")).toBe(false);
+    expect(vi.mocked(setClientAppState).mock.calls.slice(-1)[0]?.[1]).toBeNull();
+    await click(button("Activate v1"));
+    await settle(() => expect(record.recipe.activeVersionId).toBe(damagedItemFixture.id));
+  });
+  it("runs once on click, shows counts/diffs/links/tokens, and keeps evidence tied to the tested saved version", async () => {
+    let finish!: (value: ShopBacktestResult) => void;
+    backtestResult = () => new Promise((resolve) => { finish = resolve; });
+    await mount();
+    await click(button("Run backtest"));
+    await settle(() => expect(button("Running backtest…").disabled).toBe(true));
+    await click(button("Running backtest…"));
+    expect(calls.filter((call) => call.name === "backtest-recipe")).toEqual([
+      { name: "backtest-recipe", method: "GET", input: { recipe: damagedItemFixture.id, requestType: "damaged_item" } },
+    ]);
+    await act(async () => finish(report(damagedItemFixture.id)));
+    await settle(() => expect(node.textContent).toContain("7 identical / 3 different / 0 not handled"));
+    expect(node.textContent).toContain("60 tokens spent");
+    expect(node.textContent).toContain("$380.00");
+    expect(node.textContent).toContain("$190.00");
+    expect(node.textContent).toContain("Create replacement");
+    expect(node.textContent).toContain("Please send packaging photos");
+    expect(node.querySelector('a[href="/requests/req_0039"]')).not.toBeNull();
+    expect(node.querySelector('[aria-label="Backtest before activating v1"]')?.textContent).toContain("7 identical / 3 different");
+    expect(setClientAppState).toHaveBeenLastCalledWith(expect.stringMatching(/^recipe-backtest:/), expect.objectContaining({
+      recipeId: record.recipe.id, source: "backtest", requestType: "damaged_item", totalTokens: 60,
+      reports: [expect.objectContaining({ recipeVersionId: damagedItemFixture.id, version: 1, summary: expect.objectContaining({ identical: 7 }) })],
+    }), expect.any(Object));
+    await click(button("Save new version"));
+    await settle(() => expect(node.querySelector('[aria-label="Backtest before activating v2"]')?.textContent).toContain("Run a backtest for this version"));
+    expect(node.querySelector('[aria-label="Backtest before activating v1"]')?.textContent).toContain("7 identical / 3 different");
+    expect(node.querySelector('[aria-label="Backtest version"]')?.textContent).toContain("v2");
+    expect(node.textContent).toContain("No backtest shown for this version");
+    await choose("Backtest version", `v1 · ${damagedItemFixture.name}`);
+    expect(node.querySelector(".recipe-backtest-cases")?.textContent).toContain("req_0039");
+    await click(node.querySelector<HTMLAnchorElement>('a[href="/recipes"]')!);
+    await settle(() => expect(setClientAppState).toHaveBeenLastCalledWith(expect.stringMatching(/^recipe-backtest:/), null, expect.any(Object)));
+  });
+  it("shows a retryable error without inventing a report, spending totals, or retrying automatically", async () => {
+    backtestResult = async () => { throw new Error("Request req_0039 could not be reconstructed: Extraction is not configured."); };
+    await mount();
+    await click(button("Run backtest"));
+    await settle(() => expect(node.querySelector('[role="alert"]')?.textContent).toContain("No new report was produced"));
+    expect(node.querySelector('[role="alert"]')?.textContent).toContain("Request req_0039 could not be reconstructed: Extraction is not configured.");
+    expect(node.querySelector('[role="alert"]')?.textContent?.match(/extraction may have spent tokens/gi)).toHaveLength(1);
+    expect(node.textContent).not.toContain("60 tokens spent");
+    expect(node.querySelector(".recipe-backtest-cases")).toBeNull();
+    expect(calls.filter((call) => call.name === "backtest-recipe")).toHaveLength(1);
+    backtestResult = async ({ recipe }) => report(recipe);
+    await click(button("Run backtest"));
+    await settle(() => expect(node.querySelector(".recipe-backtest-cases")).not.toBeNull());
+    expect(node.querySelector('[role="alert"]')).toBeNull();
+  });
+  it("explains not-handled mutation-output dependencies plainly while preserving real counts", async () => {
+    backtestResult = async ({ recipe }) => {
+      const value = report(recipe);
+      return { ...value, summary: { ...value.summary, identical: 0, different: 0, notHandled: 10 }, cases: value.cases.map((item) => ({
+        ...item, status: "not_handled", reasons: [{ code: "blocked", message: "Depends on an unavailable dry-run output", blockedBy: ["refund"] }],
+      })) };
+    };
+    await mount();
+    await click(button("Run backtest"));
+    await settle(() => expect(node.textContent).toContain("0 identical / 0 different / 10 not handled"));
+    expect(node.textContent).toContain("Backtests skip real changes, so that result is unavailable");
+    expect(node.querySelector(".recipe-backtest-cases")?.textContent).toContain("Not handled");
+    expect(button("Activate v1").disabled).toBe(false);
+  });
+  it("defaults comparison to active vs latest, shows paired outcomes and shared tokens, and never auto-runs it", async () => {
+    const second = parseRecipeVersion({ ...damagedItemFixture, id: "ver_active", version: 2 });
+    const latest = parseRecipeVersion({ ...damagedItemFixture, id: "ver_latest", version: 3 });
+    record = { ...record, recipe: { ...record.recipe, status: "active", activeVersionId: second.id }, versions: [damagedItemFixture, second, latest] };
+    await mount();
+    expect(node.querySelector('[aria-label="Baseline version"]')?.textContent).toContain("v2");
+    expect(node.querySelector('[aria-label="Candidate version"]')?.textContent).toContain("v3");
+    const comparison = node.querySelector<HTMLDetailsElement>(".recipe-backtest-comparison")!;
+    await act(async () => { comparison.open = true; });
+    expect(calls.some((call) => call.name === "compare-recipe-versions")).toBe(false);
+    await click(button("Compare versions"));
+    await settle(() => expect(comparison.textContent).toContain("v2 → v3 on the same requests"));
+    expect(calls.find((call) => call.name === "compare-recipe-versions")).toEqual({ name: "compare-recipe-versions", method: "GET", input: { baseline: second.id, candidate: latest.id, requestType: "damaged_item" } });
+    expect(comparison.textContent).toContain("10 of 10 request outcomes changed");
+    expect(comparison.textContent).toContain("60 combined tokens spent · shared request extraction counted once");
+    expect(comparison.textContent).toContain("Identical → Different");
+    expect(comparison.textContent).toContain("$190.00");
+    expect(comparison.textContent).toContain("$380.00");
+    expect(comparison.querySelector('a[href="/requests/req_0031"]')).not.toBeNull();
+    expect(node.querySelector('[aria-label="Backtest before activating v3"]')?.textContent).toContain("0 identical / 10 different");
+    expect(setClientAppState).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ source: "comparison", totalTokens: 60, reports: expect.arrayContaining([
+      expect.objectContaining({ recipeVersionId: second.id }), expect.objectContaining({ recipeVersionId: latest.id }),
+    ]) }), expect.any(Object));
+    await choose("Baseline version", `v1 · ${damagedItemFixture.name}`);
+    expect(comparison.textContent).not.toContain("v2 → v3 on the same requests");
+    expect(calls.filter((call) => call.name === "compare-recipe-versions")).toHaveLength(1);
+  });
+  it("handles comparison pending/error and disallows mismatched cohorts or identical version choices", async () => {
+    const second = parseRecipeVersion({ ...damagedItemFixture, id: "ver_other", version: 2 });
+    record = { ...record, versions: [damagedItemFixture, second] };
+    let reject!: (error: Error) => void;
+    compareResult = () => new Promise((_, fail) => { reject = fail; });
+    await mount();
+    await click(button("Compare versions"));
+    await settle(() => expect(button("Comparing versions…").disabled).toBe(true));
+    await act(async () => reject(new Error("Could not compare these versions")));
+    await settle(() => expect(node.querySelector('[role="alert"]')?.textContent).toContain("Could not compare"));
+    expect(node.textContent).not.toContain("combined tokens spent");
+    await choose("Baseline version", `v2 · ${second.name}`);
+    expect(button("Compare versions").disabled).toBe(true);
+    expect(node.textContent).toContain("select two different versions");
+    record = { ...record, versions: [...record.versions, parseRecipeVersion({ ...second, id: "ver_return", version: 3,
+      trigger: { event: "request.created", match: { "===": [{ var: "trigger.type" }, "return"] } },
+    })] };
+    await act(async () => { await client.invalidateQueries({ queryKey: ["action"] }); });
+    await choose("Candidate version", `v3 · ${second.name}`);
+    expect(button("Compare versions").disabled).toBe(true);
+    expect(node.textContent).toContain("same explicit request type");
+  });
+  it("requires an explicit trigger cohort rather than asking the operator or guessing", async () => {
+    record = { ...record, versions: [parseRecipeVersion({ ...damagedItemFixture, trigger: { event: "request.created", match: true } })] };
+    await mount();
+    expect(button("Run backtest").disabled).toBe(true);
+    expect(node.textContent).toContain("Set an explicit request type");
+    const type = { "===": [{ var: "trigger.type" }, "damaged_item"] };
+    expect(backtestRequestType({ and: [type, { ">": [{ var: "trigger.quantity" }, 0] }] })).toBe("damaged_item");
+    expect(backtestRequestType({ "==": ["return", { var: "trigger.type" }] })).toBe("return");
+    expect(backtestRequestType({ or: [type, { "===": [{ var: "trigger.type" }, "return"] }] })).toBeUndefined();
   });
 });
 describe("readable safe expression display", () => {

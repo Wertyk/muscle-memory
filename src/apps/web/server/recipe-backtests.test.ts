@@ -1,15 +1,19 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { closeDbExec, withMigrationRuntime } from "@agent-native/core/db";
 import { loadActionsFromStaticRegistry } from "@agent-native/core/server";
-import { buildRequestTrigger, parseRecipeVersion, type JsonObject, type TextExtractor } from "@muscle-memory/recipe-engine";
+import { buildRequestTrigger, parseRecipeVersion, type Demonstration, type JsonObject, type TextExtractor } from "@muscle-memory/recipe-engine";
 import { ValidateRequestFields, type Request } from "@muscle-memory/shop-domain";
 import { asc, count, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import backtestRecipe from "../actions/backtest-recipe.js";
 import compareVersions from "../actions/compare-recipe-versions.js";
+import draftRecipe from "../actions/draft-recipe-from-demonstration.js";
+import getDraft from "../actions/get-recipe-draft.js";
+import updateDraft from "../actions/update-recipe-draft.js";
+import saveVersion from "../actions/save-recipe-version.js";
 import getOrder from "../actions/get-order.js";
 import getCustomer from "../actions/get-customer.js";
 import issueRefund from "../actions/issue-refund.js";
@@ -23,11 +27,15 @@ import * as tables from "./db/schema.js";
 import { createShopDemoData, DEMO_NOW } from "./db/shop-demo-data.js";
 import { damagedItemBacktestFixture as recipe } from "./fixtures/backtest-recipes.js";
 import { damagedItemFixture as blockedRecipe } from "./fixtures/intake-recipes.js";
+import { runFixtures } from "./fixtures/run-recipes.js";
+import { DrizzleRecipeCatalog } from "./infra/recipe-catalog.js";
 import { seedShop } from "./infra/shop-demo-store.js";
 import { RegistryActionInvoker } from "./infra/registry-action-invoker.js";
 import { ShopHistoricalCaseSource } from "./infra/shop-historical-cases.js";
 import { ShopRequestExtractor } from "./infra/shop-request-extractor.js";
+import { CompleteTextExtractor } from "./infra/complete-text-extraction.js";
 import { DrizzleShopRepository } from "./infra/shop-repository.js";
+import { DrizzleTraceStore } from "./infra/trace-store.js";
 import migrateApp from "./plugins/db.js";
 
 const data = createShopDemoData(DEMO_NOW);
@@ -150,6 +158,50 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     expect(cases.find((c) => c.id === "req_0038")?.outcome[0]).toMatchObject({ action: "create-replacement-order", input: { orderId: "ord_1038", items: [{ quantity: 1 }] } });
   });
 
+  it("backtests the Studio-saved approval fixture with a constant refund, approval gate and tag", async () => {
+    const original = runFixtures.approval;
+    const catalog = new DrizzleRecipeCatalog(db);
+    await catalog.saveVersion(original);
+    await catalog.save({ id: original.recipeId, name: original.name, status: "draft", activeVersionId: null });
+    const draft = await getDraft.run({ recipeId: original.recipeId }, context);
+    if (!draft || !("content" in draft)) throw new Error("Expected Studio draft");
+    const updated = await updateDraft.run({ recipeId: original.recipeId, expectedRevision: draft.revision,
+      content: { ...draft.content, trigger: { event: "request.created", match: { "===": [{ var: "trigger.type" }, "damaged_item"] } } },
+    }, context);
+    const saved = await saveVersion.run({ recipeId: original.recipeId, expectedRevision: updated.revision }, context);
+    vi.spyOn(composition, "getRecipeBacktests").mockImplementation(() => create());
+    const before = await shopSnapshot();
+    const counts = await tableCounts();
+    const result = await backtestRecipe.run({ recipe: saved.id, requestType: "damaged_item" }, context);
+    expect(backtestOutputSchema.parse(result)).toEqual(result);
+    expect(result.summary).toMatchObject({ total: 10, identical: 0, different: 10, notHandled: 0 });
+    for (const item of result.cases) {
+      expect(item.run?.steps.find((step) => step.stepId === "refund")).toMatchObject({ status: "planned", approvalRequired: true,
+        input: { amount: { amountMinor: 14000, currency: "USD" } } });
+      expect(item.intendedMutations.map((mutation) => mutation.action)).toEqual(["issue-refund", "tag-request"]);
+    }
+    expect(await shopSnapshot()).toEqual(before);
+    expect(await tableCounts()).toEqual(counts);
+  });
+
+  it("backtests an actual TASK-11 Teach draft against seed history without inventing fixture equivalence", async () => {
+    const demo = JSON.parse(await readFile(new URL("./fixtures/broken-platter-demonstration.json", import.meta.url), "utf8")) as Demonstration;
+    const actor = { ...context, userEmail: demo.scope.userId, orgId: demo.scope.workspaceId };
+    await new DrizzleTraceStore(db).transaction((records) => records.save(demo));
+    const drafted = await draftRecipe.run({ demonstrationId: demo.id }, actor);
+    vi.spyOn(composition, "getRecipeBacktests").mockImplementation(() => create());
+    const before = await shopSnapshot();
+    const counts = await tableCounts();
+    const result = await backtestRecipe.run({ recipe: drafted.draft.id, requestType: "damaged_item" }, actor);
+    expect(result.summary).toMatchObject({ total: 10, identical: 0, different: 10, notHandled: 0, totalTokens: 60 });
+    const fullRefund = result.cases.find((item) => item.caseId === "req_0039")!;
+    expect(fullRefund.intendedMutations.find((mutation) => mutation.action === "issue-refund")?.input.amount).toEqual({ amountMinor: 19000, currency: "USD" });
+    expect(fullRefund.diff).toContainEqual({ kind: "changed", path: "/0/input/amount/amountMinor", historical: 38000, intended: 19000 });
+    expect(result.cases.every((item) => item.reasons.some((reason) => reason.code === "different"))).toBe(true);
+    expect(await shopSnapshot()).toEqual(before);
+    expect(await tableCounts()).toEqual(counts);
+  });
+
   it("maps all 30 handled cases, including return labels, shipping-address outcomes and tags", async () => {
     let count = 0;
     for (const requestType of ["damaged_item", "where_is_my_order", "return", "address_change", "wholesale_inquiry"] as const) {
@@ -214,6 +266,7 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
   });
 
   it("rejects missing versions, wrong events, bad cohorts and failed free-text extraction safely", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(composition, "getRecipeBacktests").mockImplementation(() => create());
     const before = await tableCounts();
     await expect(backtestRecipe.run({ recipe: "ver_missing", requestType: "damaged_item" }, context)).rejects.toMatchObject({ errorCode: "VERSION_NOT_FOUND" });
@@ -221,12 +274,40 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     await expect(source().listCases({ event: "other.event", requestType: "damaged_item" })).rejects.toThrow();
     expect(actionSchema(backtestRecipe).safeParse({ recipe, requestType: "unknown" }).success).toBe(false);
     extract.mockResolvedValueOnce({ output: { type: "damaged_item" }, tokens: { input: 8, output: 4 } });
-    await expect(backtestRecipe.run({ recipe, requestType: "damaged_item" }, context)).rejects.toMatchObject({ errorCode: "BACKTEST_FAILED" });
+    await expect(backtestRecipe.run({ recipe, requestType: "damaged_item" }, context)).rejects.toMatchObject({ errorCode: "BACKTEST_FAILED",
+      message: "Request req_0040 could not be reconstructed: free-text fields missing or invalid.",
+    });
+    expect(log).toHaveBeenLastCalledWith("[recipe-backtest]", expect.objectContaining({ requestId: "req_0040", name: "HistoricalReconstructionError" }));
     expect(await tableCounts()).toEqual(before);
     expect(backtestRecipe.readOnly).toBe(true);
     expect(compareVersions.readOnly).toBe(true);
     expect(backtestRecipe.http).toEqual({ method: "GET" });
     expect(compareVersions.http).toEqual({ method: "GET" });
+  });
+
+  it("preserves the actual extraction configuration failure through historical matching", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const complete = vi.fn();
+    const extractor = new CompleteTextExtractor(() => ({ model: "" }), complete);
+    vi.spyOn(composition, "getRecipeBacktests").mockImplementation(() => composition.createRecipeBacktests(db, { registry, context, extractor }));
+    await expect(backtestRecipe.run({ recipe, requestType: "damaged_item" }, context)).rejects.toMatchObject({
+      errorCode: "BACKTEST_FAILED", message: "Request req_0040 could not be reconstructed: Extraction is not configured. Set EXTRACT_MODEL and the provider credential.",
+    });
+    expect(complete).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledExactlyOnceWith("[recipe-backtest]", expect.objectContaining({ requestId: "req_0040", causeName: "ExtractionError" }));
+  });
+
+  it("keeps unknown historical extraction failures generic while logging the request without private details", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(composition, "getRecipeBacktests").mockImplementation(() => create());
+    extract.mockRejectedValueOnce(new TypeError("private provider/customer text"));
+    await expect(backtestRecipe.run({ recipe, requestType: "damaged_item" }, context)).rejects.toMatchObject({
+      errorCode: "BACKTEST_FAILED", message: "Backtest could not finish. Check the historical request fields and recipe, then retry.",
+    });
+    expect(log).toHaveBeenCalledExactlyOnceWith("[recipe-backtest]", {
+      name: "HistoricalReconstructionError", message: "Unexpected historical reconstruction failure (private details withheld).", requestId: "req_0040",
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toContain("private provider/customer text");
   });
 
   it("uses current read data without modifying stored history", async () => {

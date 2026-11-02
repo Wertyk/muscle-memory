@@ -1495,13 +1495,33 @@
   border-radius: 50%;
   padding: 0.15rem 0.5rem;
 }
-.recipe-backtest-slot {
-  border-style: dashed;
-  background: hsl(var(--muted) / 0.25);
-}
-.recipe-backtest-slot p {
+.recipe-backtest-summary {
+  margin-top: 0.5rem;
   font-size: 0.75rem;
-  color: hsl(var(--muted-foreground));
+  line-height: 1.65;
+}
+.recipe-backtest-cases {
+  list-style: none;
+  padding: 0;
+  max-height: 32rem;
+  overflow: auto;
+}
+.recipe-backtest-cases > li {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid hsl(var(--border));
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.recipe-backtest-cases summary,
+.recipe-backtest-comparison > summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.recipe-backtest-comparison {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid hsl(var(--border));
 }
 .recipe-history {
   list-style: none;

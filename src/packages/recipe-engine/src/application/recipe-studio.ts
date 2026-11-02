@@ -74,7 +74,9 @@ export function validateStudioContent(recipeId: string, content: JsonObject) {
     : {
         issues: result.error.issues.map((issue) => ({
           path: issue.path.join("."),
-          message: issue.message,
+          message: issue.code === "invalid_union" && issue.path.includes("args")
+            ? "Invalid binding: use fixed, path, template, or an allowlisted JSONLogic expr."
+            : issue.message,
         })),
         version: null,
       };
@@ -187,7 +189,7 @@ export class RecipeStudio {
       if (!validation.version)
         throw new RecipeStudioError(
           "INVALID",
-          "Fix the draft validation errors before saving a version.",
+          `Fix the draft validation errors before saving a version: ${validation.issues.slice(0, 5).map(issue => `${issue.path || "recipe"}: ${issue.message}`).join("; ")}`,
         );
       const version = recipeVersionSchema.parse({
         ...validation.version,

@@ -246,6 +246,14 @@ Stop & save click, plus the filmed refund→reply→tag→Stop continuation.
 
 ## Recipe Studio
 
+For **Crystallize with agent**, follow `.agents/skills/crystallize/SKILL.md`:
+read the draft/source demonstration, resolve data choices, ask at most two
+questions about remaining listed ambiguities, generalize request-specific text,
+then update/save using the Studio actions below. Include `proposal` description,
+human trigger and ambiguity resolutions in `save-recipe-version` for the
+`muscle-memory.recipe-proposal` chat card. Dry-run another structured request and
+report real arguments/tokens. Never activate implicitly or claim untested success.
+
 `/recipes` lists the catalog; `/recipes/:recipeId` inspects editable bindings,
 trigger, approvals, ambiguities and immutable history. Read
 `.agents/skills/recipe-studio/SKILL.md` for the editing sequence. All UI edits use

@@ -10,6 +10,7 @@ import type {
   DemonstrationStep,
   JsonObject,
   JsonValue,
+  RecipeDraft,
 } from "@muscle-memory/recipe-engine";
 import type {
   Order,
@@ -26,6 +27,7 @@ import {
 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { moneyText } from "@/lib/shop-workspace";
+import { recipePath } from "@/lib/recipe-studio";
 
 import { TeachRequestFields } from "./TeachRequestFields";
 import { PendingMark } from "./WorkspaceParts";
@@ -90,6 +93,7 @@ export function TeachBar({
   order?: Order | undefined;
 }) {
   const t = useT();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const query = useActionQuery<Demonstration | null>(
     "get-demonstration",
@@ -111,6 +115,9 @@ export function TeachBar({
   );
   const cancel = useActionMutation<Demonstration, { demonstrationId: string }>(
     "cancel-demonstration",
+  );
+  const draft = useActionMutation<RecipeDraft, { demonstrationId: string }>(
+    "draft-recipe-from-demonstration",
   );
   useEffect(() => {
     if (query.data !== undefined) setDemo(query.data?.id ? query.data : null);
@@ -136,6 +143,9 @@ export function TeachBar({
     if (strip.current) strip.current.scrollLeft = strip.current.scrollWidth;
   }, [actions.length]);
   const recording = demo?.status === "recording";
+  const canDraft = demo?.status === "completed" &&
+    demo.incompleteReason === null && demo.stoppedAt !== null &&
+    demo.pending.length === 0 && demo.steps.length > 0;
   // GET shop lookups can finish after the initiating mutation or a tool event.
   // Watch only during Teach; shared SSE/poll invalidates the demonstration resource.
   useDbSync({
@@ -150,14 +160,19 @@ export function TeachBar({
       : {}),
   });
   async function perform(
-    kind: "start" | "stop" | "cancel",
+    kind: "start" | "stop" | "cancel" | "draft",
     confirmed?: StructuredRequestFields,
   ) {
-    if (inFlight.current) return;
+    if (inFlight.current || (kind === "draft" && !canDraft)) return;
     inFlight.current = true;
     setWorking(kind);
     setError(null);
     try {
+      if (kind === "draft") {
+        const result = await draft.mutateAsync({ demonstrationId: demo!.id });
+        navigate(recipePath(result.recipe.id));
+        return;
+      }
       const result =
         kind === "start"
           ? await start.mutateAsync({
@@ -171,7 +186,7 @@ export function TeachBar({
       setConfirmFields(false);
       await query.refetch(); // Re-read the persisted trace before claiming it saved.
     } catch (cause) {
-      setError(actionErrorMessage(cause) ?? t("shop.teachFailed"));
+      setError(actionErrorMessage(cause) ?? t(kind === "draft" ? "shop.teachDraftFailed" : "shop.teachFailed"));
     } finally {
       inFlight.current = false;
       setWorking(null);
@@ -230,17 +245,29 @@ export function TeachBar({
             </Button>
           </>
         ) : (
-          <Button
-            disabled={Boolean(working) || query.isPending || query.isError}
-            onClick={() =>
-              request.content.source === "free_text"
-                ? setConfirmFields(true)
-                : void perform("start")
-            }
-          >
-            {working ? <PendingMark /> : <IconPlayerRecord />}
-            {t(working ? "shop.teachStarting" : "shop.teach")}
-          </Button>
+          <>
+            {demo?.status === "completed" && (
+              <Button
+                disabled={!canDraft || Boolean(working) || query.isPending || query.isError}
+                onClick={() => void perform("draft")}
+              >
+                {working === "draft" ? <PendingMark /> : <IconArrowRight />}
+                {t(working === "draft" ? "shop.teachDrafting" : "shop.teachCreateDraft")}
+              </Button>
+            )}
+            <Button
+              variant={demo?.status === "completed" ? "outline" : "default"}
+              disabled={Boolean(working) || query.isPending || query.isError}
+              onClick={() =>
+                request.content.source === "free_text"
+                  ? setConfirmFields(true)
+                  : void perform("start")
+              }
+            >
+              {working === "start" ? <PendingMark /> : <IconPlayerRecord />}
+              {t(working === "start" ? "shop.teachStarting" : "shop.teach")}
+            </Button>
+          </>
         )}
       </div>
       {recording && !actions.length && (

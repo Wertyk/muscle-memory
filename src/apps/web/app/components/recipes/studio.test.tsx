@@ -19,6 +19,8 @@ import brokenPlatterDraft from "../../../server/fixtures/broken-platter-draft.js
 import { damagedItemFixture } from "../../../server/fixtures/intake-recipes";
 import { RecipePage } from "./RecipePage";
 import { RecipesPage } from "./RecipesPage";
+const agent = vi.hoisted(() => ({ send: vi.fn() }));
+vi.mock("@agent-native/core/client/agent-chat", () => ({ sendToAgentChat: agent.send }));
 vi.mock("@agent-native/toolkit/app/chat", () => ({
   AgentToggleButton: () => <button>Agent sidebar</button>,
 }));
@@ -147,6 +149,7 @@ beforeEach(() => {
   };
   studio = new RecipeStudio(store, () => "ver_ui2");
   calls = [];
+  agent.send.mockClear();
   client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: Infinity },
@@ -179,7 +182,10 @@ beforeEach(() => {
             result = await studio.get(input.recipeId);
             break;
           case "get-recipe-draft":
-            result = await studio.getDraft(input.recipeId);
+            result = input.versionId ? { demonstrationId: "demo_ui", draft: record.versions[0] } : await studio.getDraft(input.recipeId);
+            break;
+          case "get-demonstration":
+            result = { id: "demo_ui", trigger: { type: "damaged_item", requestId: "req_0001", orderId: "ord_1001", productId: "prod_platter" } };
             break;
           case "update-recipe-draft":
             result = await studio.update(input);
@@ -213,6 +219,28 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("Recipe Studio UI", () => {
+  it("delegates crystallization with the draft, ambiguity and request context through agent chat only", async () => {
+    record = { ...record, draft: {
+      ...(await studio.getDraft(record.recipe.id)),
+      ambiguities: [{ kind: "request-specific-text", stepId: "reply", argumentPath: "template", fragments: ["Ember serving platter"], candidates: [] }],
+    } };
+    await mount(`/recipes/${record.recipe.id}`);
+    await settle(() => expect(button("Crystallize with agent").disabled).toBe(false));
+    const before = calls.length;
+    await click(button("Crystallize with agent"));
+    expect(agent.send).toHaveBeenCalledTimes(1);
+    const sent = agent.send.mock.calls[0]![0];
+    expect(sent).toMatchObject({ submit: true, openSidebar: true, message: expect.stringContaining("at most two questions") });
+    expect(sent.message).not.toMatch(/productId|refund|get-customer|shipping recipient/);
+    expect(JSON.parse(sent.context)).toMatchObject({
+      workflow: "crystallize", recipeId: record.recipe.id, draftId: record.versions[0]!.id,
+      revision: 0, ambiguityCount: 1, demonstrationId: "demo_ui",
+      request: { requestId: "req_0001", type: "damaged_item", productId: "prod_platter" },
+      ambiguities: [expect.objectContaining({ kind: "request-specific-text", question: expect.stringContaining("Ember serving platter") })],
+    });
+    expect(calls).toHaveLength(before);
+    expect(calls.every(call => ["get-recipe", "get-recipe-draft", "get-demonstration"].includes(call.name))).toBe(true);
+  });
   it("lists status/version/runs/result and links into the detail route", async () => {
     await mount("/recipes");
     expect(node.textContent).toContain("Not run yet");

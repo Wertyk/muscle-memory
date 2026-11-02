@@ -72,6 +72,9 @@ export const shopMessages = {
   teachRecording: "Teaching this request",
   teachScope: "Recording your actions on this request, in this tab.",
   teachSaved: "Demonstration saved",
+  teachCreateDraft: "Create recipe draft",
+  teachDrafting: "Creating recipe draft…",
+  teachDraftFailed: "The recipe draft could not be created. Review the saved demonstration and try again.",
   teachIncomplete: "Recording incomplete",
   teachIncompleteHint:
     "Review the saved steps before using this demonstration.",

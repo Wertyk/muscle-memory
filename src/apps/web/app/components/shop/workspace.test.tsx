@@ -11,7 +11,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import enUS from "@/i18n/en-US";
@@ -246,12 +246,16 @@ function LocalAgentSync() {
   useDbSync({ queryClient: client, ...(remoteSync ? { realtime: { reason: "Incoming requests change while the inbox is open" } } : {}) });
   return null;
 }
+function CurrentPath() {
+  return <output hidden data-testid="current-path">{useLocation().pathname}</output>;
+}
 async function render(page: "request" | "inbox", path = "/inbox") {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
         <LocalAgentSync />
         <MemoryRouter initialEntries={[path]}>
+          <CurrentPath />
           {page === "request" ? (
             <RequestPage requestId={request.id} />
           ) : (
@@ -373,6 +377,8 @@ beforeEach(() => {
         return Response.json(output);
       }
       switch (name) {
+        case "draft-recipe-from-demonstration":
+          return result({ demonstrationId: input.demonstrationId, recipe: { id: "recipe_ui" }, draft: { id: "ver_ui" }, ambiguities: [] });
         case "get-demonstration":
           return result(demonstration);
         case "start-demonstration": {
@@ -935,6 +941,58 @@ describe("shop workspace with real framework action hooks and an offline action 
     expect(container.querySelector(".shop-teach-strip")?.textContent).toContain(
       "teach-proof",
     );
+    await click(byText("Create recipe draft"));
+    await settle(() => expect(container.querySelector('[data-testid="current-path"]')?.textContent).toBe("/recipes/recipe_ui"));
+    expect(writes("draft-recipe-from-demonstration")).toHaveLength(1);
+    expect(writes("draft-recipe-from-demonstration")[0]?.input).toEqual({ demonstrationId: "demo_ui" });
+    expect(agent.send).not.toHaveBeenCalled();
+  });
+
+  it("shows draft creation progress immediately and prevents double submission", async () => {
+    await mount();
+    await click(byText("Teach"));
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+    await click(byText("Stop & save"));
+    await settle(() => expect(byText("Create recipe draft").hasAttribute("disabled")).toBe(false));
+    let release!: () => void;
+    holdWrite = () => new Promise<void>(resolve => { release = resolve; });
+    const button = byText("Create recipe draft");
+    await act(async () => { button.click(); button.click(); });
+    await settle(() => expect(writes("draft-recipe-from-demonstration")).toHaveLength(1));
+    expect(byText("Creating recipe draft…").hasAttribute("disabled")).toBe(true);
+    expect(container.querySelector(".shop-teach-bar")?.getAttribute("aria-busy")).toBe("true");
+    holdWrite = undefined;
+    await act(async () => release());
+    await settle(() => expect(container.querySelector('[data-testid="current-path"]')?.textContent).toBe("/recipes/recipe_ui"));
+  });
+
+  it("keeps a failed draft creation readable and retryable without navigating", async () => {
+    await mount();
+    await click(byText("Teach"));
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+    await click(byText("Stop & save"));
+    await settle(() => expect(byText("Create recipe draft").hasAttribute("disabled")).toBe(false));
+    failure = "draft-recipe-from-demonstration";
+    await click(byText("Create recipe draft"));
+    await settle(() => expect(container.querySelector(".shop-teach-error")?.textContent).toContain("Shop policy rejected this operation"));
+    expect(container.querySelector('[data-testid="current-path"]')?.textContent).toBe("/inbox");
+    expect(byText("Create recipe draft").hasAttribute("disabled")).toBe(false);
+    expect(writes("draft-recipe-from-demonstration")).toHaveLength(1);
+  });
+
+  it("disables draft creation when a completed trace retains an incomplete reason", async () => {
+    await mount();
+    await click(byText("Teach"));
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+    await click(byText("Stop & save"));
+    await settle(() => expect(demonstration?.status).toBe("completed"));
+    demonstration = { ...demonstration!, incompleteReason: "A captured step is incomplete." };
+    await act(async () => root.render(null));
+    client.clear();
+    await mount();
+    await settle(() => expect(byText("Create recipe draft").hasAttribute("disabled")).toBe(true));
+    await click(byText("Create recipe draft"));
+    expect(writes("draft-recipe-from-demonstration")).toHaveLength(0);
   });
 
   it("updates secondary lookups from shared sync without adding primary cards or refetching shop queries", async () => {
@@ -1087,6 +1145,7 @@ describe("shop workspace with real framework action hooks and an offline action 
     expect(container.querySelector(".shop-teach-error")?.textContent).toContain(
       "do not repeat",
     );
+    expect([...container.querySelectorAll("button")].some(button => button.textContent === "Create recipe draft")).toBe(false);
   });
 
   it("handles a request manually: saves reply, tags and resolves, refreshing the visible status", async () => {

@@ -711,3 +711,82 @@ calling a model. Empty variables are hidden. Ambiguity questions use step/argume
 labels, retaining every original entry under expandable evidence. Only verified
 identity-source duplicates are collapsed into Minor; policy/source doubts remain
 in the main count. The shell owns the recipe routes’ single agent-panel toggle.
+
+## Runtime recipe registry (TASK-20)
+
+RecipeStudio publishes after the activation transaction through the SkillRegistry
+port; UI, agent, MCP and CLI use the same activate/deactivate actions. The existing
+app-wide catalog maps to app-shared resources (`SHARED_OWNER`), not per-operator
+copies. ResourceSkillRegistry writes valid YAML frontmatter under
+`skills/recipe-<encoded-recipe-id>/SKILL.md`. Encoding preserves case/underscores
+without slug collisions. Identical content is a no-op; another version updates
+that same path. The skill includes name, human trigger, precise match condition,
+inputs, current-active-version readback, dryRun-first calls and brief card replies.
+No model, deploy, registry generation or server restart is involved in publication.
+
+The recipe-skill adapter reuses the executor's PGlite/process or PostgreSQL advisory
+lock with a separate `skill:` namespace. It resolves the current catalog pointer
+inside that lock, preventing stale retries from overwriting later publication.
+External resource writes happen after the DB-only Studio transaction. A pending
+receipt is durable before the attempt; success/failure replaces it. Receipts live
+in `recipe_skill_publications` (recipe migration 4). Storage errors are replaced
+with safe retry guidance, never logged raw. If receipt persistence itself fails,
+the action still reports a retryable failure; it cannot promise a durable receipt
+while the DB is unavailable. Repeating activate/deactivate or calling
+`retry-recipe-skill({recipeId})` reconciles current state. `get-recipe` and
+`list-recipes` expose the receipt; Studio shows a retry control for pending/failed
+sync. Deactivation failure may leave a stale skill temporarily: generated skills
+require active-pointer readback before a run. Rehearsal `--all` is maintenance,
+not deactivation: deactivate recipes first to remove runtime resource skills.
+
+`list-recipes({status:"active"})` returns active immutable snapshots and triggers,
+even when a newer draft exists. MCP `tools/list` exposes the existing list/run
+actions through the existing connector catalog (plus inspect/resume). Start and
+resume opt into `mcpApp.structuredContent:true` so external clients receive the
+saved checkpoint instead of an abbreviated mutation summary. `tools/call` uses
+the same input as the CLI. Nested CLI arguments
+must be a positional JSON object:
+
+```sh
+pnpm action list-recipes '{"status":"active"}'
+pnpm action run-recipe '{"recipe":<active-version-snapshot>,"trigger":<validated-intake>,"dryRun":true}'
+```
+
+Opt-in smoke (from apps/web; port 8095 must be free):
+
+```sh
+NODE_ENV=development node --env-file=.env --import tsx scripts/recipe-registry-smoke.ts
+# Additionally spend live chat tokens and verify using installed Claude Code:
+NODE_ENV=development node --env-file=.env --import tsx scripts/recipe-registry-smoke.ts --live-agent --claude
+```
+
+The script seeds a disposable PGlite before starting dev, activates a harmless
+lookup/tag fixture through Studio, performs MCP initialize -> initialized ->
+tools/list -> tools/call list-recipes -> tools/call run-recipe (dryRun true),
+checks CLI parity and unchanged shop tags, then updates/removes publication on the
+same server. `--live-agent` checks new skill discovery, dry-run then execution,
+persisted shop effect, exact dry-run/execute order and reloaded native run-card
+widgets mounted in the same AgentKit transcript as the sidebar. `--claude` connects
+installed Claude Code with only the two recipe MCP tools allowed. `--hold` keeps
+the isolated server available for browser review for five minutes. Default tests
+never use a model. Only sanitized evidence is saved to
+`scripts/recipe-registry-evidence.json`; sessions, keys, headers and tokens are
+never printed. The script stops its own dev process and removes its temporary DB on completion.
+To resume checks against a still-running disposable registry smoke server, set
+DATABASE_URL to its original temporary PGlite URL and add `--reuse`. That mode
+requires the `muscle-memory-registry-smoke-` directory name, selects an unused
+structured delivery request, and preserves the existing process/database. It
+never seeds or opens a second PGlite process. For an existing local dev account,
+the smoke uses the same `/_agent-native/auth/local-dev` handler as Continue as
+local dev; it does not disable browser authentication.
+
+Version-matched docs: `pnpm action docs-search --query mcp`, `--slug mcp-protocol`,
+and `--slug external-agents-catalog`. Local-dev MCP is allowed only on loopback,
+with no ACCESS_TOKEN/ACCESS_TOKENS/A2A_SECRET and the documented
+`X-Agent-Native-Owner-Email: dev@local.test` hint (the server-configured owner wins).
+Without that hint the default endpoint returns 401; no auth bypass is added.
+The smoke sends Content-Type application/json, Accept application/json and
+text/event-stream, MCP-Protocol-Version 2025-03-26, and retains a session ID if
+returned. Deployed hosts must use the framework's documented OAuth/bearer auth.
+Exact JSON-RPC request bodies and HTTP outcomes are in the evidence file and task
+notes. A direct HTTP probe alone is not Claude Code or browser verification.

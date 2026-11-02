@@ -248,6 +248,9 @@ beforeEach(() => {
           case "deactivate-recipe":
             result = await studio.deactivate(input.recipeId);
             break;
+          case "retry-recipe-skill":
+            result = await studio.syncSkill(input.recipeId);
+            break;
           case "backtest-recipe":
             result = await backtestResult(input);
             break;
@@ -274,6 +277,23 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 describe("Recipe Studio UI", () => {
+  it("shows a failed discovery sync and retries through the shared action", async () => {
+    let retryable = true;
+    const get = studio.get.bind(studio);
+    vi.spyOn(studio, "get").mockImplementation(async id => ({ ...await get(id), skillPublication: {
+      status: retryable ? "failed" : "published", versionId: damagedItemFixture.id,
+      retryable, message: retryable ? "Retry discovery sync" : null,
+    } }));
+    vi.spyOn(studio, "syncSkill").mockImplementation(async () => {
+      retryable = false;
+      return { status: "published", versionId: damagedItemFixture.id, retryable: false, message: null };
+    });
+    await mount();
+    expect(node.textContent).toContain("Agent recipe discovery needs to sync");
+    await click(button("Retry discovery sync"));
+    await settle(() => expect(node.textContent).not.toContain("Agent recipe discovery needs to sync"));
+    expect(calls.some(call => call.name === "retry-recipe-skill" && call.input.recipeId === damagedItemFixture.recipeId)).toBe(true);
+  });
   it("delegates crystallization with the draft, ambiguity and request context through agent chat only", async () => {
     record = { ...record, draft: {
       ...(await studio.getDraft(record.recipe.id)),

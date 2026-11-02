@@ -42,6 +42,7 @@ import { CompleteTextExtractor } from "./infra/complete-text-extraction.js";
 import { DemoIntake } from "./infra/demo-intake.js";
 import { RecipeActionInvoker } from "./infra/recipe-action-invoker.js";
 import { DrizzleRecipeCatalog } from "./infra/recipe-catalog.js";
+import { RecipeSkillRegistry } from "./infra/recipe-skill-registry.js";
 import { DrizzleRecipeStudioStore } from "./infra/recipe-studio-store.js";
 import { RegistryActionInvoker } from "./infra/registry-action-invoker.js";
 import { RequestIntake } from "./infra/request-intake.js";
@@ -66,10 +67,11 @@ import { DrizzleCorrectionStore } from "./infra/correction-store.js";
 import { createCorrectionCapture } from "./infra/correction-capture.js";
 import { shopResult } from "./shop-action-contracts.js";
 
-export function createRecipeStudio(db: ShopDb, context?: ActionRunContext) {
+export function createRecipeStudio(db: ShopDb, context?: ActionRunContext, publishSkills = true) {
   return new RecipeStudio(
     new DrizzleRecipeStudioStore(db, demonstrationOwner(context)),
     () => `ver_${randomBytes(8).toString("hex")}`,
+    publishSkills ? new RecipeSkillRegistry(db) : undefined,
   );
 }
 export function getRecipeStudio(context?: ActionRunContext) {
@@ -317,10 +319,12 @@ export function saveRecipeVersion(input: Parameters<RecipeStudio["save"]>[0] & {
     return createCorrections(db).propose(owner, input.correctionId!, input.proposal ?? null, () => createRecipeStudio(db, context).save(input));
   });
 }
-export function activateRecipeVersion(input: Parameters<RecipeStudio["activate"]>[0], context?: ActionRunContext) {
+export async function activateRecipeVersion(input: Parameters<RecipeStudio["activate"]>[0], context?: ActionRunContext) {
   const owner = correctionOwner(context);
-  return getDb().transaction(async tx => {
+  const recipe = await getDb().transaction(async tx => {
     const db = tx as unknown as ShopDb;
-    return createCorrections(db).activate(owner, input.recipeId, input.versionId, () => createRecipeStudio(db, context).activate(input));
+    return createCorrections(db).activate(owner, input.recipeId, input.versionId, () => createRecipeStudio(db, context, false).activate(input));
   });
+  // Publish only after the outer activation/correction transaction commits.
+  return { ...recipe, skillPublication: await getRecipeStudio(context).syncSkill(input.recipeId) };
 }

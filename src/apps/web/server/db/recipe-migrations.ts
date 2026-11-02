@@ -80,6 +80,13 @@ export const recipeMigrations: MigrationEntry[] = [{
     WHERE owner_email IS NULL OR workspace_id IS NULL;
   ALTER TABLE recipe_corrections ALTER COLUMN owner_email SET NOT NULL,
     ALTER COLUMN workspace_id SET NOT NULL;`,
+}, {
+  version: 6,
+  name: "task20-recipe-skill-publications",
+  sql: `CREATE TABLE IF NOT EXISTS recipe_skill_publications (
+    recipe_id VARCHAR(31) PRIMARY KEY REFERENCES recipes(id) ON DELETE CASCADE,
+    publication JSONB NOT NULL
+  );`,
 }];
 
 export const migrateRecipes = runMigrations(recipeMigrations, { table: "_muscle_memory_recipe_migrations" });

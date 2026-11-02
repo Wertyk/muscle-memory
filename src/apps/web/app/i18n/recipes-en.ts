@@ -1,5 +1,8 @@
 export const recipeMessages = {
   title: "Recipes",
+  skillSyncFailed: "Recipe state saved. Agent recipe discovery needs to sync.",
+  retrySkillSync: "Retry discovery sync",
+  skillSyncRetried: "Discovery sync retried. Check its status before continuing.",
   crystallize: "Crystallize with agent",
   learnedFromAgent: "Learned from an agent run · thread {{thread}}",
   learnedFromTeach: "Learned from Teach · {{demonstration}}",

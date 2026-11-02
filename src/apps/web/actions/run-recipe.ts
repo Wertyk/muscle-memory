@@ -12,6 +12,7 @@ export default defineAction({
     dryRun: booleanFlagSchema.default(false).describe("Default false; true persists a simulation without shop mutations or handoff delivery"),
   }),
   outputSchema: runOutputSchema,
+  mcpApp: { structuredContent: true },
   chatUI: { renderer: RUN_CARD_RENDERER, title: "Recipe run" },
   errors: recipeErrors,
   run: (input, context) => recipeOperation(() => getRecipeUseCases(context).runRecipe.execute({

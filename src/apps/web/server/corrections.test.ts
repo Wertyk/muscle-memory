@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { closeDbExec, withMigrationRuntime } from "@agent-native/core/db";
+import { resourceGetByPath, SHARED_OWNER } from "@agent-native/core/resources";
 import { loadActionsFromStaticRegistry } from "@agent-native/core/server";
 import { recipeContent } from "@muscle-memory/recipe-engine";
 import { z } from "zod";
@@ -23,6 +24,7 @@ import { getDb, type ShopDb } from "./db/index.js";
 import * as tables from "./db/schema.js";
 import { damagedItemFixture } from "./fixtures/intake-recipes.js";
 import { RegistryActionInvoker } from "./infra/registry-action-invoker.js";
+import { ResourceSkillRegistry } from "./infra/resource-skill-registry.js";
 import { seedShop, resetShop } from "./infra/shop-demo-store.js";
 import * as session from "./infra/teach-session.js";
 import { studioContentInput } from "./studio-action-contracts.js";
@@ -110,6 +112,27 @@ describe("correction → Studio proposal → decision, real actions and PGlite",
     expect(await db.select().from(tables.recipeVersions)).toHaveLength(2);
     await resetShop(db, { all: true });
     expect(await db.select().from(tables.recipeVersions)).toEqual([]);
+  });
+  it("accepts a correction proposal and publishes its runtime skill after commit", async () => {
+    const { correction } = await corrected();
+    const saved = await propose(correction.id);
+    const acceptanceAtPublication: string[] = [];
+    const put = ResourceSkillRegistry.prototype.put;
+    vi.spyOn(ResourceSkillRegistry.prototype, "put").mockImplementation(async function (this: ResourceSkillRegistry, ...args) {
+      acceptanceAtPublication.push((await getDb().select().from(tables.recipeCorrections))[0]!.snapshot.status);
+      return put.apply(this, args);
+    });
+    expect(await activate.run({ recipeId, versionId: saved.id }, context)).toMatchObject({
+      activeVersionId: saved.id, skillPublication: { status: "published", versionId: saved.id, retryable: false },
+    });
+    expect(acceptanceAtPublication).toEqual(["accepted"]);
+    expect((await db.select().from(tables.recipeCorrections))[0]?.snapshot).toMatchObject({
+      id: correction.id, status: "accepted", proposal: { version: { id: saved.id } }, decision: { by: { userId: context.userEmail } },
+    });
+    const name = `recipe-${Array.from(recipeId, char => char.charCodeAt(0).toString(16)).join("")}`;
+    const skill = await resourceGetByPath(SHARED_OWNER, `skills/${name}/SKILL.md`);
+    expect(skill?.content).toContain(saved.id);
+    expect((await getRecipe.run({ recipeId }, context)).skillPublication).toMatchObject({ status: "published", versionId: saved.id });
   });
   it("maps additional refunds/tags, rejects unrelated targets/agent/recipe calls and captures only successful effects", async () => {
     const { request } = await corrected();

@@ -76,6 +76,7 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
   const save = useActionMutation("save-recipe-version");
   const activate = useActionMutation("activate-recipe");
   const deactivate = useActionMutation("deactivate-recipe");
+  const retrySkill = useActionMutation("retry-recipe-skill");
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
@@ -214,6 +215,14 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
           </Button>
         </div>
       </header>
+      {detail.data.skillPublication?.retryable && (
+        <div role="status" className="mb-4 flex items-center gap-3 text-sm">
+          <span>{t("recipes.skillSyncFailed")}</span>
+          <Button variant="outline" disabled={disabled} onClick={() => void perform(
+            () => retrySkill.mutateAsync({ recipeId }), t("recipes.skillSyncRetried"),
+          ).catch(() => {})}>{t("recipes.retrySkillSync")}</Button>
+        </div>
+      )}
       {(detail.isError || draftQuery.isError) && (
         <QueryError
           error={detail.error ?? draftQuery.error}

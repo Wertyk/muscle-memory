@@ -7,6 +7,8 @@ import type {
   JsonObject,
   JsonValue,
 } from "../domain/model.js";
+import type { SkillRegistry, SkillPublication } from "./ports.js";
+import { recipeSkill, recipeSkillName } from "./recipe-skill.js";
 import { recipeVersionSchema } from "./recipe-schema.js";
 
 export interface StudioDraft {
@@ -117,10 +119,11 @@ export class RecipeStudio {
   constructor(
     private readonly store: RecipeStudioStore,
     private readonly nextVersionId: () => string,
+    private readonly skills?: SkillRegistry,
   ) {}
-  async list() {
+  async list(status?: Recipe["status"]) {
     return immutableSnapshot(
-      (await this.store.list()).map((record) => {
+      await Promise.all((await this.store.list()).filter(record => !status || record.recipe.status === status).map(async (record) => {
         const latest = [...record.versions].sort(
           (a, b) => b.version - a.version,
         )[0];
@@ -130,10 +133,12 @@ export class RecipeStudio {
         return {
           ...record.recipe,
           version: latest?.version ?? 0,
+          activeVersion: record.versions.find(version => version.id === record.recipe.activeVersionId) ?? null,
+          skillPublication: await this.skills?.publication(record.recipe.id) ?? null,
           runs: record.runs.length,
           lastResult: last?.status ?? null,
         };
-      }),
+      })),
     );
   }
   async get(recipeId: string) {
@@ -149,7 +154,7 @@ export class RecipeStudio {
               recipeContent(version),
             ) as readonly JsonDifference[]),
     }));
-    return immutableSnapshot({ recipe: record.recipe, history });
+    return immutableSnapshot({ recipe: record.recipe, history, skillPublication: await this.skills?.publication(recipeId) ?? null });
   }
   async getDraft(recipeId: string) {
     const draft = draftOf(required(await this.store.get(recipeId)));
@@ -207,7 +212,7 @@ export class RecipeStudio {
     });
   }
   async activate(input: { recipeId: string; versionId: string }) {
-    return this.store.transaction(input.recipeId, async (records) => {
+    const recipe = await this.store.transaction(input.recipeId, async (records) => {
       const record = required(await records.get());
       const version = record.versions.find((v) => v.id === input.versionId);
       if (!version)
@@ -229,9 +234,10 @@ export class RecipeStudio {
       await records.saveRecipe(recipe);
       return recipe;
     });
+    return { ...recipe, skillPublication: await this.syncSkill(input.recipeId) };
   }
   async deactivate(recipeId: string) {
-    return this.store.transaction(recipeId, async (records) => {
+    const recipe = await this.store.transaction(recipeId, async (records) => {
       const record = required(await records.get());
       const recipe: Recipe = {
         ...record.recipe,
@@ -241,5 +247,44 @@ export class RecipeStudio {
       await records.saveRecipe(recipe);
       return recipe;
     });
+    return { ...recipe, skillPublication: await this.syncSkill(recipeId) };
+  }
+  /** Retry always reconciles the CURRENT pointer, never a stale failed version. */
+  async syncSkill(recipeId: string): Promise<SkillPublication | null> {
+    if (!this.skills) return null;
+    // Missing recipes are action errors; resource outages must not undo activation.
+    required(await this.store.get(recipeId));
+    let versionId: string | null = null;
+    const failed = (): SkillPublication => ({
+      status: "failed", versionId, retryable: true,
+      message: "Recipe state saved; runtime skill sync failed. Retry with retry-recipe-skill.",
+    });
+    try {
+      return await this.skills.withLock(recipeId, async () => {
+        const record = required(await this.store.get(recipeId));
+        versionId = record.recipe.activeVersionId;
+        await this.skills!.record(recipeId, { status: "pending", versionId, retryable: true, message: "Runtime skill sync pending; retry if interrupted." });
+        try {
+          if (record.recipe.status === "active" && versionId) {
+            const version = record.versions.find(version => version.id === versionId);
+            if (!version) throw new Error("Active version missing.");
+            const skill = recipeSkill(version);
+            await this.skills!.put(skill.name, skill.description, skill.instructions);
+          } else {
+            await this.skills!.remove(recipeSkillName(recipeId));
+          }
+          const result: SkillPublication = { status: versionId ? "published" : "removed", versionId, retryable: false, message: null };
+          await this.skills!.record(recipeId, result);
+          return result;
+        } catch {
+          const result = failed();
+          await this.skills!.record(recipeId, result);
+          return result;
+        }
+      });
+    } catch {
+      // If the receipt store itself is unavailable, return safe retry guidance.
+      return failed();
+    }
   }
 }

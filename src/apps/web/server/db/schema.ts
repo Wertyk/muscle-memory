@@ -8,6 +8,7 @@ import type {
   RequestMatch,
   Run,
   StudioDraft,
+  SkillPublication,
 } from "@muscle-memory/recipe-engine";
 import type {
   Correction,
@@ -318,3 +319,8 @@ export const recipeCorrections = pgTable("recipe_corrections", {
   createdAt: bigint("created_at", { mode: "number" }).notNull(),
   snapshot: jsonb("snapshot").$type<Correction>().notNull(),
 }, table => [index("recipe_corrections_request_idx").on(table.requestId), index("recipe_corrections_run_idx").on(table.runId)]);
+// Publication is independently retryable; it never controls the active pointer.
+export const recipeSkillPublications = pgTable("recipe_skill_publications", {
+  recipeId: varchar("recipe_id", { length: 31 }).primaryKey().references(() => recipes.id, { onDelete: "cascade" }),
+  publication: jsonb("publication").$type<SkillPublication>().notNull(),
+});

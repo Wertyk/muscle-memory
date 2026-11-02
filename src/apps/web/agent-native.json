@@ -17,6 +17,7 @@
       "recipe_runs": "Durable engine checkpoints for the single shared synthetic demo shop; access through recipe run actions and DrizzleRunRepository.",
       "recipe_handoffs": "Deduplicated escalation work for the single shared synthetic shop inbox; access through DrizzleAgentHandoff and recipe run actions.",
       "recipes": "Catalog metadata and active version pointers for the existing single shared synthetic shop; access through DrizzleRecipeCatalog.",
+      "recipe_skill_publications": "Runtime skill publication receipts for the existing app-wide synthetic recipe catalog; accessed only through RecipeStudio and RecipeSkillRegistry, with no user credentials or customer data.",
       "request_processing": "Intake checkpoints for the existing single shared synthetic shop inbox; read through list-request-processing, writes through RequestIntake."
     }
   }

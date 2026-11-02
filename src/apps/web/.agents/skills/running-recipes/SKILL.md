@@ -8,6 +8,20 @@ metadata:
 
 # Run a recipe
 
+Discover active capabilities in the runtime recipe skills, or call
+`list-recipes({status:"active"})`. Each row includes `activeVersion` (the executable
+snapshot, which can differ from the latest saved draft). Read `get-recipe` before
+running to confirm the active pointer and trigger. For a structured shop request,
+read `get-request({requestId})` and use `{requestId:request.id,
+...request.content.fields}` as the trigger. Never invent fields for free text.
+Dry-run first; execute only when requested and the preview is suitable.
+
+MCP and CLI use these same actions. The MCP endpoint is `/mcp`; initialize,
+notify initialized, list tools, then call `list-recipes` and `run-recipe`. Local
+loopback development uses the documented `X-Agent-Native-Owner-Email` owner hint
+without bearer secrets; deployed hosts use framework OAuth. CLI nested inputs
+use a positional JSON object, e.g. `pnpm action list-recipes '{"status":"active"}'`.
+
 Before activation, use `backtest-recipe({recipe, requestType})` to compare a saved
 version ID or unsaved snapshot with resolved requests. Use
 `compare-recipe-versions({baseline, candidate, requestType})` for two versions on

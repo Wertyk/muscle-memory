@@ -28,13 +28,19 @@ const INITIAL_TOOL_NAMES = [
   "activate-recipe",
   "deactivate-recipe",
   "record-correction-decision",
+  "retry-recipe-skill",
+  "run-recipe",
   "ask-question",
 ];
 
 export default createAgentChatPlugin({
   appId: "web",
   actions: loadActionsFromStaticRegistry(actionsRegistry),
-  mcp: { connectorCatalog: [], appApprovalPage: true },
+  mcp: {
+    connectorCatalog: ["list-recipes", "get-recipe", "run-recipe", "get-recipe-run", "resume-recipe-run"],
+    keyToolNames: ["list-recipes", "get-recipe", "run-recipe"],
+    appApprovalPage: true,
+  },
   initialToolNames: INITIAL_TOOL_NAMES,
   resolveOrgId: async (event) => (await getOrgContext(event)).orgId,
   prepareRequest: prepareEnglishAgentRequest,

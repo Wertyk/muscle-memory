@@ -55,6 +55,31 @@ export const recipeMigrations: MigrationEntry[] = [{
     version_id VARCHAR(31) PRIMARY KEY REFERENCES recipe_versions(id),
     owner_email TEXT NOT NULL, workspace_id TEXT NOT NULL, evidence JSONB NOT NULL
   );`,
+}, {
+  version: 4,
+  name: "task17-recipe-corrections",
+  sql: `CREATE TABLE IF NOT EXISTS recipe_corrections (
+    id VARCHAR(31) PRIMARY KEY CHECK (id ~ '^cor_[A-Za-z0-9_-]+$'),
+    request_id VARCHAR(31) NOT NULL REFERENCES requests(id),
+    run_id VARCHAR(31) NOT NULL REFERENCES recipe_runs(id),
+    recipe_version_id VARCHAR(31) NOT NULL REFERENCES recipe_versions(id),
+    proposal_version_id VARCHAR(31) REFERENCES recipe_versions(id),
+    created_at BIGINT NOT NULL, snapshot JSONB NOT NULL,
+    CHECK (snapshot->>'id' = id AND snapshot->>'requestId' = request_id AND snapshot->>'runId' = run_id),
+    CHECK (snapshot->>'status' IN ('recorded','proposed','accepted','rejected'))
+  );
+  CREATE INDEX IF NOT EXISTS recipe_corrections_request_idx ON recipe_corrections(request_id);
+  CREATE INDEX IF NOT EXISTS recipe_corrections_run_idx ON recipe_corrections(run_id);`,
+}, {
+  version: 5,
+  name: "task17-correction-owner-scope",
+  sql: `ALTER TABLE recipe_corrections ADD COLUMN IF NOT EXISTS owner_email TEXT,
+    ADD COLUMN IF NOT EXISTS workspace_id TEXT;
+  UPDATE recipe_corrections SET owner_email = snapshot->'owner'->>'userId',
+    workspace_id = snapshot->'owner'->>'workspaceId'
+    WHERE owner_email IS NULL OR workspace_id IS NULL;
+  ALTER TABLE recipe_corrections ALTER COLUMN owner_email SET NOT NULL,
+    ALTER COLUMN workspace_id SET NOT NULL;`,
 }];
 
 export const migrateRecipes = runMigrations(recipeMigrations, { table: "_muscle_memory_recipe_migrations" });

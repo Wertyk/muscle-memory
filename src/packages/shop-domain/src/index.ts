@@ -5,3 +5,5 @@ export * from "./application/create-request.js";
 export * from "./application/classify-request.js";
 export * from "./application/get-request-activity.js";
 export * from "./application/get-handling-stats.js";
+export * from "./domain/correction.js";
+export * from "./application/corrections.js";

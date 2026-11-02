@@ -10,6 +10,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { ShopDb } from "../db/index.js";
 import {
+  recipeCorrections,
   demoSteps,
   demonstrations,
   recipeDrafts,
@@ -44,6 +45,7 @@ interface ResetDependent {
  * Missing tables are skipped for databases with only the shop migration applied.
  * No framework tables or CASCADE/TRUNCATE are included. */
 export const shopResetDependents: readonly ResetDependent[] = [
+  { table: recipeCorrections },
   { table: requestAgentRuns },
   { table: demoSteps },
   { table: demonstrations },

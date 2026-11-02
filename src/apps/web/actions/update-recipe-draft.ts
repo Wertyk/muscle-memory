@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { getRecipeStudio } from "../server/composition.js";
 import {
-  studioContent,
+  studioContentInput,
   studioErrors,
   studioLink,
   studioId,
@@ -16,7 +16,7 @@ export default defineAction({
   schema: z.object({
     recipeId: studioId,
     expectedRevision: studioRevision,
-    content: studioContent,
+    content: studioContentInput,
   }),
   errors: studioErrors,
   link: ({ result }) => studioLink(result),

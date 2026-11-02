@@ -19,7 +19,7 @@ import {
   IconVersions,
 } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useLocation } from "react-router";
 
 import {
   EmptyState,
@@ -42,6 +42,7 @@ import {
   type RecipeDraft,
 } from "@/lib/recipe-studio";
 
+import { CorrectionsPanel } from "./CorrectionsPanel";
 import { AmbiguitiesPanel } from "./AmbiguitiesPanel";
 import { CrystallizeControl } from "./CrystallizeControl";
 import { RecipeField, WireLegend, type ChangeField } from "./RecipeField";
@@ -54,6 +55,7 @@ export function RecipePage() {
   return <RecipeStudioPage key={recipeId} recipeId={recipeId} />;
 }
 function RecipeStudioPage({ recipeId }: { recipeId: string }) {
+  const location = useLocation();
   const t = useT();
   const [reports, setReports] = useState<Record<string, ShopBacktestResult>>({});
   const [shown, setShown] = useState<ShownBacktest | null>(null);
@@ -327,8 +329,8 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
             )}
             <ol className="recipe-history">
               {[...history].reverse().map(({ version, diff }) => (
-                <li key={version.id}>
-                  <details>
+                <li key={version.id} id={`version-${version.id}`}>
+                  <details open={location.hash === `#version-${version.id}` || new URLSearchParams(location.search).get("version") === version.id || undefined}>
                     <summary>
                       <span>v{version.version}</span>
                       <span>{version.name}{version.id === recipe.activeVersionId && ` · ${t("recipes.active")}`}</span>
@@ -360,6 +362,7 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
                         <BacktestSummary summary={reports[version.id]!.summary} />
                       </> : <p className="text-xs text-muted-foreground">{t("recipes.backtests.activationNudge")}</p>}
                     </div>
+                    <CorrectionsPanel corrections={detail.data.corrections?.filter(c => c.proposal?.version.id === version.id)} />
                     <Button
                       className="mt-3"
                       variant="outline"
@@ -367,6 +370,7 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
                       disabled={
                         disabled ||
                         version.id === recipe.activeVersionId ||
+                        Boolean(detail.data.corrections?.some(c => c.proposal?.version.id === version.id && c.status === "rejected")) ||
                         validateStudioContent(recipeId, recipeContent(version))
                           .issues.length > 0
                       }

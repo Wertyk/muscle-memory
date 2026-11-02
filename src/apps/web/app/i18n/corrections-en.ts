@@ -1,0 +1,15 @@
+export const correctionMessages = {
+  recorded: "Correction recorded",
+  propose: "Propose recipe update",
+  prompt: "Propose a reusable recipe update from this recorded correction. Preserve dynamic bindings and unrelated edits. Save a new version with correctionId and proposal notes, then show its proposal card and Studio diff for my review. Do not activate it.",
+  proposed: "Proposed → version {{version}} · awaiting your decision",
+  accepted: "Accepted → version {{version}}",
+  rejected: "Rejected → {{reason}}",
+  reject: "Reject proposal",
+  reason: "Reason for rejection",
+  loadingDiff: "Loading saved version diff…",
+  diffUnavailable: "Open Studio to review the saved version diff.",
+  reviewDiff: "Review diff and activate in Studio",
+  evidence: "Correction evidence",
+  failed: "Could not record the decision. Refresh and try again.",
+};

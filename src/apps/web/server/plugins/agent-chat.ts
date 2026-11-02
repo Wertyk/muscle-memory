@@ -27,6 +27,7 @@ const INITIAL_TOOL_NAMES = [
   "save-recipe-version",
   "activate-recipe",
   "deactivate-recipe",
+  "record-correction-decision",
   "ask-question",
 ];
 

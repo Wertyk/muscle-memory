@@ -6,8 +6,9 @@ import {
   type StudioIssue,
 } from "@muscle-memory/recipe-engine";
 import { z } from "zod";
+import { CorrectionError } from "@muscle-memory/shop-domain";
 
-import { recipeJsonSchema } from "./recipe-action-contracts.js";
+import { recipeJsonInputSchema, recipeJsonSchema } from "./recipe-action-contracts.js";
 
 export const studioId = z
   .string()
@@ -15,6 +16,7 @@ export const studioId = z
   .regex(/^[A-Za-z_][A-Za-z0-9_-]*$/);
 export const studioRevision = z.number().int().nonnegative();
 export const studioContent = z.record(z.string(), recipeJsonSchema);
+export const studioContentInput = z.record(z.string(), recipeJsonInputSchema);
 // Keep the tool's root schema an object for OpenAI-compatible action callers.
 export const studioDraftRead = z
   .object({ recipeId: studioId.optional(), versionId: studioId.optional() })
@@ -42,6 +44,8 @@ export async function studioResult<T>(work: Promise<T>): Promise<T> {
   try {
     return await work;
   } catch (error) {
+    if (error instanceof CorrectionError)
+      return studioErrors.noWrite(error.message, "RECIPE_CONFLICT", { statusCode: 409 });
     if (error instanceof RecipeStudioError)
       return studioErrors.noWrite(
         error.message,

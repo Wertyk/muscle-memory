@@ -17,5 +17,6 @@ export const proposalNotesSchema = z.object({
 });
 export const recipeProposalSchema = z.object({
   version: recipeVersionSchema,
+  correctionId: z.string().optional(),
   proposal: proposalNotesSchema.optional(),
 });

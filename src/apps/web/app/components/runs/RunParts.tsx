@@ -1,3 +1,5 @@
+import type { CorrectionEvidence } from "@shared/corrections";
+import { CorrectionsPanel } from "../recipes/CorrectionsPanel";
 import { useT } from "@agent-native/core/client/i18n";
 import type {
   JsonValue,
@@ -180,7 +182,7 @@ export function RunTimeline({
   run,
   compact = false,
 }: {
-  run: Run;
+  run: Run & CorrectionEvidence;
   compact?: boolean;
 }) {
   const t = useT();
@@ -316,6 +318,7 @@ export function RunTimeline({
             </li>
           );
         })}
+      {!!run.corrections?.length && <li><CorrectionsPanel corrections={run.corrections} /></li>}
     </ol>
   );
 }

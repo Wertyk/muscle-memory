@@ -10,6 +10,7 @@ import type {
   StudioDraft,
 } from "@muscle-memory/recipe-engine";
 import type {
+  Correction,
   Customer,
   Order,
   Product,
@@ -305,3 +306,15 @@ export const demoSteps = pgTable(
   },
   (table) => [primaryKey({ columns: [table.demonstrationId, table.sequence] })],
 );
+
+export const recipeCorrections = pgTable("recipe_corrections", {
+  ownerEmail: text("owner_email").notNull(),
+  workspaceId: text("workspace_id").notNull(),
+  id: varchar("id", { length: 31 }).primaryKey(),
+  requestId: varchar("request_id", { length: 31 }).$type<Request["id"]>().notNull().references(() => requests.id),
+  runId: varchar("run_id", { length: 31 }).notNull().references(() => recipeRuns.id),
+  recipeVersionId: varchar("recipe_version_id", { length: 31 }).notNull().references(() => recipeVersions.id),
+  proposalVersionId: varchar("proposal_version_id", { length: 31 }).references(() => recipeVersions.id),
+  createdAt: bigint("created_at", { mode: "number" }).notNull(),
+  snapshot: jsonb("snapshot").$type<Correction>().notNull(),
+}, table => [index("recipe_corrections_request_idx").on(table.requestId), index("recipe_corrections_run_idx").on(table.runId)]);

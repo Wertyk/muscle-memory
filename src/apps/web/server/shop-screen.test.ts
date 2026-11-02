@@ -49,6 +49,7 @@ beforeEach(() => {
     },
     listRequests: { execute: vi.fn(async () => success([request])) },
   } as unknown as typeof useCases;
+  vi.spyOn(composition, "readCorrections").mockResolvedValue([]);
   vi.spyOn(composition, "getShopUseCases").mockReturnValue(useCases);
   vi.spyOn(composition, "getCurrentDemonstration").mockResolvedValue(null);
   vi.spyOn(composition, "getRequestIntake").mockReturnValue({

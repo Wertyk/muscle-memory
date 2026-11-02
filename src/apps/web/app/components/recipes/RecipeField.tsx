@@ -10,7 +10,7 @@ import {
   IconCheck,
   IconTypography,
 } from "@tabler/icons-react";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type CSSProperties, type ReactNode } from "react";
 
 import { PendingMark } from "@/components/shop/WorkspaceParts";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import {
 } from "@/lib/recipe-studio";
 
 import { MessagePreview, messageParts } from "./MessagePreview";
+import { useCircuitTarget } from "./RecipeCircuitContext";
 
 export type FieldPath = readonly (string | number)[];
 export type ChangeField = (
@@ -124,6 +125,7 @@ export function RecipeField({
 }) {
   const t = useT();
   const id = useId();
+  const circuit = useCircuitTarget(path);
   const [edit, setEdit] = useState<{
     base: RecipeDraft;
     text: string;
@@ -169,7 +171,10 @@ export function RecipeField({
       className="recipe-field"
       data-invalid={issues.length > 0 || Boolean(error)}
     >
-      <div className="recipe-field-row">
+      <div className={`recipe-field-row${circuit.target ? " recipe-circuit-argument" : ""}`}
+        data-circuit-node={circuit.target?.id} data-source={circuit.target?.mode} data-highlighted={circuit.active}>
+        {circuit.target && <span key={circuit.loadKey} className="recipe-circuit-port" data-circuit-target-port={circuit.target.id}
+          style={{ "--circuit-delay": `${circuit.target.stepOrder * 40}ms` } as CSSProperties} aria-hidden="true" />}
         <span className="recipe-argument">{label}</span>
         <div className="min-w-0 flex-1">{children}</div>
         <Button

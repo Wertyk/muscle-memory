@@ -1,5 +1,8 @@
 # Chat
 
+For Muscle Memory's product overview, current setup and rehearsal instructions,
+architecture, and hackathon disclosures, read the [workspace README](../../README.md).
+
 ## Kiln & Co. fixture data
 
 All shop data is 100% synthetic: customer names, businesses, street addresses,

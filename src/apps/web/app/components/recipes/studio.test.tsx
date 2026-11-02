@@ -53,6 +53,8 @@ let root: Root,
   client: QueryClient,
   studio: RecipeStudio,
   record: StudioRecord;
+let savedRun: Record<string, unknown> | null;
+let demonstrationSteps: JsonObject[];
 let calls: { name: string; input: Record<string, unknown>; method: string }[];
 let backtestResult: (input: { recipe: string; requestType: string }) => Promise<ShopBacktestResult>;
 let compareResult: (input: { baseline: string; candidate: string; requestType: string }) => Promise<ShopBacktestComparison>;
@@ -145,6 +147,8 @@ async function mount(path = `/recipes/${damagedItemFixture.recipeId}`) {
   await settle(() => expect(node.querySelector("h1")).not.toBeNull());
 }
 beforeEach(() => {
+  savedRun = null;
+  demonstrationSteps = [];
   vi.mocked(setClientAppState).mockClear();
   backtestResult = async ({ recipe }) => report(recipe);
   compareResult = async ({ baseline, candidate }) => ({
@@ -212,6 +216,12 @@ beforeEach(() => {
       try {
         let result: unknown;
         switch (name) {
+          case "list-recipe-runs":
+            result = savedRun ? [{ id: savedRun.id, createdAt: savedRun.createdAt }] : [];
+            break;
+          case "get-recipe-run":
+            result = savedRun;
+            break;
           case "list-recipes":
             result = await studio.list();
             break;
@@ -222,7 +232,7 @@ beforeEach(() => {
             result = input.versionId ? { demonstrationId: "demo_ui", draft: record.versions[0] } : await studio.getDraft(input.recipeId);
             break;
           case "get-demonstration":
-            result = { id: "demo_ui", trigger: { type: "damaged_item", requestId: "req_0001", orderId: "ord_1001", productId: "prod_platter" } };
+            result = { id: "demo_ui", steps: demonstrationSteps, trigger: { type: "damaged_item", requestId: "req_0001", orderId: "ord_1001", productId: "prod_platter" } };
             break;
           case "update-recipe-draft":
             result = await studio.update(input);
@@ -282,7 +292,7 @@ describe("Recipe Studio UI", () => {
       ambiguities: [expect.objectContaining({ kind: "request-specific-text", question: expect.stringContaining("Ember serving platter") })],
     });
     expect(calls).toHaveLength(before);
-    expect(calls.every(call => ["get-recipe", "get-recipe-draft", "get-demonstration"].includes(call.name))).toBe(true);
+    expect(calls.every(call => ["get-recipe", "get-recipe-draft", "get-demonstration", "list-recipe-runs", "get-recipe-run"].includes(call.name))).toBe(true);
   });
   it("lists status/version/runs/result and links into the detail route", async () => {
     await mount("/recipes");
@@ -372,7 +382,6 @@ describe("Recipe Studio UI", () => {
   it("renders event, approval and binding history in the card vocabulary", async () => {
     const version = parseRecipeVersion(brokenPlatterDraft);
     const steps = structuredClone(version.steps) as any[];
-    steps[1].args.amount.currency = { mode: "fixed", value: "USD" };
     const initial = parseRecipeVersion({ ...version, steps });
     record = {
       ...record,
@@ -394,7 +403,7 @@ describe("Recipe Studio UI", () => {
     expect(history.querySelector("p")?.textContent).toContain("A customer request arrives");
     expect(history.querySelector("p")?.textContent).not.toContain("request.created");
     const diff = history.querySelector(".recipe-diff")!;
-    expect(diff.textContent).toContain("Never → When refund amount > $100");
+    expect(diff.textContent).toContain("Never → When refund amount > $100.00");
     expect(diff.textContent).not.toContain("10000");
     expect(diff.querySelectorAll("li")).toHaveLength(4);
     expect(diff.textContent).toContain("Trigger field");
@@ -403,6 +412,34 @@ describe("Recipe Studio UI", () => {
     expect(diff.textContent).toContain("Formula");
     expect(diff.textContent).toContain("Template");
     expect(diff.textContent).toContain("25% × unit price");
+  });
+  it("uses the latest run currency in money cards, history and separate short ambiguity choices", async () => {
+    const version = parseRecipeVersion(brokenPlatterDraft);
+    const initial = { ...version, id: "ver_initial", version: 1 };
+    const steps = structuredClone(version.steps) as any[];
+    steps[1].approval = { ">": [{ var: "input.amount.amountMinor" }, 10000] };
+    const candidate = parseRecipeVersion({ ...version, id: "ver_candidate", version: 2, steps });
+    const keyed = steps[1].args.amount.amountMinor;
+    const first = { mode: "expr", expr: { "*": [0.5, { var: "steps.step_2.output.items[0].unitPrice.amountMinor" }] } };
+    const entry = { stepId: "step_6", argumentPath: "amount.amountMinor", kind: "multiple-candidates", candidates: [
+      { binding: keyed }, { binding: first }, { binding: { mode: "fixed", value: 14000 } },
+    ] };
+    record = { ...record, recipe: { ...record.recipe, id: version.recipeId }, versions: [initial, candidate],
+      draft: { recipeId: version.recipeId, revision: 0, baseVersionId: candidate.id, content: { name: candidate.name, trigger: candidate.trigger, steps: steps }, ambiguities: [entry] },
+    };
+    demonstrationSteps = [{ id: "step_6", input: { amount: { amountMinor: 14000, currency: "GBP" } }, output: null }];
+    savedRun = { id: "run_latest", createdAt: 20, trigger: {}, steps: [{ stepId: "step_6", input: { amount: { amountMinor: 14000, currency: "EUR" } }, output: null }] };
+    await mount(`/recipes/${version.recipeId}`);
+    await settle(() => expect(node.querySelector(".recipe-diff")?.textContent).toContain("Never → When refund amount > €100.00"));
+    const panel = node.querySelector('[aria-label="Ambiguities"]')!;
+    expect([...panel.querySelectorAll(".recipe-ambiguities > li > ul > li")].map((item) => item.textContent)).toEqual([
+      "50% of the item's unit price", "50% of the first item's unit price", "a fixed €140.00",
+    ]);
+    expect(panel.querySelector("p")?.textContent).not.toContain("unitPrice");
+    expect(panel.querySelector("pre")?.textContent).toContain("steps.step_2.output.items[0].unitPrice.amountMinor");
+    expect(node.querySelector('[aria-label="Issue refund"] .recipe-approval')?.textContent).toContain("When refund amount > €100.00");
+    expect(node.textContent).not.toContain("in unit price → currency");
+    expect(record.draft!.ambiguities).toEqual([entry]);
   });
   it("uses the stored name, and carries an edited name through save, active history and the list", async () => {
     const initial = { ...damagedItemFixture, name: "Draft: damaged_item" };
@@ -714,6 +751,30 @@ describe("Recipe Studio historical backtests", () => {
     expect(node.querySelector(".recipe-backtest-cases")?.textContent).toContain("req_0039");
     await click(node.querySelector<HTMLAnchorElement>('a[href="/recipes"]')!);
     await settle(() => expect(setClientAppState).toHaveBeenLastCalledWith(expect.stringMatching(/^recipe-backtest:/), null, expect.any(Object)));
+  });
+  it("formats whole money, removed item lists and added operations in backtest diffs", async () => {
+    backtestResult = async ({ recipe }) => {
+      const result = report(recipe);
+      const item = result.cases[7]!;
+      return { ...result, cases: [{ ...item,
+        diff: [
+          { kind: "added", path: "/0/input/amount", intended: { currency: "USD", amountMinor: 2100 } },
+          { kind: "removed", path: "/0/input/items", historical: [{ productId: "prd_0016", quantity: 1 }] },
+          { kind: "added", path: "/1", intended: { action: "tag-request", input: { requestId: "req_0038", tag: "replacement" } } },
+        ],
+        run: { trigger: {}, steps: [{ stepId: "order", input: {}, output: { items: [{ productId: "prd_0016", name: "Chalk Plate", quantity: 1 }] } }] } as any,
+      }] };
+    };
+    await mount();
+    await click(button("Run backtest"));
+    await settle(() => expect(node.querySelector(".recipe-backtest-cases")?.textContent).toContain("$21.00"));
+    const diff = node.querySelector(".recipe-backtest-cases .recipe-diff")!;
+    expect(diff.textContent).toContain("Refund amount");
+    expect(diff.textContent).toContain("Chalk Plate × 1");
+    expect(diff.textContent).toContain("Add tag “replacement”");
+    expect(diff.textContent).not.toContain("amountMinor");
+    expect(diff.textContent).not.toContain("productId");
+    expect(diff.textContent).not.toContain("requestId");
   });
   it("shows a retryable error without inventing a report, spending totals, or retrying automatically", async () => {
     backtestResult = async () => { throw new Error("Request req_0039 could not be reconstructed: Extraction is not configured."); };

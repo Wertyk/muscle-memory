@@ -10,7 +10,8 @@ import {
 } from "@shared/recipe-proposal";
 import { Link } from "react-router";
 
-import { expressionLabel, recipePath, words } from "@/lib/recipe-studio";
+import { expressionLabel, recipePath } from "@/lib/recipe-studio";
+import { stepLabel } from "@/lib/recipe-presentation";
 
 function ProposalSteps({ steps }: { steps: readonly Step[] }) {
   const t = useT();
@@ -18,9 +19,7 @@ function ProposalSteps({ steps }: { steps: readonly Step[] }) {
     <ol className="mt-2 list-decimal space-y-1 pl-5">
       {steps.map((step) => (
         <li key={step.id}>
-          {step.kind === "action"
-            ? words(step.action)
-            : t(`recipes.kinds.${step.kind}`)}
+          {stepLabel({ kind: step.kind, action: step.kind === "action" ? step.action : null }, t)}
           {step.kind === "branch" && (
             <>
               {` · ${expressionLabel(step.condition)}`}

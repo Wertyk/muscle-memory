@@ -1585,7 +1585,7 @@
   padding: 0;
   font-size: 0.75rem;
 }
-.recipe-ambiguities li + li {
+.recipe-ambiguities > li + li {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid hsl(var(--border));

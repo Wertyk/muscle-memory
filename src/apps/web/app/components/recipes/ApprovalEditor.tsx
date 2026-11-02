@@ -20,12 +20,13 @@ import {
   approvalArguments,
   approvalExpression,
   approvalOperators,
-  approvalSummary,
+  approvalDescription,
   readApproval,
   type ApprovalChoice,
   type ApprovalOperator,
 } from "@/lib/recipe-approval";
-import { expressionLabel, type RecipeDraft } from "@/lib/recipe-studio";
+import type { RecipeDraft } from "@/lib/recipe-studio";
+import { useRecipePresentation } from "@/hooks/use-recipe-presentation";
 
 import type { ChangeField, FieldPath } from "./RecipeField";
 
@@ -43,6 +44,7 @@ export function ApprovalEditor({
   disabled: boolean;
 }) {
   const t = useT();
+  const presentation = useRecipePresentation();
   const id = useId();
   const args = approvalArguments(step);
   const current = readApproval(step.approval, args);
@@ -67,9 +69,7 @@ export function ApprovalEditor({
         <span className="recipe-argument">{t("recipes.approval")}</span>
         <span className="recipe-approval min-w-0 flex-1">
           <IconShieldCheck className="size-4 shrink-0" />
-          {current.mode === "advanced"
-            ? expressionLabel(step.approval ?? false)
-            : approvalSummary(current, args)}
+          {approvalDescription(step, {}, false, presentation)}
         </span>
         <Button
           variant="ghost"

@@ -2,6 +2,7 @@ import type { JsonValue } from "@muscle-memory/recipe-engine";
 
 import { moneyCurrency, moneyLabel } from "./recipe-money";
 import { argumentLabel, expressionLabel, isObject } from "./recipe-studio";
+import { resolvedCurrency, type PresentationContext } from "./recipe-presentation";
 
 export interface ApprovalArgument {
   path: string;
@@ -171,7 +172,7 @@ export function approvalExpression(
 export function approvalSummary(
   choice: ApprovalChoice,
   args: readonly ApprovalArgument[],
-  moneyValue = `$${choice.value}`,
+  moneyValue = moneyLabel(Math.round(Number(choice.value) * 100)),
 ) {
   if (choice.mode === "never") return "Never · continue automatically";
   if (choice.mode === "always") return "Always";
@@ -190,6 +191,7 @@ export function approvalDescription(
   step: Record<string, JsonValue>,
   labels: Readonly<Record<string, string>> = {},
   concise = false,
+  context: PresentationContext = {},
 ) {
   const args = approvalArguments(step);
   const choice = readApproval(step.approval, args);
@@ -197,6 +199,6 @@ export function approvalDescription(
   if (choice.mode === "advanced") return expressionLabel(step.approval ?? false, labels);
   return approvalSummary(choice, args, moneyLabel(
     Math.round(Number(choice.value) * 100),
-    moneyCurrency(step, choice.argument), labels, true,
+    resolvedCurrency(moneyCurrency(step, choice.argument), context, String(step.id), choice.argument), context,
   ));
 }

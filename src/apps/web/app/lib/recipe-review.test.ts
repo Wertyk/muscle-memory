@@ -62,15 +62,15 @@ describe("human approval and ambiguity presentation", () => {
   });
   it("formats approval history using the bound currency and whole input amounts", () => {
     const approval = { ">": [{ var: "input.amount.amountMinor" }, 10000] };
-    expect(approvalDescription({ ...step, approval }, {}, true)).toBe("When refund amount > $100");
+    expect(approvalDescription({ ...step, approval }, {}, true)).toBe("When refund amount > $100.00");
     expect(approvalDescription(step, {}, true)).toBe("Never");
     expect(approvalDescription({ ...step, approval: true }, {}, true)).toBe("Always");
     expect(approvalDescription({ ...step, approval, args: {
       amount: { mode: "fixed", value: { amountMinor: 14000, currency: "EUR" } },
-    } }, {}, true)).toBe("When refund amount > €100");
+    } }, {}, true)).toBe("When refund amount > €100.00");
     expect(approvalDescription({ ...step, approval, args: {
       amount: { amountMinor: step.args.amount.amountMinor, currency: { mode: "path", path: "trigger.currency" } },
-    } }, {}, true)).toBe("When refund amount > 100 in currency · Request");
+    } }, {}, true)).toBe("When refund amount > $100.00");
   });
   it("names the competing refund and reply candidates in the question", () => {
     const formula = { mode: "expr", expr: { "*": [0.5, { find: [
@@ -89,9 +89,9 @@ describe("human approval and ambiguity presentation", () => {
       ] },
     ];
     const questions = reviewQuestions(entries, { steps: [refund, reply] }, { order: "Look up order" });
-    expect(questions[0]?.question).toContain("Refund amount matched 50% × unit price");
-    expect(questions[0]?.question).toContain("and a fixed $24.00 — which should future requests use?");
-    expect(questions[1]?.question).toContain("Reply matched a message using First name of name · Request and fixed text “Hi Maya”");
+    expect(questions[0]?.question).toBe("Which should future requests use for refund amount?");
+    expect(questions[0]?.candidates).toEqual(["50% of the item's unit price", "a fixed $24.00"]);
+    expect(questions[1]?.candidates).toEqual(["a message with values from the request", "fixed text “Hi Maya”"]);
     expect(questions.every((item) => !item.question.includes("Which source should supply this value?"))).toBe(true);
     expect(questions.map((item) => item.entry)).toEqual(entries);
   });

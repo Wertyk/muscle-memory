@@ -20,7 +20,8 @@ import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import enUS from "@/i18n/en-US";
-import { durationText, valueSummary } from "@/lib/recipe-runs";
+import { durationText } from "@/lib/recipe-runs";
+import { valueSummary } from "@/lib/recipe-presentation";
 
 import { runFixtures } from "../../../server/fixtures/run-recipes";
 import { RunPage } from "./RunPage";
@@ -69,7 +70,7 @@ function gateRun(): Run {
         status: "completed",
         approvalRequired: false,
         input: { orderId: "ord_1001" },
-        output: { id: "ord_1001", status: "delivered" },
+        output: { id: "ord_1001", status: "delivered", items: [{ productId: "prd_0016", name: "Ember Large Serving Platter", quantity: 4, unitPrice: { amountMinor: 28000, currency: "USD" } }] },
         startedAt: 1,
         finishedAt: 31,
         durationMs: 30,
@@ -87,6 +88,8 @@ function gateRun(): Run {
         approvalRequired: true,
         input: {
           orderId: "ord_1001",
+          requestId: "req_0001",
+          productId: "prd_0016",
           amount: { amountMinor: 14000, currency: "USD" },
           reason: "Damaged platter",
         },
@@ -102,6 +105,7 @@ function gateRun(): Run {
   };
 }
 let saved: Run;
+let listedSubject: string;
 let root: Root;
 let element: HTMLDivElement;
 let queries: QueryClient;
@@ -152,6 +156,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   Element.prototype.scrollIntoView = vi.fn();
   saved = gateRun();
+  listedSubject = "Broken Ember platter";
   calls = [];
   writeWait = undefined;
   readFails = false;
@@ -177,6 +182,7 @@ beforeEach(() => {
           ? JSON.parse(String(init.body))
           : Object.fromEntries(parsed.searchParams);
       calls.push({ name, input });
+      if (name === "get-request") return Response.json({ id: "req_0001", subject: "Broken Ember platter" });
       if (name === "get-recipe-run")
         return readFails
           ? Response.json({ error: "Read unavailable" }, { status: 409 })
@@ -185,7 +191,7 @@ beforeEach(() => {
         return Response.json(
           input.status === "failed"
             ? []
-            : [summarizeRun(saved, "Broken Ember platter")],
+            : [summarizeRun(saved, listedSubject)],
         );
       if (name === "resume-recipe-run") {
         await writeWait;
@@ -290,6 +296,13 @@ describe("run detail and list", () => {
     expect(element.textContent).toContain("Look up order");
     expect(element.textContent).toContain("Issue refund");
     expect(element.textContent).toContain("$140.00");
+    expect(element.textContent).toContain("Order ID: ord_1001");
+    expect(element.textContent).toContain("Request ID: req_0001");
+    expect(element.textContent).toContain("Product ID: prd_0016");
+    expect(element.textContent).toContain("Ember Large Serving Platter × 4 ($280.00 each)");
+    await settle(() => expect(element.querySelector("h1 a")?.textContent).toBe("Broken Ember platter · req_0001"));
+    expect(element.querySelector('a[href^="/recipes/recipe_run_approval"]')?.textContent).toBe(`${saved.recipe.name} · Version 1`);
+    expect(element.querySelector("h1")?.textContent).not.toContain(saved.recipe.name);
     expect(element.textContent).toContain("30 ms");
     expect(element.textContent).toContain("0 LLM tokens");
     expect(element.textContent).toContain("Not executed yet");
@@ -373,6 +386,7 @@ describe("run detail and list", () => {
     ).toHaveLength(1);
   });
   it("sends combined URL filters, renders list columns and clears an empty filtered view", async () => {
+    listedSubject = "Broken Ember platter ".repeat(30);
     await mount(
       <RunsPage />,
       "/runs?status=awaiting_approval&requestId=req_0001&recipeId=recipe_run_approval&mode=execute",
@@ -388,7 +402,8 @@ describe("run detail and list", () => {
       recipeId: "recipe_run_approval",
       mode: "execute",
     });
-    expect(element.querySelector('a[href="/runs/run_ui"]')).not.toBeNull();
+    expect(element.querySelector('a[href="/runs/run_ui"]')?.textContent).toHaveLength(220);
+    expect(element.querySelector('a[href="/runs/run_ui"]')?.textContent).toMatch(/…$/);
     expect(element.textContent).toContain("Active duration");
     expect(element.textContent).toContain("Execution tokens");
     await click(button("Clear filters"));
@@ -514,6 +529,10 @@ describe("registered renderers inside the mounted AgentKit chat transcript", () 
           '.run-timeline-compact li[data-status="completed"]',
         ),
       ).toHaveLength(1);
+      expect(element.querySelector(".run-chat-card")?.textContent).toContain("Order ID: ord_1001");
+      expect(element.querySelector(".run-chat-card")?.textContent).toContain("Ember Large Serving Platter × 4 ($280.00 each)");
+      expect(element.querySelector(".run-approval")?.textContent).toContain("$140.00");
+      expect(element.querySelector(".run-approval")?.textContent).toContain("Request ID: req_0001");
       expect(element.querySelector(".run-zero-tokens")?.textContent).toBe(
         "0 LLM tokens",
       );

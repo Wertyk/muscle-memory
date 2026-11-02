@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { durationText, recipeVersionPath, runPath } from "@/lib/recipe-runs";
+import { valueSummary } from "@/lib/recipe-presentation";
 import { dateText, requestPath } from "@/lib/shop-workspace";
 
 import {
@@ -173,7 +174,7 @@ export function RunsPage() {
                         className="shop-record-link font-medium"
                         to={runPath(run.id)}
                       >
-                        {run.requestSubject ?? run.id}
+                        {valueSummary(run.requestSubject ?? run.id)}
                       </Link>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {run.requestId ? (

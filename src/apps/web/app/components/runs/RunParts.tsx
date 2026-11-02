@@ -13,24 +13,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   durationText,
   recipeVersionPath,
-  valueSummary,
 } from "@/lib/recipe-runs";
+import { presentationContext, stepLabel, valueSummary } from "@/lib/recipe-presentation";
 import { dateText, requestPath } from "@/lib/shop-workspace";
 
 import { PendingMark } from "../shop/WorkspaceParts";
 
-type Translate = ReturnType<typeof useT>;
-export function stepLabel(
-  step: Pick<StepRun, "kind" | "action">,
-  t: Translate,
-) {
-  if (step.action) {
-    const key = `shop.teachActions.${step.action}`;
-    const label = t(key);
-    return label === key ? step.action.replace(/-/g, " ") : label;
-  }
-  return t(`runs.${step.kind}`);
-}
 export function RunStatusChip({
   status,
 }: {
@@ -62,21 +50,23 @@ export function TokenCount({ tokens }: { tokens: Run["tokens"] }) {
 export function RunLinks({
   run,
   compact = false,
+  showRequest = true,
 }: {
   run: Run;
   compact?: boolean;
+  showRequest?: boolean;
 }) {
   const t = useT();
   const requestId = runRequestId(run.trigger);
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-      {requestId ? (
+      {showRequest && (requestId ? (
         <Link className="shop-record-link" to={requestPath(requestId)}>
           {requestId}
         </Link>
       ) : (
         <span className="text-muted-foreground">{t("runs.noRequest")}</span>
-      )}
+      ))}
       <Link
         className="shop-record-link break-words"
         to={recipeVersionPath(run.recipe.recipeId, run.recipe.id)}
@@ -194,6 +184,7 @@ export function RunTimeline({
   compact?: boolean;
 }) {
   const t = useT();
+  const presentation = presentationContext(run);
   const definitions = new Map<string, Step>();
   const visit = (steps: readonly Step[]) =>
     steps.forEach((step) => {
@@ -254,7 +245,7 @@ export function RunTimeline({
                     <dd>
                       {step.input === null
                         ? t("runs.noInput")
-                        : valueSummary(step.input)}
+                        : valueSummary(step.input, presentation)}
                     </dd>
                   </div>
                   <div>
@@ -262,7 +253,7 @@ export function RunTimeline({
                     <dd>
                       {step.output === null
                         ? t("runs.noOutput")
-                        : valueSummary(step.output)}
+                        : valueSummary(step.output, presentation)}
                     </dd>
                   </div>
                 </dl>
@@ -286,6 +277,10 @@ export function RunTimeline({
                 </details>
               </>
             )}
+            {compact && <div className="mt-1 space-y-1 break-words text-xs text-muted-foreground">
+              {step.input !== null && <p>{valueSummary(step.input, presentation)}</p>}
+              {step.output !== null && <p>{valueSummary(step.output, presentation)}</p>}
+            </div>}
             {compact && step.status !== "completed" && (
               <span className="text-xs text-muted-foreground">
                 {t(`runs.states.${step.status}`)}

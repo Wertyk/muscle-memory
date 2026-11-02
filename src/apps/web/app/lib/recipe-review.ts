@@ -1,7 +1,8 @@
 import type { JsonValue } from "@muscle-memory/recipe-engine";
 
-import { moneyCurrency, moneyLabel } from "./recipe-money";
-import { argumentLabel, atPath, bindingLabel, expressionLabel, isObject } from "./recipe-studio";
+import { moneyCurrency } from "./recipe-money";
+import { argumentLabel, atPath, isObject } from "./recipe-studio";
+import { candidateLabel, resolvedCurrency, type PresentationContext } from "./recipe-presentation";
 
 function flatten(steps: JsonValue | undefined): Record<string, JsonValue>[] {
   if (!Array.isArray(steps)) return [];
@@ -103,36 +104,13 @@ export interface ReviewQuestion {
   step: string;
   question: string;
   minor: boolean;
-}
-function candidateLabel(
-  binding: JsonValue | undefined,
-  argument: string,
-  step: Record<string, JsonValue> | undefined,
-  labels: Readonly<Record<string, string>>,
-) {
-  if (!isObject(binding)) return undefined;
-  if (binding.mode === "fixed") {
-    if (typeof binding.value === "number" && argument.endsWith("amountMinor"))
-      return `a fixed ${moneyLabel(binding.value, moneyCurrency(step ?? {}, argument), labels)}`;
-    if (typeof binding.value === "string") {
-      const text = binding.value.length > 100 ? `${binding.value.slice(0, 100)}…` : binding.value;
-      return `fixed text “${text}”`;
-    }
-    return `a fixed ${JSON.stringify(binding.value)}`;
-  }
-  if (binding.mode === "expr" && isObject(binding.expr) && Array.isArray(binding.expr.cat)) {
-    const parts = binding.expr.cat.filter((part) => typeof part !== "string")
-      .map((part) => expressionLabel(part, labels));
-    return `a message using ${parts.join(" and ")}`;
-  }
-  if (["path", "expr", "template"].includes(String(binding.mode)))
-    return bindingLabel(binding as Parameters<typeof bindingLabel>[0], labels);
-  return undefined;
+  candidates?: readonly string[] | undefined;
 }
 export function reviewQuestions(
   entries: readonly JsonValue[],
   content: JsonValue,
   labels: Readonly<Record<string, string>>,
+  context: PresentationContext = {},
 ): ReviewQuestion[] {
   const steps = flatten(isObject(content) ? content.steps : undefined);
   return entries.map((entry) => {
@@ -150,6 +128,7 @@ export function reviewQuestions(
     const title =
       argumentLabel(argument, String(step?.action ?? "")) || "Recipe";
     let question = "Which source should supply this value?";
+    let candidates: string[] | undefined;
     if (entry.kind === "request-specific-text") {
       const fragments = Array.isArray(entry.fragments)
         ? entry.fragments
@@ -169,14 +148,13 @@ export function reviewQuestions(
             ? `Should this stay the same for every request?`
             : "Should this follow the request, or stay as shown in the demonstration?";
     } else if (entry.kind === "multiple-candidates" && Array.isArray(entry.candidates)) {
-      const candidates = [...new Set([chosen, ...entry.candidates.map((candidate) =>
+      const currency = resolvedCurrency(moneyCurrency(step ?? {}, argument), context, String(step?.id), argument);
+      candidates = [...new Set([chosen, ...entry.candidates.map((candidate) =>
         isObject(candidate) ? candidate.binding : undefined,
-      )].map((binding) => candidateLabel(binding, argument, step, labels))
+      )].map((binding) => candidateLabel(binding, currency, labels, argument.endsWith("amountMinor")))
         .filter((label): label is string => Boolean(label)))];
       if (candidates.length) {
-        const choices = candidates.length === 1 ? candidates[0]
-          : `${candidates.slice(0, -1).join(", ")} and ${candidates[candidates.length - 1]}`;
-        question = `${title} matched ${choices} — which should future requests use?`;
+        question = `Which should future requests use for ${title.toLowerCase()}?`;
       }
     } else if (entry.kind === "positional-array")
       question =
@@ -193,6 +171,7 @@ export function reviewQuestions(
       step: labels[String(entry.stepId)] ?? "Original demonstration",
       question,
       minor,
+      candidates: minor ? undefined : candidates,
     };
   });
 }

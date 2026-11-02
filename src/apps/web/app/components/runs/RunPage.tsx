@@ -1,7 +1,11 @@
 import { useActionQuery } from "@agent-native/core/client/hooks";
 import { useT } from "@agent-native/core/client/i18n";
 import type { JsonValue, Run } from "@muscle-memory/recipe-engine";
+import type { Request } from "@muscle-memory/shop-domain";
+import { runRequestId } from "@shared/recipe-runs";
 import { Link, useParams } from "react-router";
+import { requestPath } from "@/lib/shop-workspace";
+import { fieldLabel, isObject, valueSummary } from "@/lib/recipe-presentation";
 
 import { QueryError, ShopMasthead } from "../shop/WorkspaceParts";
 import { RunApproval } from "./RunApproval";
@@ -19,6 +23,8 @@ export function RunPage() {
   const t = useT();
   const { runId = "" } = useParams();
   const query = useActionQuery<Run>("get-recipe-run", { runId });
+  const requestId = query.data ? runRequestId(query.data.trigger) : null;
+  const request = useActionQuery<Request>("get-request", { requestId }, { enabled: Boolean(requestId) });
   if (query.isPending)
     return (
       <div className="shop-page">
@@ -45,10 +51,12 @@ export function RunPage() {
       {run && (
         <>
           <header className="shop-page-heading mt-6">
-            <h1 className="shop-serif break-words">{run.recipe.name}</h1>
+            <h1 className="shop-serif break-words">{requestId ? <Link className="shop-record-link" to={requestPath(requestId)}>
+              {valueSummary(request.data?.subject ?? (isObject(run.trigger) && typeof run.trigger.subject === "string" ? run.trigger.subject : fieldLabel("request")))} · {requestId}
+            </Link> : t("runs.details")}</h1>
             <RunStatusChip status={run.status} />
           </header>
-          <RunLinks run={run} />
+          <RunLinks run={run} showRequest={false} />
           <RunMetrics run={run} />
           <div className="mb-6 space-y-4">
             <RunApproval runId={run.id} />

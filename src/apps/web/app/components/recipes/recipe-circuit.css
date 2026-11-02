@@ -1,0 +1,164 @@
+.recipe-page .recipe-studio-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.recipe-page .recipe-inspector {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+.recipe-circuit {
+  position: relative;
+  min-width: 0;
+}
+.recipe-circuit[data-wide="true"] {
+  display: grid;
+  grid-template-columns: 200px clamp(110px, calc(100% - 800px), var(--circuit-gutter, 110px)) minmax(600px, 1fr);
+  align-items: start;
+}
+.recipe-circuit-legend { min-width: 0; }
+.recipe-circuit[data-wide="true"] > .recipe-circuit-legend {
+  grid-column: 1 / -1;
+}
+.recipe-circuit[data-wide="true"] .recipe-legend { padding-top: 0; }
+.recipe-circuit[data-wide="true"] > .recipe-circuit-sources { grid-column: 1; grid-row: 2; }
+.recipe-circuit[data-wide="true"] > .recipe-circuit-steps { grid-column: 3; grid-row: 2; }
+.recipe-circuit-sources section + section { margin-top: 1.75rem; }
+.recipe-circuit-sources h3 {
+  margin-bottom: 0.55rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.recipe-circuit-output-group + .recipe-circuit-output-group { margin-top: 1rem; }
+.recipe-circuit-output-group h4 { margin-bottom: 0.4rem; font-size: 0.7rem; font-weight: 500; color: hsl(var(--muted-foreground)); }
+.recipe-circuit-source {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0.7rem 1rem 0.7rem 0.75rem;
+  margin-bottom: 0.35rem;
+  text-align: left;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.4rem;
+  background: hsl(var(--card));
+  cursor: pointer;
+}
+.recipe-circuit-source-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.recipe-circuit-source code {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.65rem;
+}
+.recipe-circuit-source:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+.recipe-circuit-source[aria-pressed="true"] { border-color: hsl(var(--wire)); }
+.recipe-circuit-port {
+  position: absolute;
+  z-index: 4;
+  top: calc(50% - 3.5px);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: hsl(var(--wire));
+  pointer-events: none;
+}
+.recipe-circuit-source > .recipe-circuit-port { right: -3.5px; }
+.recipe-circuit-argument > .recipe-circuit-port { left: -3.5px; }
+.recipe-circuit-argument {
+  position: relative;
+  padding-left: 0.8rem;
+  border-radius: 0.3rem;
+}
+.recipe-circuit-source[data-highlighted="true"],
+.recipe-circuit-argument[data-highlighted="true"],
+.recipe-circuit-argument:focus-within {
+  background: hsl(var(--wire-bg));
+}
+[data-highlighted="true"] > .recipe-circuit-port {
+  box-shadow: 0 0 0 3px hsl(var(--wire) / 0.18);
+}
+.recipe-circuit-wires {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.recipe-circuit-wire {
+  fill: none;
+  stroke: hsl(var(--wire));
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+}
+.recipe-circuit-junction { fill: hsl(var(--wire)); }
+.recipe-circuit[data-circuit-active="true"] :is(.recipe-circuit-wire, .recipe-circuit-junction) { opacity: 0.18; }
+.recipe-circuit :is(.recipe-circuit-wire, .recipe-circuit-junction)[data-highlighted="true"] { opacity: 1; }
+.recipe-circuit .recipe-circuit-wire[data-highlighted="true"] { stroke-width: 2.5px; }
+.recipe-circuit-formula {
+  position: absolute;
+  z-index: 4;
+  width: max-content;
+  max-width: 68px;
+  padding: 0.3rem 0.25rem;
+  transform: translate(-50%, -50%);
+  border: 1px solid hsl(var(--wire) / 0.45);
+  border-radius: 999px;
+  background: hsl(var(--wire-bg));
+  color: hsl(var(--wire));
+  text-align: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.65rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+.recipe-circuit-formula > span:not(.recipe-circuit-port) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recipe-circuit-formula [data-formula-input] { left: -3.5px; }
+.recipe-circuit-formula [data-formula-output] { right: -3.5px; }
+.recipe-circuit-formula[data-highlighted="true"] { border-color: hsl(var(--wire)); }
+.recipe-circuit:not([data-circuit-ready="true"]) :is(.recipe-circuit-wires, .recipe-circuit-formula, .recipe-circuit-port) { visibility: hidden; }
+.recipe-circuit-ambiguity-notice { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; justify-content: space-between; margin-bottom: 1rem; padding: 0.65rem 0.9rem; border: 1px solid hsl(var(--border)); border-radius: 0.4rem; font-size: 0.8rem; }
+.recipe-panel:focus { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.recipe-circuit[data-wide="true"] .recipe-flow { padding-left: 0; }
+.recipe-circuit[data-wide="true"] .recipe-flow::before { display: none; }
+.recipe-circuit[data-wide="true"] .recipe-step-number { left: 1.2rem; top: 1.05rem; }
+.recipe-circuit[data-wide="true"] .recipe-step-heading { padding-left: 2.2rem; }
+.recipe-circuit[data-wide="true"] .recipe-wire::before { display: none; }
+.recipe-circuit[data-wide="true"] .recipe-step-card { box-shadow: none; }
+.recipe-money-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.4rem; }
+.recipe-money-fields > .recipe-field { flex: 1; min-width: min(100%, 15rem); }
+.recipe-circuit[data-wide="true"] .recipe-money-fields { display: block; }
+.recipe-circuit[data-wide="true"] .recipe-currency-field .recipe-argument { position: static; width: 6.3rem; height: auto; clip-path: none; }
+.recipe-circuit[data-wide="true"] .recipe-currency-field .recipe-field-row { padding: 0.45rem 0 0.45rem 0.8rem; gap: 0.65rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .recipe-circuit-wire[data-enter] {
+    stroke-dasharray: 1;
+    animation: recipe-circuit-draw 600ms cubic-bezier(0.22, 1, 0.36, 1) var(--circuit-delay, 0ms) both;
+  }
+  .recipe-circuit-port[data-enter] { animation: recipe-circuit-port-in 600ms cubic-bezier(0.22, 1, 0.36, 1) var(--circuit-delay, 0ms) both; }
+  .recipe-circuit-junction[data-enter] { animation: recipe-circuit-junction-in 600ms cubic-bezier(0.22, 1, 0.36, 1) var(--circuit-delay, 0ms) both; }
+}
+@keyframes recipe-circuit-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes recipe-circuit-port-in { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: scale(1); } }
+@keyframes recipe-circuit-junction-in { from { opacity: 0; } }

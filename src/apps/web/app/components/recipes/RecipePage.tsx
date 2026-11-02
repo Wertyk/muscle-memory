@@ -43,9 +43,10 @@ import {
 } from "@/lib/recipe-studio";
 
 import { CorrectionsPanel } from "./CorrectionsPanel";
-import { AmbiguitiesPanel } from "./AmbiguitiesPanel";
+import { AmbiguitiesPanel, AmbiguityNotice } from "./AmbiguitiesPanel";
 import { CrystallizeControl } from "./CrystallizeControl";
-import { RecipeField, WireLegend, type ChangeField } from "./RecipeField";
+import { RecipeField, type ChangeField } from "./RecipeField";
+import { RecipeCircuit } from "./RecipeCircuit";
 import { RecipeStatus } from "./RecipesPage";
 import { RecipeSteps } from "./RecipeSteps";
 import { RecipeVersionDiff } from "./RecipeVersionDiff";
@@ -249,7 +250,6 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
                 )?.version.version ?? 0,
             }))}
       </div>
-      <WireLegend />
       <div className="recipe-studio-grid">
         <div className="min-w-0">
           <section
@@ -290,11 +290,14 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
               <span>{expressionLabel(trigger.match ?? null, labels)}</span>
             </RecipeField>
           </section>
+          <AmbiguityNotice draft={draft} labels={labels} panelId="recipe-ambiguities" />
+          <RecipeCircuit draft={draft} labels={labels} loadKey={`${recipeId}:${draft.baseVersionId}`}>
           <RecipeSteps
             steps={draft.content.steps ?? []}
             {...{ draft, labels, disabled }}
             onChange={change}
           />
+          </RecipeCircuit>
           {Array.isArray(draft.content.steps) &&
             draft.content.steps.length === 0 && (
               <EmptyState title={t("recipes.noSteps")} />
@@ -324,7 +327,7 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
           )}
         </div>
         <aside className="recipe-inspector" aria-label={t("recipes.review")}>
-          <AmbiguitiesPanel draft={draft} labels={labels} />
+          <AmbiguitiesPanel id="recipe-ambiguities" draft={draft} labels={labels} />
           <RecipeBacktestPanel detail={detail.data} reports={reports} remember={remember} />
           <section className="recipe-panel">
             <h2 className="shop-serif">

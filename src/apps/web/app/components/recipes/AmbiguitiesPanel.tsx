@@ -3,6 +3,25 @@ import { useT } from "@agent-native/core/client/i18n";
 import { reviewQuestions, type ReviewQuestion } from "@/lib/recipe-review";
 import type { RecipeDraft } from "@/lib/recipe-studio";
 import { useRecipePresentation } from "@/hooks/use-recipe-presentation";
+import { Button } from "@/components/ui/button";
+
+export function AmbiguityNotice({ draft, labels, panelId }: {
+  draft: RecipeDraft;
+  labels: Readonly<Record<string, string>>;
+  panelId: string;
+}) {
+  const presentation = useRecipePresentation();
+  const count = reviewQuestions(draft.ambiguities, draft.content, labels, presentation).filter((item) => !item.minor).length;
+  if (!count) return null;
+  return <div className="recipe-circuit-ambiguity-notice">
+    <span>{count} {count === 1 ? "ambiguity" : "ambiguities"} to review</span>
+    <Button variant="outline" size="sm" aria-controls={panelId} onClick={() => {
+      const panel = document.getElementById(panelId);
+      panel?.scrollIntoView({ block: "start" });
+      panel?.focus({ preventScroll: true });
+    }}>Review ambiguities</Button>
+  </div>;
+}
 function Questions({ items }: { items: readonly ReviewQuestion[] }) {
   const t = useT();
   return (
@@ -27,9 +46,11 @@ function Questions({ items }: { items: readonly ReviewQuestion[] }) {
 export function AmbiguitiesPanel({
   draft,
   labels,
+  id,
 }: {
   draft: RecipeDraft;
   labels: Readonly<Record<string, string>>;
+  id?: string;
 }) {
   const t = useT();
   const presentation = useRecipePresentation();
@@ -37,7 +58,7 @@ export function AmbiguitiesPanel({
   const important = items.filter((item) => !item.minor);
   const minor = items.filter((item) => item.minor);
   return (
-    <section className="recipe-panel" aria-label={t("recipes.ambiguities")}>
+    <section id={id} tabIndex={id ? -1 : undefined} className="recipe-panel" aria-label={t("recipes.ambiguities")}>
       <h2 className="shop-serif">
         {t("recipes.ambiguities")}
         <span

@@ -58,30 +58,30 @@ function BindingFields({
     const amountLabel = amount.mode === "fixed" && typeof amount.value === "number"
       ? moneyLabel(amount.value, currencyLabel) : undefined;
     return (
-      <RecipeField
-        label={label}
-        path={[...path, "amountMinor"]}
-        kind="binding"
-        {...{ draft, onChange, disabled }}
-      >
-        <div className="recipe-money-values">
+      <div className="recipe-money-fields">
+        <RecipeField
+          label={label}
+          path={[...path, "amountMinor"]}
+          kind="binding"
+          {...{ draft, onChange, disabled }}
+        >
           <WireChip binding={amount} labels={labels} {...(amountLabel ? { compactLabel: amountLabel } : {})} />
-          <div className="recipe-currency-field">
-            <RecipeField
-              label="Currency"
-              path={[...path, "currency"]}
-              kind="binding"
-              {...{ draft, onChange, disabled }}
-            >
-              <WireChip
-                binding={currency}
-                labels={labels}
-                compactLabel={currencyLabel}
-              />
-            </RecipeField>
-          </div>
+        </RecipeField>
+        <div className="recipe-currency-field">
+          <RecipeField
+            label="Currency"
+            path={[...path, "currency"]}
+            kind="binding"
+            {...{ draft, onChange, disabled }}
+          >
+            <WireChip
+              binding={currency}
+              labels={labels}
+              compactLabel={currencyLabel}
+            />
+          </RecipeField>
         </div>
-      </RecipeField>
+      </div>
     );
   }
   if (

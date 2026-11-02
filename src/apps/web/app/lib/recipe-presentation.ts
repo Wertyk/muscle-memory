@@ -371,6 +371,24 @@ export function bindingLabel(
         : valueSummary(binding.value);
   }
 }
+/** Compact operation on a circuit node; the complete formula stays in the chip/title. */
+export function formulaLabel(value: JsonValue, labels: Readonly<Record<string, string>> = {}): string {
+  let inner = value;
+  for (let depth = 0; depth < 32 && isObject(inner); depth++) {
+    const rounded = inner.round ?? inner.floor ?? inner.ceil;
+    if (!Array.isArray(rounded)) break;
+    inner = rounded[0] ?? null;
+  }
+  if (isObject(inner)) {
+    const product = inner["*"];
+    const scale = Array.isArray(product) ? product.find((part) => typeof part === "number") : undefined;
+    if (typeof scale === "number") return `× ${scale}`;
+    for (const [op, label] of Object.entries({ firstWord: "First name", money: "Format money", cat: "Join text", find: "Find item" }))
+      if (inner[op] !== undefined) return label;
+  }
+  const full = expressionLabel(value, labels);
+  return full.length > 24 ? `${full.slice(0, 23)}…` : full;
+}
 export function atPath(
   content: JsonValue,
   path: readonly (string | number)[],

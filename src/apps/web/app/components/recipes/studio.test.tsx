@@ -317,6 +317,23 @@ describe("Recipe Studio UI", () => {
     expect(calls).toHaveLength(before);
     expect(calls.every(call => ["get-recipe", "get-recipe-draft", "get-demonstration", "list-recipe-runs", "get-recipe-run"].includes(call.name))).toBe(true);
   });
+  it("offers unresolved ambiguities above the circuit and scrolls to and focuses their existing panel", async () => {
+    record = { ...record, draft: { ...(await studio.getDraft(record.recipe.id)),
+      ambiguities: [{ kind: "request-specific-text", stepId: "reply", argumentPath: "template", fragments: ["Maya"] }],
+    } };
+    await mount();
+    const notice = node.querySelector<HTMLElement>(".recipe-circuit-ambiguity-notice")!;
+    expect(notice.textContent).toContain("1 ambiguity to review");
+    expect(Boolean(notice.compareDocumentPosition(node.querySelector(".recipe-legend")!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    const panel = node.querySelector<HTMLElement>("#recipe-ambiguities")!;
+    panel.scrollIntoView = vi.fn();
+    const before = calls.length;
+    await click(button("Review ambiguities"));
+    expect(panel.scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+    expect(document.activeElement).toBe(panel);
+    expect(panel.getAttribute("aria-label")).toBe("Ambiguities");
+    expect(calls).toHaveLength(before);
+  });
   it.each([false, true])("shows the stored source provenance in Studio (agent=%s)", async isAgent => {
     agentSource = isAgent;
     await mount(`/recipes/${record.recipe.id}`);

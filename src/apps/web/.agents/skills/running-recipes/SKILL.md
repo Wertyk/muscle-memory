@@ -8,6 +8,17 @@ metadata:
 
 # Run a recipe
 
+Before activation, use `backtest-recipe({recipe, requestType})` to compare a saved
+version ID or unsaved snapshot with resolved requests. Use
+`compare-recipe-versions({baseline, candidate, requestType})` for two versions on
+one shared case set. These actions do not persist runs, versions or shop effects.
+Report identical/different/not_handled counts and the per-request reasons/diffs.
+Do not present blocked/handoff paths as handled. Reads use current shop data;
+free-text request extraction and recipe extract steps consume real tokens.
+Include `summary.totalTokens`; for comparisons the combined summary counts shared
+request extraction once. Each version's report also attributes that shared usage
+to its own scenario. Repeat calls extract again; no persistent cache is installed.
+
 Use `run-recipe` with `recipe` (a complete immutable recipe version), `trigger`,
 and optional `dryRun` (default false). For request workflows, include the short
 `requestId` in the trigger so failure/explicit handoff can escalate that request.

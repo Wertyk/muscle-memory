@@ -86,6 +86,29 @@ PGlite with `pnpm -C src seed:shop`, checks CLI/frontend parity, then calls the
 real local chat endpoint using the configured model and verifies persisted effects.
 Only sanitized assertions/metadata are saved to `scripts/shop-actions-evidence.json`.
 
+## Recipe backtesting
+
+| Action | Input | Result / use |
+| --- | --- | --- |
+| `backtest-recipe` | `recipe` (version ID or snapshot), `requestType` | Summary, per-request differences and dry-run evidence |
+| `compare-recipe-versions` | `baseline`, `candidate` (version IDs or snapshots), `requestType` | Paired reports on one case set, status changes, intended-mutation differences and combined tokens |
+
+`backtest-recipe({recipe, requestType})` accepts a saved version ID or a complete
+immutable snapshot. `compare-recipe-versions({baseline, candidate, requestType})`
+accepts the same references for both versions. These read-only GET actions are
+discoverable through `tool-search`; they never save snapshots, runs or shop data.
+Select the recipe trigger's request type explicitly; only resolved requests of
+that type are loaded, then the engine evaluates all trigger conditions per case.
+Preserve the summary, per-request status/reasons/diff, and dry-run evidence.
+`not_handled` includes blocked mutation-output dependencies and handoffs.
+
+Real free-text request extraction and recipe extract steps spend tokens, even
+though shop mutations are suppressed. Summary `tokens`/`totalTokens` include both;
+comparison's combined summary counts shared request extraction once. A repeated
+action call extracts again. Dry-run reads use **current** shop data (acceptable
+for the seed), not historical snapshots. Do not treat results as proof of policy
+success. Recipe Studio UI is TASK-13. Details: `server/recipe-execution.md`.
+
 ## Application state
 
 - `navigation` describes the view and selected ids. Inbox is `{ view: "inbox", path: "/inbox" }`; an open request is `{ view: "request", requestId, path: "/requests/<requestId>" }`. The same id is in tab-scoped `selection:<TAB_ID>`; leaving the request clears selection. Filters (`status`, `type`) live in URL search params. Chat is `chat` at `/chat` and `/chat/<threadId>`; legacy `/home` links redirect to the inbox.

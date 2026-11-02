@@ -317,8 +317,8 @@ public SVG logos, favicons, and app icons match the bundled chat template; typog
 and UI icons come from the packages credited above. Shop content is synthetic.
 The screenshot references are for captures of this app supplied during review.
 
-The planning documents under [`docs/source/`](../docs/source/) are research notes
-and hackathon reference material, not application code.
+Planning notes and hackathon research (`docs/source/` in the private working
+repository) are not application code and are not included in this public repository.
 
 ## AI tools and models
 

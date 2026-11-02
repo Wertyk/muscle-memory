@@ -1,5 +1,12 @@
 export const recipeMessages = {
   title: "Recipes",
+  crystallize: "Crystallize with agent",
+  crystallizePrompt: "Crystallize this draft into a named, reusable recipe. Follow the crystallize skill: read the draft and source demonstration, resolve the listed ambiguities, ask at most two questions if needed, then update and save through Recipe Studio with proposal notes. Dry-run a different request of the same type and report its arguments and tokens. Keep activation for my review.",
+  proposal: "Recipe proposal",
+  proposalSaved: "Saved v{{version}} · activation is a separate choice",
+  proposedResolutions: "Agent resolution notes",
+  resolutionEvidence: "Original ambiguities remain in Studio for review. These notes describe the agent's choices; a saved version does not prove a successful dry run.",
+  openStudio: "Open in Recipe Studio",
   back: "All recipes",
   name: "Name",
   status: "Status",

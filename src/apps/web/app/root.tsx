@@ -39,6 +39,7 @@ import { i18nCatalog } from "./i18n";
 
 import stylesheet from "./global.css?url";
 import "./components/runs/RunChatCard";
+import "./components/recipes/RecipeProposalCard";
 
 configureTracking({
   getDefaultProps: (_name, properties) => ({

@@ -39,6 +39,7 @@ import {
 } from "@/lib/recipe-studio";
 
 import { AmbiguitiesPanel } from "./AmbiguitiesPanel";
+import { CrystallizeControl } from "./CrystallizeControl";
 import { RecipeField, WireLegend, type ChangeField } from "./RecipeField";
 import { RecipeStatus } from "./RecipesPage";
 import { RecipeSteps } from "./RecipeSteps";
@@ -158,6 +159,7 @@ export function RecipePage() {
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          <CrystallizeControl draft={draft} originalVersionId={history[0]?.version.id} disabled={disabled} />
           {recipe.status === "active" && (
             <Button
               variant="outline"

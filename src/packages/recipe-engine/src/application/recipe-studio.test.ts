@@ -121,7 +121,7 @@ describe("RecipeStudio application", () => {
           recipeId: version.recipeId,
           expectedRevision: updated.revision,
         }),
-      ).rejects.toThrow(/validation/);
+      ).rejects.toThrow(/steps\.0\.args/);
       expect((await studio.get(version.recipeId)).history).toHaveLength(1);
     }
   });

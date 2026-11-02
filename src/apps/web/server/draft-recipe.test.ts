@@ -9,6 +9,9 @@ import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import draftAction from "../actions/draft-recipe-from-demonstration.js";
 import getDraft from "../actions/get-recipe-draft.js";
+import updateDraft from "../actions/update-recipe-draft.js";
+import saveVersion from "../actions/save-recipe-version.js";
+import getRecipe from "../actions/get-recipe.js";
 import start from "../actions/start-demonstration.js";
 import stop from "../actions/stop-demonstration.js";
 import cancel from "../actions/cancel-demonstration.js";
@@ -76,7 +79,7 @@ describe("stored Teach → draft → dry-run with real app actions", () => {
     if (directory) await rm(directory, { recursive: true, force: true });
   });
 
-  async function record(literalReply = false) {
+  async function record(literalReply = false, productReply = false) {
     const demonstration = await start.run({ requestId: request.id }, context);
     await getRequest.run({ requestId: request.id }, context);
     await getOrder.run({ orderId: order.id }, context);
@@ -85,7 +88,7 @@ describe("stored Teach → draft → dry-run with real app actions", () => {
     await getActivity.run({ requestId: request.id }, context);
     await issueRefund.run({ orderId: order.id, amount: { amountMinor: 14000, currency: "USD" }, reason: "Damaged item" }, context);
     await sendReply.run({ requestId: request.id,
-      template: literalReply ? `Hi ${customer.name}, we refunded 14000 minor units.` : "Hi {{name}}, we refunded {{amount}} minor units.",
+      template: productReply ? "Hi Maya, I am sorry your Ember serving platter arrived chipped. We refunded $140.00, half of its price." : literalReply ? `Hi ${customer.name}, we refunded 14000 minor units.` : "Hi {{name}}, we refunded {{amount}} minor units.",
       variables: literalReply ? {} : { name: customer.name, amount: 14000 },
     }, context);
     await tag.run({ requestId: request.id, tag: "damaged" }, context);
@@ -204,6 +207,60 @@ describe("stored Teach → draft → dry-run with real app actions", () => {
     await runWithRequestContext({}, async () => {
       await expect(getDraft.run({ versionId: "ver_missing" }, { caller: "cli" })).rejects.toMatchObject({ errorCode: "DRAFT_INPUT" });
     });
+  }));
+
+  it("crystallizes through Studio, rejects invalid content readably, and generalizes product/customer on another order at zero tokens", async () => session(async () => {
+    const demo = await record(false, true);
+    const result = await draftAction.run({ demonstrationId: demo.id }, context);
+    const recipeId = result.recipe.id;
+    expect(result.ambiguities).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "request-specific-text", fragments: ["Ember serving platter"] })]));
+    const draft = await composition.getRecipeStudio(context).getDraft(recipeId);
+    const bad = await updateDraft.run({ recipeId, expectedRevision: draft.revision, content: {
+      ...draft.content, steps: [{ id: "reply", kind: "action", action: "send-reply", args: { template: { mode: "expr", expr: { javascript: "bad" } } } }],
+    } }, context);
+    expect(bad.issues[0]?.message).toContain("Invalid binding");
+    await expect(saveVersion.run({ recipeId, expectedRevision: bad.revision }, context)).rejects.toMatchObject({
+      errorCode: "RECIPE_INVALID", message: expect.stringContaining("steps.0.args.template"),
+    });
+    const orderRead = actionStep(result, "get-order");
+    const price = { find: [{ var: `steps.${orderRead.id}.output.items` }, "productId", { var: "trigger.productId" }, "unitPrice.amountMinor"] };
+    const currency = { find: [{ var: `steps.${orderRead.id}.output.items` }, "productId", { var: "trigger.productId" }, "unitPrice.currency"] };
+    const amount = { "*": [price, 0.5] };
+    const content = { ...draft.content, name: "Damaged item · half-price refund", steps: [
+      { id: "customer", kind: "action", action: "get-customer", args: { customerId: { mode: "path", path: "trigger.customerId" } } },
+      ...result.draft.steps.map(step => step.kind === "action" && step.action === "send-reply" ? { ...step, args: {
+        requestId: { mode: "path", path: "trigger.requestId" }, variables: { mode: "fixed", value: {} },
+        template: { mode: "expr", expr: { cat: ["Hi ", { firstWord: [{ var: "steps.customer.output.name" }] }, ", sorry your ",
+          { find: [{ var: `steps.${orderRead.id}.output.items` }, "productId", { var: "trigger.productId" }, "name"] },
+          " arrived damaged. We refunded ", { money: [amount, currency] }, "."] } },
+      } } : step),
+    ] } as JsonObject;
+    const updated = await updateDraft.run({ recipeId, expectedRevision: bad.revision, content }, context);
+    expect(updated.issues).toEqual([]);
+    expect(updated.ambiguities).toEqual(draft.ambiguities);
+    const proposal = { description: "Refund half of the damaged line and reply personally.", trigger: "A damaged-item request identifies a purchased product.",
+      resolutions: [{ ambiguity: "Refund amount", resolution: "Operator confirmed 50% of selected unit price." }, { ambiguity: "Product and name", resolution: "Bind keyed line name and customer first name." }] };
+    const saved = await saveVersion.run({ recipeId, expectedRevision: updated.revision, proposal }, context);
+    expect(saved).toMatchObject({ recipeId, version: 2, name: content.name });
+    expect(saved).not.toHaveProperty("proposal");
+    expect(saveVersion.chatUI?.projectResult?.({ proposal }, saved)).toEqual({ version: saved, proposal });
+    expect((await getRecipe.run({ recipeId }, context)).history.slice(-1)[0]?.version).toEqual(saved);
+    expect((await getRecipe.run({ recipeId }, context)).recipe.activeVersionId).toBeNull();
+    // Target line is moved away from index zero, and recipient differs from customer.
+    const chosen = targetOrder.items[0]!;
+    await db.update(tables.orders).set({ items: [...targetOrder.items.slice(1), chosen], shippingAddress: { ...targetOrder.shippingAddress, name: "Different Recipient" } }).where(eq(tables.orders.id, targetOrder.id));
+    if (target.content.source !== "structured") throw new Error("Expected structured seed");
+    const before = await shopEffects();
+    const run = await runRecipe.run({ recipe: saved, trigger: buildRequestTrigger(target.content.fields as unknown as JsonObject, {
+      requestId: target.id, customerId: target.customerId, subject: target.subject,
+    }), dryRun: true }, context);
+    expect(run.status).toBe("completed");
+    const reply = run.steps.find(step => step.action === "send-reply")!;
+    expect(reply.input).toEqual({ requestId: target.id, variables: {}, template: `Hi ${targetCustomer.name.split(" ")[0]}, sorry your ${chosen.name} arrived damaged. We refunded $${(chosen.unitPrice.amountMinor * 0.5 / 100).toFixed(2)}.` });
+    expect(run.steps.find(step => step.action === "issue-refund")?.input).toMatchObject({ orderId: target.orderId, amount: { amountMinor: chosen.unitPrice.amountMinor * 0.5, currency: chosen.unitPrice.currency } });
+    expect(run.tokens).toEqual({ input: 0, output: 0 });
+    expect(extract).not.toHaveBeenCalled();
+    expect(await shopEffects()).toEqual(before);
   }));
 
   it("uses confirmed extraction-shaped fields for free text and never infers from its raw message", async () => session(async () => {

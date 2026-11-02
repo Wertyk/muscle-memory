@@ -4,3 +4,4 @@ export * from "./application/use-cases.js";
 export * from "./application/create-request.js";
 export * from "./application/classify-request.js";
 export * from "./application/get-request-activity.js";
+export * from "./application/get-handling-stats.js";

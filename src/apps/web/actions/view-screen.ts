@@ -8,6 +8,7 @@ import {
   getShopUseCases,
   getCurrentDemonstration,
   getRecipeUseCases,
+  getHandlingStats,
 } from "../server/composition.js";
 import { PROCESSING_STATES } from "../shared/request-processing.js";
 import { shopId, shopResult } from "../server/shop-action-contracts.js";
@@ -67,6 +68,8 @@ export default defineAction({
           useCases.getShipmentStatus.execute({ orderId: request.orderId }),
         );
       }
+    } else if (navigation?.view === "dashboard") {
+      screen.handlingStats = await getHandlingStats(context).execute();
     } else if (navigation?.view === "inbox") {
       const url = await readAppStateForCurrentTab("__url__");
       const params = z

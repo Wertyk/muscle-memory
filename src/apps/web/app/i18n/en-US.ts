@@ -1,7 +1,9 @@
 import { shopMessages } from "./shop-en";
 import { runMessages } from "./runs-en";
+import { dashboardMessages } from "./dashboard-en";
 
 const messages = {
+  dashboard: dashboardMessages,
   shop: shopMessages,
   runs: runMessages,
   composer: {

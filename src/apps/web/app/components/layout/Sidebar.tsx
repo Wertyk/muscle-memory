@@ -35,6 +35,7 @@ import { APP_TITLE } from "@/lib/app-config";
 import { chatThreadPath, threadIdFromPath } from "@/lib/chat-paths";
 import { INBOX_PATH } from "@/lib/shop-workspace";
 import { cn } from "@/lib/utils";
+import { DashboardNavLink } from "./DashboardNavLink";
 
 const CHAT_STORAGE_KEY = "chat";
 const CHAT_ACTIVE_THREAD_KEY = `agent-chat-active-thread:${CHAT_STORAGE_KEY}`;
@@ -419,6 +420,7 @@ export function Sidebar({
       >
         <InboxNavLink collapsed={collapsed} />
         <RunsNavLink collapsed={collapsed} />
+        <DashboardNavLink collapsed={collapsed} />
         <ChatThreadsSection collapsed={collapsed} />
       </nav>
 

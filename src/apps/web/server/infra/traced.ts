@@ -17,6 +17,7 @@ export interface TraceRecording {
   navigation?: unknown;
 }
 export interface TraceCapture {
+  succeeded?: (action: { actionName: string; input: unknown; output: unknown }, context?: ActionRunContext) => Promise<void>;
   // Resolve and reserve once at entry, never move an in-flight call to another demo.
   recording(
     context: ActionRunContext | undefined,
@@ -41,8 +42,14 @@ export function traced<Input, Output>(
   capture: TraceCapture,
 ) {
   return async (input: Input, context?: ActionRunContext): Promise<Output> => {
+    const invoke = async () => {
+      const output = await run(input, context);
+      // Usage attribution is telemetry. A failed write must not repeat a shop effect.
+      try { await capture.succeeded?.({ actionName, input, output }, context); } catch { /* Missing measurements remain unknown. */ }
+      return output;
+    };
     const recording = await capture.recording(context, { actionName, input });
-    if (!recording) return run(input, context);
+    if (!recording) return invoke();
     const now = capture.now ?? Date.now;
     const startedAt = now();
     let snapshot: unknown;
@@ -62,11 +69,11 @@ export function traced<Input, Output>(
         recording,
         `Could not snapshot the ${actionName} step. This action is not captured.`,
       );
-      return run(input, context);
+      return invoke();
     }
     let output: Output;
     try {
-      output = await run(input, context);
+      output = await invoke();
     } catch (cause) {
       try {
         await recording.reject?.();

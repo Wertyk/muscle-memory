@@ -111,6 +111,19 @@ success. Recipe Studio UI is TASK-13. Details: `server/recipe-execution.md`.
 
 ## Application state
 
+`/dashboard` reads `get-handling-stats({})` through the same action available to
+the agent/MCP/CLI. Navigate with `view=dashboard`; `view-screen` returns the same
+stats projection. It shows the latest 100 recorded handling outcomes, token/time
+series, zero-token recipe share, same-type mean costs with separate sample counts,
+and live pending approval/active recipe counts. Null means unmeasured, never zero.
+Seed history, unlinked/manual resolutions, queued handoffs and dry runs are
+excluded. Agent outcomes require an explicit recorded resolution; exact action
+run/thread links join framework observability totals for the signed-in actor and
+workspace. Multi-request turns have unknown cost. Attribution and matching
+duration start with TASK-21, without invented backfill. Read the dashboard method
+disclosure or `server/recipe-execution.md` before reporting savings; preserve
+coverage and sample counts. A falling curve is an observation, not a guarantee.
+
 - `navigation` describes the view and selected ids. Inbox is `{ view: "inbox", path: "/inbox" }`; an open request is `{ view: "request", requestId, path: "/requests/<requestId>" }`. The same id is in tab-scoped `selection:<TAB_ID>`; leaving the request clears selection. Filters (`status`, `type`) live in URL search params. Chat is `chat` at `/chat` and `/chat/<threadId>`; legacy `/home` links redirect to the inbox.
 - Use `navigate` when supported and `view-screen` for a fresh read of visible details; basic navigation is already in `<current-screen>`.
 - `navigate({ view: "inbox" })` opens the inbox; `navigate({ view: "request", requestId })` opens a request. `view-screen` reads tab-scoped state and the same shop use-cases to return current request/customer/order/shipment details or filtered inbox records. Never infer the target from a previous chat message when current navigation is available.

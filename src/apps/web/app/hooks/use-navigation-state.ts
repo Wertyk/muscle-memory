@@ -99,6 +99,7 @@ export function navigationStateForPath(pathname: string): NavigationState {
 }
 
 function viewForPath(pathname: string): string {
+  if (pathname === "/dashboard") return "dashboard";
   if (pathname === INBOX_PATH) return "inbox";
   if (requestIdFromPath(pathname)) return "request";
   if (runIdFromPath(pathname)) return "run";
@@ -121,6 +122,8 @@ function pathForView(view?: string): string {
     case "runs":
     case "run":
       return "/runs";
+    case "dashboard":
+      return "/dashboard";
     case "inbox":
     case "request":
       return INBOX_PATH;

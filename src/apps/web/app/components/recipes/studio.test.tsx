@@ -37,12 +37,13 @@ vi.mock("@agent-native/core/client/i18n", () => ({
   useT:
     () =>
     (key: string, values: Record<string, unknown> = {}) => {
-      const value = key
+      const message = (messageKey: string) => messageKey
         .split(".")
         .reduce<unknown>(
           (node, part) => (node as Record<string, unknown>)?.[part],
           enUS,
         );
+      const value = (typeof values.count === "number" ? message(`${key}_${values.count === 1 ? "one" : "other"}`) : undefined) ?? message(key);
       return String(value ?? key).replace(/\{\{(\w+)\}\}/g, (_, name) =>
         String(values[name] ?? ""),
       );
@@ -763,7 +764,7 @@ describe("Recipe Studio historical backtests", () => {
     expect(node.textContent).toContain("$190.00");
     expect(node.textContent).toContain("Create replacement");
     expect(node.textContent).toContain("Please send packaging photos");
-    expect(node.textContent).toContain("1 differ only in wording or tags");
+    expect(node.textContent).toContain("1 differs only in wording or tags");
     const wordingCase = node.querySelector('a[href="/requests/req_0040"]')?.closest("li");
     expect(wordingCase?.textContent).toContain("Same outcome; only wording or tags differ");
     expect(wordingCase?.textContent).toContain("Wording difference");
@@ -944,8 +945,8 @@ describe("Recipe Studio historical backtests", () => {
     await mount();
     await click(button("Compare versions"));
     const comparison = node.querySelector<HTMLDetailsElement>(".recipe-backtest-comparison")!;
-    await settle(() => expect(comparison.textContent).toContain("0 of 1 request outcomes changed · 1 differ only in wording or tags"));
-    expect(comparison.textContent).toContain("8 same outcome · 2 different outcome · 0 not handled — 1 differ only in wording or tags");
+    await settle(() => expect(comparison.textContent).toContain("0 of 1 request outcomes changed · 1 differs only in wording or tags"));
+    expect(comparison.textContent).toContain("8 same outcome · 2 different outcome · 0 not handled — 1 differs only in wording or tags");
     expect(comparison.textContent).toContain("Same outcome → Same outcome · Only wording or tags changed");
     expect(comparison.textContent).toContain("Wording difference");
     expect(comparison.textContent).toContain("Earlier reply words");

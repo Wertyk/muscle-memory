@@ -10,6 +10,7 @@ export const correctionMessages = {
   loadingDiff: "Loading saved version diff…",
   diffUnavailable: "Open Studio to review the saved version diff.",
   reviewDiff: "Review diff and activate in Studio",
+  viewVersion: "View version {{version}} in Studio",
   evidence: "Correction evidence",
   failed: "Could not record the decision. Refresh and try again.",
 };

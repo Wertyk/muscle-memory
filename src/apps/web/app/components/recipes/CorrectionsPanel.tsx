@@ -42,7 +42,7 @@ function CorrectionItem({ correction }: { correction: Correction }) {
     })}>{t("corrections.propose")}</Button>}
     {correction.proposal && <>
       <p className="mt-2 text-sm" role="status">{t(`corrections.${correction.status}`, { version: correction.proposal.version.version, reason: correction.decision?.reason ?? "" })}</p>
-      <Link className="shop-record-link mt-2 inline-block text-sm underline" to={recipeVersionPath(correction.recipe.recipeId, correction.proposal.version.id)}>{t("corrections.reviewDiff")}</Link>
+      <Link className="shop-record-link mt-2 inline-block text-sm underline" to={recipeVersionPath(correction.recipe.recipeId, correction.proposal.version.id)}>{t(correction.status === "proposed" ? "corrections.reviewDiff" : "corrections.viewVersion", { version: correction.proposal.version.version })}</Link>
     </>}
     {correction.status === "proposed" && <details className="mt-3 text-sm">
       <summary>{t("corrections.reject")}</summary>

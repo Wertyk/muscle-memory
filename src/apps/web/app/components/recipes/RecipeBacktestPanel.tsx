@@ -212,7 +212,7 @@ export function RecipeBacktestPanel({ detail, reports, remember }: {
       {error("comparison")}
       {paired && <div className="mt-3" aria-live="polite">
         <p className="text-xs">{t("recipes.backtests.paired", { baseline: baseline?.version, candidate: candidate?.version })}</p>
-        <p className="my-2 text-xs">{t("recipes.backtests.changed", { changed: paired.cases.filter((item) => item.changed).length, nonOutcomeOnly: paired.cases.filter((item) => item.nonOutcomeOnly).length, total: paired.cases.length })}</p>
+        <p className="my-2 text-xs">{t("recipes.backtests.changed", { changed: paired.cases.filter((item) => item.changed).length, nonOutcomeOnly: paired.cases.filter((item) => item.nonOutcomeOnly).length, count: paired.cases.filter((item) => item.nonOutcomeOnly).length, total: paired.cases.length })}</p>
         <p className="text-xs">{paired.summary.totalTokens === null
           ? t("recipes.backtests.tokensUnknown", { known: paired.summary.tokens.input + paired.summary.tokens.output, count: paired.summary.unknownUsageCases })
           : t("recipes.backtests.combinedTokens", { count: paired.summary.totalTokens })}</p>

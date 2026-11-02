@@ -1,10 +1,11 @@
+import type { CorrectionEvidence } from "@shared/corrections";
 import type {
   JsonValue,
   RecipeStudio,
 } from "@muscle-memory/recipe-engine";
 
 export type RecipeSummary = Awaited<ReturnType<RecipeStudio["list"]>>[number];
-export type RecipeDetail = Awaited<ReturnType<RecipeStudio["get"]>>;
+export type RecipeDetail = Awaited<ReturnType<RecipeStudio["get"]>> & CorrectionEvidence;
 export type RecipeDraft = Awaited<ReturnType<RecipeStudio["getDraft"]>>;
 export const RECIPES_PATH = "/recipes";
 export const recipePath = (id: string) => `/recipes/${encodeURIComponent(id)}`;

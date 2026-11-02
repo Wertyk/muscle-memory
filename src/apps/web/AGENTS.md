@@ -290,3 +290,25 @@ Studio approvals use Never / Always / When controls plus Advanced JSON. Prefer
 accepts money thresholds in dollars; action JSON uses integer minor units.
 Message previews show text with symbolic source chips, without evaluating or
 calling a model. Minor ambiguity entries are still preserved as review evidence.
+
+## Human corrections (TASK-17)
+
+Successful operator frontend `send-reply`, `issue-refund` and `tag-request` calls
+on the current request are captured by `traced()` for 30 minutes after its latest
+completed automatic intake run. Agent/recipe calls, approval runs, dry runs and
+unrelated requests/orders are excluded. Read `corrections` on `get-request`,
+`get-recipe-run`, `get-recipe` or `view-screen`; each pins the request/run/version,
+superseded step and original/new action evidence. Normal shop actions remain the
+only way to make the correction. An additional refund is additive shop data.
+
+For **Propose recipe update**, follow `.agents/skills/recipe-studio/SKILL.md`:
+update the existing draft, then `save-recipe-version` with `correctionId` and
+`proposal` notes. Generalise reply text into the template and refund totals into
+price/quantity formulas. Never activate implicitly. The proposal card links to the
+saved Studio history diff; optional backtest uses the existing Studio controls.
+`activate-recipe` records accepted → version N atomically with activation.
+`record-correction-decision({correctionId,decision:"rejected",reason})` records a
+terminal rejection and prevents activation of that proposal. Both outcomes are
+visible on the request, run timeline and Studio history. Rehearsal resets clear
+corrections before their run/request/version parents while preserving the catalog
+in the default mode.

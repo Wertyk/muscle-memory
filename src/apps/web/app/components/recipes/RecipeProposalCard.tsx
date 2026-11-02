@@ -1,3 +1,4 @@
+import { useActionQuery } from "@agent-native/core/client/hooks";
 import { useT } from "@agent-native/core/client/i18n";
 import {
   registerActionChatRenderer,
@@ -10,7 +11,8 @@ import {
 } from "@shared/recipe-proposal";
 import { Link } from "react-router";
 
-import { expressionLabel, recipePath } from "@/lib/recipe-studio";
+import { RecipeVersionDiff } from "./RecipeVersionDiff";
+import { expressionLabel, recipePath, type RecipeDetail } from "@/lib/recipe-studio";
 import { stepLabel } from "@/lib/recipe-presentation";
 
 function ProposalSteps({ steps }: { steps: readonly Step[] }) {
@@ -37,7 +39,7 @@ export function RecipeProposalCard({ context }: ToolRendererProps) {
   const t = useT();
   const parsed = recipeProposalSchema.safeParse(context.resultJson);
   if (context.status !== "completed" || !parsed.success) return null;
-  const { version, proposal } = parsed.data;
+  const { version, proposal, correctionId } = parsed.data;
   return (
     <article
       className="run-chat-card"
@@ -74,14 +76,30 @@ export function RecipeProposalCard({ context }: ToolRendererProps) {
           </p>
         </>
       )}
+      {correctionId && <CorrectionProposalDiff recipeId={version.recipeId} versionId={version.id} />}
       <Link
         className="shop-record-link mt-4 inline-block text-sm underline underline-offset-4"
-        to={recipePath(version.recipeId)}
+        to={recipePath(version.recipeId) + (correctionId ? `#version-${version.id}` : "")}
       >
         {t("recipes.openStudio")} →
       </Link>
     </article>
   );
+}
+
+function CorrectionProposalDiff({ recipeId, versionId }: { recipeId: string; versionId: string }) {
+  const t = useT();
+  const query = useActionQuery<RecipeDetail>("get-recipe", { recipeId });
+  const index = query.data?.history.findIndex(entry => entry.version.id === versionId) ?? -1;
+  const entry = query.data?.history[index];
+  if (!entry) return <p className="mt-3 text-xs text-muted-foreground">{t(query.isError ? "corrections.diffUnavailable" : "corrections.loadingDiff")}</p>;
+  const labels: Record<string, string> = {};
+  const collect = (steps: readonly Step[]) => steps.forEach(step => {
+    labels[step.id] = stepLabel({ kind: step.kind, action: step.kind === "action" ? step.action : null }, t);
+    if (step.kind === "branch") { collect(step.then); collect(step.else); }
+  });
+  collect(entry.version.steps);
+  return <div className="mt-3"><RecipeVersionDiff entry={entry} previous={query.data?.history[index - 1]?.version} labels={labels} /></div>;
 }
 
 registerActionChatRenderer({

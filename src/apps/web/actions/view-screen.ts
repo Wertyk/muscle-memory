@@ -1,3 +1,4 @@
+import { readCorrections } from "../server/composition.js";
 import { defineAction } from "@agent-native/core/action";
 import { readAppStateForCurrentTab } from "@agent-native/core/application-state";
 import { REQUEST_STATUSES, REQUEST_TYPES } from "@muscle-memory/shop-domain";
@@ -29,6 +30,7 @@ export default defineAction({
     if (navigation) screen.navigation = navigation;
     if (selection) screen.selection = selection;
     if (navigation?.view === "run" && typeof navigation.runId === "string") {
+      screen.corrections = await readCorrections(context, { runId: navigation.runId });
       screen.run = await getRecipeUseCases().runs.get(navigation.runId);
     } else if (navigation?.view === "runs") {
       const url = await readAppStateForCurrentTab("__url__");
@@ -46,6 +48,7 @@ export default defineAction({
         }),
       );
       screen.request = request;
+      screen.corrections = await readCorrections(context, { requestId: request.id });
       screen.processing =
         (await getRequestIntake().processing.list([request.id]))[0] ?? null;
       const demonstration = await getCurrentDemonstration(request.id, context);
@@ -81,6 +84,7 @@ export default defineAction({
     ) {
       const detail = await getRecipeStudio(context).get(navigation.recipeId);
       screen.recipe = detail;
+      screen.corrections = await readCorrections(context, { recipeId: navigation.recipeId });
       screen.draft = await getRecipeStudio(context).getDraft(
         navigation.recipeId,
       );

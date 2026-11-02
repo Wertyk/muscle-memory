@@ -12,6 +12,8 @@ import {
   type TextExtractor,
 } from "@muscle-memory/recipe-engine";
 import {
+  Corrections,
+  CorrectionError,
   ClassifyRequest,
   CreateRequest,
   ValidateRequestFields,
@@ -59,6 +61,8 @@ import {
   demonstrationScope,
 } from "./infra/teach-session.js";
 import { DrizzleTraceStore } from "./infra/trace-store.js";
+import { DrizzleCorrectionStore } from "./infra/correction-store.js";
+import { createCorrectionCapture } from "./infra/correction-capture.js";
 import { shopResult } from "./shop-action-contracts.js";
 
 export function createRecipeStudio(db: ShopDb, context?: ActionRunContext) {
@@ -105,6 +109,7 @@ export function getDraftRecipeUseCases() {
 export const shopTraceCapture = createShopTraceCapture(
   () => getTeachUseCases().demonstrations,
 );
+shopTraceCapture.correction = createCorrectionCapture(() => getCorrections());
 shopTraceCapture.succeeded = (action, context) => new AgentRequestUsage(getDb()).succeeded(action, context);
 
 export function getHandlingStats(context?: ActionRunContext) {
@@ -283,4 +288,34 @@ export function getCurrentDemonstration(
   return scope
     ? getTeachUseCases().demonstrations.current(scope, requestId)
     : Promise.resolve(null);
+}
+
+export function createCorrections(db: ShopDb) {
+  return new Corrections(new DrizzleCorrectionStore(db), Date.now, () => `cor_${randomBytes(8).toString("hex")}`);
+}
+export function getCorrections() { return createCorrections(getDb()); }
+export function correctionOwner(context?: ActionRunContext) {
+  const owner = demonstrationOwner(context);
+  if (!owner) throw new CorrectionError("Sign in to review corrections.");
+  return owner;
+}
+export function readCorrections(context: ActionRunContext | undefined, filter: Parameters<Corrections["list"]>[1]) {
+  const owner = demonstrationOwner(context);
+  return owner ? getCorrections().list(owner, filter) : Promise.resolve([]);
+}
+// The existing Studio and operational correction writes share one DB transaction.
+export function saveRecipeVersion(input: Parameters<RecipeStudio["save"]>[0] & { correctionId?: string | undefined; proposal?: unknown }, context?: ActionRunContext) {
+  if (!input.correctionId) return getRecipeStudio(context).save(input);
+  const owner = correctionOwner(context);
+  return getDb().transaction(async tx => {
+    const db = tx as unknown as ShopDb;
+    return createCorrections(db).propose(owner, input.correctionId!, input.proposal ?? null, () => createRecipeStudio(db, context).save(input));
+  });
+}
+export function activateRecipeVersion(input: Parameters<RecipeStudio["activate"]>[0], context?: ActionRunContext) {
+  const owner = correctionOwner(context);
+  return getDb().transaction(async tx => {
+    const db = tx as unknown as ShopDb;
+    return createCorrections(db).activate(owner, input.recipeId, input.versionId, () => createRecipeStudio(db, context).activate(input));
+  });
 }

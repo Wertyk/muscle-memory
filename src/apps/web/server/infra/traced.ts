@@ -17,6 +17,7 @@ export interface TraceRecording {
   navigation?: unknown;
 }
 export interface TraceCapture {
+  correction?: (context: ActionRunContext | undefined, action: { actionName: string; input: unknown }) => Promise<((output: unknown) => Promise<void>) | null>;
   succeeded?: (action: { actionName: string; input: unknown; output: unknown }, context?: ActionRunContext) => Promise<void>;
   // Resolve and reserve once at entry, never move an in-flight call to another demo.
   recording(
@@ -42,8 +43,12 @@ export function traced<Input, Output>(
   capture: TraceCapture,
 ) {
   return async (input: Input, context?: ActionRunContext): Promise<Output> => {
+    // Pin correction evidence before the effect and before navigation can change.
+    let correct: ((output: unknown) => Promise<void>) | null = null;
+    try { correct = await capture.correction?.(context, { actionName, input }) ?? null; } catch { /* Capture must never block shop work. */ }
     const invoke = async () => {
       const output = await run(input, context);
+      try { await correct?.(output); } catch { /* Do not repeat a successful shop effect. */ }
       // Usage attribution is telemetry. A failed write must not repeat a shop effect.
       try { await capture.succeeded?.({ actionName, input, output }, context); } catch { /* Missing measurements remain unknown. */ }
       return output;

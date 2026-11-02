@@ -1,9 +1,11 @@
+import { correctionMessages } from "./corrections-en";
 import { recipeMessages } from "./recipes-en";
 import { shopMessages } from "./shop-en";
 import { runMessages } from "./runs-en";
 import { dashboardMessages } from "./dashboard-en";
 
 const messages = {
+  corrections: correctionMessages,
   dashboard: dashboardMessages,
   shop: shopMessages,
   runs: runMessages,

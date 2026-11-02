@@ -1,3 +1,5 @@
+import type { CorrectionEvidence } from "@shared/corrections";
+import { CorrectionsPanel } from "../recipes/CorrectionsPanel";
 import { useActionQuery } from "@agent-native/core/client/hooks";
 import { useT } from "@agent-native/core/client/i18n";
 import {
@@ -239,7 +241,7 @@ function OrderPanel({
 export function RequestPage({ requestId }: { requestId: string }) {
   const t = useT();
   const [saved, setSaved] = useState<SavedResult | null>(null);
-  const query = useActionQuery<Request>(
+  const query = useActionQuery<Request & CorrectionEvidence>(
     "get-request",
     { requestId },
     { resources: ["shop"] },
@@ -302,6 +304,7 @@ export function RequestPage({ requestId }: { requestId: string }) {
         </div>
       </header>
       <RequestProcessingBanner requestId={requestId} />
+      <CorrectionsPanel corrections={request.corrections} />
       <TeachBar key={request.id} request={request} order={order.data} />
       <div role="status" aria-live="polite">
         {saved && (

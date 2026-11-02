@@ -123,3 +123,25 @@ describe("traced action run", () => {
     expect(mutation).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("corrections at the traced seam", () => {
+  it("pins at entry, excludes failed shop effects, and never retries a successful refund if correction capture fails", async () => {
+    const recorded = vi.fn();
+    let currentRequest = "req_1";
+    const correction = vi.fn(async () => {
+      const pinned = currentRequest;
+      return async (output: unknown) => { recorded(pinned, output); throw new Error("storage failure"); };
+    });
+    const effect = vi.fn(async () => { currentRequest = "req_2"; return { amount: 10 }; });
+    const capture = { recording: async () => null, correction };
+    expect(await traced("issue-refund", effect, capture)({}, { caller: "frontend" })).toEqual({ amount: 10 });
+    expect(effect).toHaveBeenCalledOnce();
+    expect(recorded).toHaveBeenCalledWith("req_1", { amount: 10 });
+    recorded.mockClear();
+    await expect(traced("issue-refund", async () => { throw new Error("policy"); }, capture)({})).rejects.toThrow("policy");
+    expect(recorded).not.toHaveBeenCalled();
+    correction.mockRejectedValueOnce(new Error("begin failure"));
+    expect(await traced("issue-refund", effect, capture)({})).toEqual({ amount: 10 });
+    expect(effect).toHaveBeenCalledTimes(2);
+  });
+});

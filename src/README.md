@@ -303,10 +303,12 @@ installed packages:
 | Oxlint | 1.90.0 | Linting. |
 | dependency-cruiser | 18.7.0 | Import-boundary enforcement. |
 | `@fontsource-variable/inter` | 5.3.0 | Packaged font. |
+| `@fontsource-variable/fraunces` | 5.3.0 | Bundled variable display font; OFL-1.1. |
+| `@fontsource-variable/jetbrains-mono` | 5.3.0 | Bundled variable data font; OFL-1.1. |
 | `@tabler/icons-react` | 3.50.0 | Packaged icons. |
 | Playwright / `@playwright/test` | 1.64.1 | Browser e2e regression tests. |
 
-**Assets:** no third-party assets beyond template/library defaults. All tracked
+**Assets:** third-party assets comprise the template defaults and the packaged fonts and icons credited above. All tracked
 public SVG logos, favicons, and app icons match the bundled chat template; typography
 and UI icons come from the packages credited above. Shop content is synthetic.
 The screenshot references are for captures of this app supplied during review.

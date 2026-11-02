@@ -12,9 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { durationText, recipeVersionPath, runPath } from "@/lib/recipe-runs";
+import { durationText, runPath } from "@/lib/recipe-runs";
+import { CostTag } from "../kiln/CostTag";
 import { valueSummary } from "@/lib/recipe-presentation";
-import { dateText, requestPath } from "@/lib/shop-workspace";
+import { dateText } from "@/lib/shop-workspace";
 
 import {
   EmptyState,
@@ -22,7 +23,7 @@ import {
   QueryError,
   ShopMasthead,
 } from "../shop/WorkspaceParts";
-import { RunsLoading, RunStatusChip, TokenCount } from "./RunParts";
+import { RunsLoading, RunStatusChip } from "./RunParts";
 
 export function RunsPage() {
   const t = useT();
@@ -148,87 +149,29 @@ export function RunsPage() {
         <EmptyState title={t(filtered ? "runs.noMatches" : "runs.noRuns")} />
       ) : (
         rows.length > 0 && (
-          <div className="run-table-wrap">
-            <table className="run-table">
-              <thead>
-                <tr>
-                  {[
-                    "request",
-                    "recipe",
-                    "status",
-                    "started",
-                    "duration",
-                    "tokens",
-                  ].map((key) => (
-                    <th key={key} scope="col">
-                      {t(key === "status" ? "shop.status" : `runs.${key}`)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((run) => (
-                  <tr key={run.id}>
-                    <td>
-                      <Link
-                        className="shop-record-link font-medium"
-                        to={runPath(run.id)}
-                      >
-                        {valueSummary(run.requestSubject ?? run.id)}
-                      </Link>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {run.requestId ? (
-                          <Link
-                            className="shop-record-link"
-                            to={requestPath(run.requestId)}
-                          >
-                            {run.requestId}
-                          </Link>
-                        ) : (
-                          t("runs.noRequest")
-                        )}
-                      </div>
-                      <Link
-                        to={runPath(run.id)}
-                        className="mt-2 inline-block text-xs underline underline-offset-4"
-                      >
-                        {t("runs.viewRun")}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link
-                        className="shop-record-link"
-                        to={recipeVersionPath(
-                          run.recipeId,
-                          run.recipeVersionId,
-                        )}
-                      >
-                        {run.recipeName}
-                      </Link>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {t("runs.version", { version: run.version })}
-                        {run.mode === "dry-run" && ` · ${t("runs.dry-run")}`}
-                      </p>
-                    </td>
-                    <td>
-                      <RunStatusChip status={run.status} />
-                    </td>
-                    <td className="tabular-nums">
-                      {dateText(new Date(run.createdAt).toISOString())}
-                    </td>
-                    <td
-                      title={t("runs.durationScope")}
-                      className="whitespace-nowrap tabular-nums"
-                    >
-                      {durationText(run.durationMs)}
-                    </td>
-                    <td title={t("runs.tokenScope")}>
-                      <TokenCount tokens={run.tokens} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="kiln-run-list">
+            <div className="kiln-run-head" aria-hidden="true">
+              <span>{t("runs.request")}</span><span>{t("runs.recipe")}</span><span>{t("shop.status")}</span><span>{t("runs.tokens")} · {t("runs.duration")}</span>
+            </div>
+            <ul aria-label={t("runs.title")}>
+              {rows.map(run => <li key={run.id}>
+                <Link className="kiln-run-row" to={runPath(run.id)}>
+                  <span><strong>{valueSummary(run.requestSubject ?? run.id)}</strong>
+                    <span className="kiln-run-meta kiln-data">{run.requestId ?? t("runs.noRequest")}</span>
+                    <time className="kiln-run-meta" dateTime={new Date(run.createdAt).toISOString()}>{dateText(new Date(run.createdAt).toISOString())}</time>
+                    <span className="kiln-run-meta underline underline-offset-4">{t("runs.viewRun")} →</span>
+                  </span>
+                  <span><strong>{run.recipeName}</strong><span className="kiln-run-meta">{t("runs.version", { version: run.version })}</span>
+                    <span className="kiln-mode" data-mode={run.mode}>{t(`runs.${run.mode}`)}</span>
+                  </span>
+                  <span><RunStatusChip status={run.status} /></span>
+                  <span title={`${t("runs.tokenScope")} ${t("runs.durationScope")}`}>
+                    <CostTag tokens={run.tokens.input + run.tokens.output} durationMs={run.durationMs} handler={run.status === "completed" && run.mode === "execute" ? "recipe" : "neutral"} />
+                    <span className="sr-only">{durationText(run.durationMs)}</span>
+                  </span>
+                </Link>
+              </li>)}
+            </ul>
           </div>
         )
       )}

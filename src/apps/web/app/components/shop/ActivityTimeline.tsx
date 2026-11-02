@@ -39,7 +39,7 @@ function ActivityDetail({ item }: { item: RequestActivity }) {
     case "refund":
       return (
         <p className="shop-activity-detail">
-          <strong className="font-medium text-foreground">
+          <strong className="kiln-data font-medium text-foreground">
             {moneyText(item.amount)}
           </strong>{" "}
           · {item.reason}

@@ -15,13 +15,13 @@ import { Link } from "react-router";
 import { runPath } from "@/lib/recipe-runs";
 
 import { QueryError } from "../shop/WorkspaceParts";
+import { RunSignature } from "../kiln/RunSignature";
 import { RunApproval } from "./RunApproval";
 import {
   RunLinks,
   RunReason,
   RunStatusChip,
   RunTimeline,
-  TokenCount,
 } from "./RunParts";
 
 function SavedRunCard({ snapshot }: { snapshot: Run }) {
@@ -41,11 +41,9 @@ function SavedRunCard({ snapshot }: { snapshot: Run }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <RunStatusChip status={run.status} />
-        <span title={t("runs.tokenScope")}>
-          <TokenCount tokens={run.tokens} />
-        </span>
+        <RunSignature run={run} />
       </div>
-      <h3 className="mt-3 break-words font-semibold">{run.recipe.name}</h3>
+      <h3 className="shop-serif mt-3 break-words text-xl">{run.recipe.name}</h3>
       <div className="mt-2">
         <RunLinks run={run} compact />
       </div>

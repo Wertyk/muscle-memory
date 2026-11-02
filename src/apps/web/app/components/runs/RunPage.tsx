@@ -8,6 +8,7 @@ import { requestPath } from "@/lib/shop-workspace";
 import { fieldLabel, isObject, valueSummary } from "@/lib/recipe-presentation";
 
 import { QueryError, ShopMasthead } from "../shop/WorkspaceParts";
+import { RunSignature } from "../kiln/RunSignature";
 import { RunApproval } from "./RunApproval";
 import { ReplayButton } from "./GhostReplay";
 import {
@@ -51,10 +52,14 @@ export function RunPage() {
       )}
       {run && (
         <>
-          <header className="shop-page-heading mt-6">
+          <header className="shop-page-heading kiln-detail-heading mt-6">
+            <RunSignature run={run} size="large" />
+            <div className="kiln-detail-title">
+            {requestId && <p className="kiln-detail-meta kiln-data">{requestId}</p>}
             <h1 className="shop-serif break-words">{requestId ? <Link className="shop-record-link" to={requestPath(requestId)}>
-              {valueSummary(request.data?.subject ?? (isObject(run.trigger) && typeof run.trigger.subject === "string" ? run.trigger.subject : fieldLabel("request")))} · {requestId}
+              {valueSummary(request.data?.subject ?? (isObject(run.trigger) && typeof run.trigger.subject === "string" ? run.trigger.subject : fieldLabel("request")))}
             </Link> : t("runs.details")}</h1>
+            </div>
             <div className="flex items-center gap-3"><RunStatusChip status={run.status} /><ReplayButton key={run.id} run={run} /></div>
           </header>
           <RunLinks run={run} showRequest={false} />
@@ -74,7 +79,7 @@ export function RunPage() {
           </section>
           <details className="run-evidence mt-7">
             <summary>
-              {t("runs.details")} · {run.id}
+              {t("runs.details")} · <span className="kiln-data">{run.id}</span>
             </summary>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <JsonEvidence title={t("runs.trigger")} value={run.trigger} />

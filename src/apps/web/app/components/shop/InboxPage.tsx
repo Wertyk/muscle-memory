@@ -8,6 +8,7 @@ import {
   type Request,
 } from "@muscle-memory/shop-domain";
 import { IconArrowUpRight, IconFilter } from "@tabler/icons-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useSearchParams } from "react-router";
 import { PROCESSING_STATES, type RequestProcessing } from "@shared/request-processing";
 
@@ -21,7 +22,8 @@ import {
 } from "@/components/ui/select";
 import { ageText, dateText, requestPath } from "@/lib/shop-workspace";
 import { DemoIntakeControl } from "./DemoIntakeControl";
-import { ProcessingChip } from "./ProcessingChip";
+import { InboxHandling } from "../kiln/InboxHandling";
+import { inboxOutcome, newArrivalIds } from "@/lib/kiln";
 
 import {
   EmptyState,
@@ -55,6 +57,14 @@ function CustomerName({ id }: { id: string }) {
 export function InboxPage() {
   const t = useT();
   const [params, setParams] = useSearchParams();
+  const beforeIntake = useRef<readonly string[]>([]);
+  const revealed = useRef<string[]>([]);
+  const [arrivals, setArrivals] = useState<readonly string[]>([]);
+  useEffect(() => {
+    if (!arrivals.length) return;
+    const timer = setTimeout(() => setArrivals([]), 1500 + arrivals.length * 60);
+    return () => clearTimeout(timer);
+  }, [arrivals]);
   const status = REQUEST_STATUSES.find(
     (value) => value === params.get("status"),
   );
@@ -113,7 +123,14 @@ export function InboxPage() {
           {t("shop.requestCount", { count: requests.length })}
         </span>
       </header>
-      <DemoIntakeControl />
+      <DemoIntakeControl filters={{ status, type, processing }}
+        onStart={() => { beforeIntake.current = (query.data ?? []).map(request => request.id); }}
+        onArrived={(incoming, rows) => {
+          const visible = incoming.filter(request => (!status || request.status === status) && (!type || requestType(request) === type) &&
+            (!processing || rows.find(row => row.requestId === request.id)?.state === processing)).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || a.id.localeCompare(b.id));
+          setArrivals(newArrivalIds(beforeIntake.current, visible.map(request => request.id), revealed.current));
+          revealed.current = [...revealed.current, ...incoming.map(request => request.id)];
+        }} />
       <div className="shop-filters">
         <IconFilter
           className="hidden size-4 text-muted-foreground sm:block"
@@ -201,12 +218,16 @@ export function InboxPage() {
         <div className="shop-inbox-list" aria-busy={query.isFetching || processingQuery.isFetching}>
           <div className="shop-inbox-columns" aria-hidden="true">
             <span>{t("shop.request")}</span>
+            <span>Handled by</span>
             <span>{t("shop.status")}</span>
             <span>{t("shop.received")}</span>
           </div>
           <ul>
             {requests.map((request) => (
-              <li key={request.id} className="shop-inbox-row">
+              <li key={request.id} className="shop-inbox-row"
+                data-arrival={arrivals.includes(request.id) ? request.id : undefined}
+                data-handler={processingById.has(request.id) ? inboxOutcome(processingById.get(request.id)!) : undefined}
+                style={arrivals.includes(request.id) ? { "--arrival-index": arrivals.indexOf(request.id) } as CSSProperties : undefined}>
                 <div className="min-w-0">
                   <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="shop-type-label">
@@ -236,10 +257,8 @@ export function InboxPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <StatusChip status={request.status} />
-                  {processingById.has(request.id) && <ProcessingChip state={processingById.get(request.id)!.state} />}
-                </div>
+                <div className="kiln-row-handling">{processingById.has(request.id) && <InboxHandling row={processingById.get(request.id)!} />}</div>
+                <div className="kiln-row-status"><StatusChip status={request.status} /></div>
                 <time
                   className="shop-inbox-age"
                   dateTime={request.createdAt}

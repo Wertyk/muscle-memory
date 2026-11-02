@@ -182,6 +182,8 @@ beforeEach(() => {
           ? JSON.parse(String(init.body))
           : Object.fromEntries(parsed.searchParams);
       calls.push({ name, input });
+      if (name === "get-handling-stats") return Response.json({ samples: [] });
+      if (name === "list-request-processing") return Response.json([]);
       if (name === "get-request") return Response.json({ id: "req_0001", subject: "Broken Ember platter" });
       if (name === "get-recipe-run")
         return readFails
@@ -253,7 +255,7 @@ describe("run detail and list", () => {
     const exit = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent === "Exit replay")!;
     await click(exit);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(calls.every((call) => ["get-recipe-run", "get-request"].includes(call.name))).toBe(true);
+    expect(calls.every((call) => ["get-recipe-run", "get-request", "list-request-processing"].includes(call.name))).toBe(true);
   });
 
   it("shows an empty filtered list and recovers through clearing filters", async () => {
@@ -266,6 +268,17 @@ describe("run detail and list", () => {
       expect(element.textContent).toContain("Broken Ember platter"),
     );
   });
+  it.each([
+    ["completed", "execute", "recipe"],
+    ["handed_off", "execute", "neutral"],
+    ["aborted", "execute", "neutral"],
+    ["completed", "dry-run", "neutral"],
+  ] as const)("colours %s %s costs as %s work", async (status, mode, handler) => {
+    saved = { ...saved, status, mode };
+    await mount(<RunsPage />, "/runs");
+    await settle(() => expect(element.querySelector(".kiln-run-row .kiln-cost")?.getAttribute("data-handler")).toBe(handler));
+  });
+
   it("shows an unavailable run read and recovers without enabling an unverified gate", async () => {
     readFails = true;
     await detail();
@@ -316,7 +329,10 @@ describe("run detail and list", () => {
     expect(element.textContent).toContain("Request ID: req_0001");
     expect(element.textContent).toContain("Product ID: prd_0016");
     expect(element.textContent).toContain("Ember Large Serving Platter × 4 ($280.00 each)");
-    await settle(() => expect(element.querySelector("h1 a")?.textContent).toBe("Broken Ember platter · req_0001"));
+    await settle(() => expect(element.querySelector("h1 a")?.textContent).toBe("Broken Ember platter"));
+    expect(element.querySelector("h1 .kiln-data")).toBeNull();
+    expect(element.querySelector("h1")?.previousElementSibling?.textContent).toBe("req_0001");
+    expect(element.querySelector(".kiln-detail-meta")?.classList.contains("kiln-data")).toBe(true);
     expect(element.querySelector('a[href^="/recipes/recipe_run_approval"]')?.textContent).toBe(`${saved.recipe.name} · Version 1`);
     expect(element.querySelector("h1")?.textContent).not.toContain(saved.recipe.name);
     expect(element.textContent).toContain("30 ms");
@@ -418,8 +434,10 @@ describe("run detail and list", () => {
       recipeId: "recipe_run_approval",
       mode: "execute",
     });
-    expect(element.querySelector('a[href="/runs/run_ui"]')?.textContent).toHaveLength(220);
-    expect(element.querySelector('a[href="/runs/run_ui"]')?.textContent).toMatch(/…$/);
+    expect(element.querySelector('a[href="/runs/run_ui"] strong')?.textContent).toHaveLength(220);
+    expect(element.querySelectorAll('.kiln-run-list li a')).toHaveLength(1);
+    expect(element.querySelector('.kiln-run-row a, .kiln-run-row button')).toBeNull();
+    expect(element.querySelector('a[href="/runs/run_ui"] strong')?.textContent).toMatch(/…$/);
     expect(element.textContent).toContain("Active duration");
     expect(element.textContent).toContain("Execution tokens");
     await click(button("Clear filters"));
@@ -549,9 +567,7 @@ describe("registered renderers inside the mounted AgentKit chat transcript", () 
       expect(element.querySelector(".run-chat-card")?.textContent).toContain("Ember Large Serving Platter × 4 ($280.00 each)");
       expect(element.querySelector(".run-approval")?.textContent).toContain("$140.00");
       expect(element.querySelector(".run-approval")?.textContent).toContain("Request ID: req_0001");
-      expect(element.querySelector(".run-zero-tokens")?.textContent).toBe(
-        "0 LLM tokens",
-      );
+      await settle(() => expect(element.querySelector(".kiln-cost")?.textContent).toBe("0 tokens · 30 ms"));
       await click(button("Approve"));
       await settle(() =>
         expect(

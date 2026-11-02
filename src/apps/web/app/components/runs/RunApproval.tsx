@@ -12,6 +12,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { presentationContext, stepLabel, valueSummary } from "@/lib/recipe-presentation";
 
+import { DataText } from "../kiln/DataText";
 import { PendingMark, QueryError } from "../shop/WorkspaceParts";
 
 /** Both surfaces decide the exact saved gate through the shared executor action. */
@@ -70,7 +71,7 @@ export function RunApproval({ runId }: { runId: string }) {
         <>
           <h3 className="font-semibold">{t("runs.approvalTitle")}</h3>
           <p className="mt-2 break-words text-sm">
-            {stepLabel(step, t)} · {valueSummary(step.input, presentationContext(query.data))}
+            {stepLabel(step, t)} · <DataText text={valueSummary(step.input, presentationContext(query.data))} />
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             {t("runs.approvalHint")}

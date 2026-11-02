@@ -1,0 +1,190 @@
+@import "@fontsource-variable/fraunces/full.css";
+@import "@fontsource-variable/jetbrains-mono";
+
+:root {
+  --ember: 18 70% 38%;
+  --ember-surface: 24 80% 94%;
+  --ember-foreground: 18 70% 32%;
+  --celadon: 164 34% 28%;
+  --celadon-surface: 164 30% 93%;
+  --celadon-foreground: 164 34% 24%;
+  --font-display: "Fraunces Variable", Georgia, serif;
+  --font-data: "JetBrains Mono Variable", ui-monospace, monospace;
+  --ease-kiln: cubic-bezier(0.22,1,0.36,1);
+  --dur-1: 120ms;
+  --dur-2: 240ms;
+  --dur-3: 480ms;
+}
+.dark {
+  --ember: 22 85% 64%;
+  --ember-surface: 20 35% 16%;
+  --ember-foreground: 22 85% 74%;
+  --celadon: 164 35% 73%;
+  --celadon-surface: 164 25% 16%;
+  --celadon-foreground: 164 35% 80%;
+}
+
+.shop-page h1.shop-serif {
+  font-variation-settings: "opsz" 72, "SOFT" 65, "WONK" 1;
+  text-wrap: balance;
+}
+.shop-page h2.shop-serif {
+  font-variation-settings: "opsz" 32, "SOFT" 45, "WONK" 1;
+}
+.font-mono, .tabular-nums, .kiln-data, .run-zero-tokens,
+.run-metrics dd, .run-json, .shop-money {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: normal;
+}
+.kiln-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  color: hsl(var(--sidebar-accent-foreground));
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.kiln-brand small {
+  color: hsl(var(--sidebar-foreground));
+  font-size: 0.6875rem;
+  font-weight: 400;
+}
+.kiln-maker {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  color: hsl(var(--celadon));
+  vertical-align: middle;
+}
+.kiln-maker[data-size="medium"] { width: 72px; height: 72px; }
+.kiln-maker[data-size="large"] { width: 96px; height: 96px; }
+.kiln-maker svg { width: 100%; height: 100%; overflow: visible; }
+.kiln-stamp-outer, .kiln-stamp-inner, .kiln-stamp-glyph {
+  fill: none;
+  stroke: currentColor;
+}
+.kiln-stamp-outer { stroke-width: 1.8; }
+.kiln-stamp-inner { stroke-width: 0.7; }
+.kiln-stamp-glyph { stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.kiln-maker[data-size="compact"] .kiln-stamp-outer { stroke-width: 3; }
+.kiln-maker[data-size="compact"] .kiln-stamp-inner { stroke-width: 1.5; }
+.kiln-maker[data-size="compact"] .kiln-stamp-glyph { stroke-width: 4.5; }
+.kiln-stamp-name { font-family: var(--font-display); font-size: 10px; fill: currentColor; }
+.kiln-stamp-cost { font-family: var(--font-data); font-size: 7px; fill: currentColor; letter-spacing: 0.3px; }
+.kiln-signature { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; min-width: 0; }
+.kiln-cost {
+  display: inline-block;
+  color: hsl(var(--celadon));
+  font: 500 0.6875rem/1.6 var(--font-data);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.kiln-cost[data-handler="agent"] { color: hsl(var(--ember)); }
+.kiln-inbox-handling { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-width: 0; }
+.kiln-inbox-handling[data-handler="recipe"] { display: grid; gap: 0.25rem; }
+.kiln-handling-recipe { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.kiln-inbox-handling .kiln-cost { display: block; }
+.kiln-recipe-name { display: block; color: hsl(var(--celadon)); font-size: 0.75rem; font-weight: 500; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.shop-inbox-row > .kiln-row-status { align-self: center; }
+.shop-inbox-row[data-arrival] { position: relative; isolation: isolate; }
+.shop-inbox-row[data-arrival]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: hsl(var(--celadon-surface));
+  opacity: 0;
+}
+.shop-inbox-row[data-handler="agent"]::after { background: hsl(var(--ember-surface)); }
+
+.kiln-run-head, .kiln-run-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(8rem, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: center;
+  padding: 1.25rem 1rem;
+}
+.kiln-run-list { border-block: 1px solid hsl(var(--border)); }
+.kiln-run-list ul { list-style: none; margin: 0; padding: 0; }
+.kiln-run-list li { border-top: 1px solid hsl(var(--border)); }
+.kiln-run-head { padding-block: 0.75rem; font-size: 0.6875rem; color: hsl(var(--muted-foreground)); }
+.kiln-run-row { font-size: 0.8125rem; border-radius: var(--radius); color: hsl(var(--foreground)); }
+.kiln-run-row > span { min-width: 0; overflow-wrap: anywhere; }
+.kiln-run-row strong { display: block; font-weight: 500; }
+.kiln-run-meta { display: block; margin-top: 0.375rem; font-size: 0.6875rem; color: hsl(var(--muted-foreground)); }
+.kiln-run-row:hover { background: hsl(var(--celadon-surface)); }
+.kiln-run-row:focus-visible, .shop-request-link:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+.kiln-mode { display: inline-block; margin-top: 0.375rem; border-radius: 999px; padding: 0.125rem 0.5rem; color: hsl(var(--celadon-foreground)); background: hsl(var(--celadon-surface)); font-size: 0.625rem; }
+.kiln-mode[data-mode="dry-run"] { background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); }
+.run-status[data-status="handed_off"], .run-notice.kiln-handoff { color: hsl(var(--ember-foreground)); background: hsl(var(--ember-surface)); border-color: hsl(var(--ember) / 0.3); }
+.run-status[data-status="running"] { color: hsl(var(--celadon)); }
+.run-status[data-status="awaiting_approval"] { background: hsl(var(--shop-pending-surface)); border-color: hsl(var(--shop-pending) / 0.25); }
+.run-page .kiln-detail-heading { align-items: center; gap: 1.5rem; }
+.kiln-detail-heading > .kiln-detail-title { flex: 1 1 18rem; min-width: 0; }
+.kiln-detail-heading > .kiln-signature { flex-direction: column; gap: 0.375rem; }
+.kiln-processing-banner[data-handler="recipe"] { border-inline-start: 3px solid hsl(var(--celadon)); }
+.kiln-processing-banner[data-handler="agent"] { border-inline-start: 3px solid hsl(var(--ember)); }
+.kiln-processing-banner[data-handler="approval"] { border-inline-start: 3px solid hsl(var(--shop-pending)); }
+.kiln-waterfall { display: flex; align-items: center; gap: 0.75rem; margin-block: 0.75rem; color: hsl(var(--celadon)); }
+.kiln-waterfall-track { flex: 1; min-width: 0; height: 6px; background: hsl(var(--muted)); border-radius: 2px; }
+.kiln-waterfall-bar { display: block; min-width: 2px; max-width: 100%; height: 100%; border-radius: 2px; background: currentColor; }
+.kiln-waterfall-label { min-width: 5rem; text-align: end; font-size: 0.6875rem; color: hsl(var(--muted-foreground)); }
+.run-timeline > li[data-kind="approval"][data-status] > .run-step-mark { color: hsl(var(--shop-pending)); background: hsl(var(--shop-pending-surface)); border-color: hsl(var(--shop-pending) / 0.35); border-radius: var(--radius); }
+.run-timeline > li[data-kind="approval"] .kiln-waterfall { color: hsl(var(--shop-pending)); }
+.run-timeline > li[data-kind="handoff"][data-status] > .run-step-mark { color: hsl(var(--ember)); background: hsl(var(--ember-surface)); border-color: hsl(var(--ember) / 0.35); }
+.run-timeline > li[data-kind="handoff"] .kiln-waterfall { color: hsl(var(--ember)); }
+.run-timeline > li[data-kind="handoff"][data-status] > .run-step-mark::after { content: ""; position: absolute; width: 0.625rem; height: 1px; background: hsl(var(--ember)); inset-inline-start: 1.8rem; top: 0.9rem; }
+.run-timeline > li[data-kind="extract"] .kiln-waterfall { color: hsl(var(--ember)); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .shop-inbox-row[data-arrival] { animation: kiln-arrive var(--dur-2) var(--ease-kiln) calc(var(--arrival-index, 0) * 60ms) both; }
+  .shop-inbox-row[data-arrival]::after { animation: kiln-glaze 1200ms var(--ease-kiln) calc(var(--arrival-index, 0) * 60ms) both; }
+  @keyframes kiln-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes kiln-glaze { from { opacity: 1; } to { opacity: 0; } }
+}
+@media (max-width: 700px) {
+  .kiln-run-head { display: none; }
+  .kiln-run-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; padding: 1rem 0.5rem; }
+  .kiln-run-row > span:first-child { grid-column: 1 / -1; }
+  .kiln-run-row > span:last-child { grid-column: 1 / -1; }
+  .kiln-signature { gap: 0.5rem; }
+}
+
+/* TASK-35 owns dashboard layout; only its existing colour aliases change here. */
+.shop-page.dashboard-page {
+  --dashboard-agent: var(--ember);
+  --shop-resolved: var(--celadon);
+  --shop-resolved-surface: var(--celadon-surface);
+}
+.dark .shop-page.dashboard-page { --dashboard-agent: var(--ember); }
+.kiln-maker:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; border-radius: 50%; }
+
+
+/* Outcomes have their own lane; shop status is independent of how work was handled. */
+.shop-inbox-list .shop-inbox-columns,
+.shop-inbox-list .shop-inbox-row { grid-template-columns: minmax(0, 1fr) minmax(0, 0.75fr) 6.5rem 5rem; }
+.kiln-row-handling { min-width: 0; }
+.kiln-detail-meta { margin-bottom: 0.75rem; color: hsl(var(--muted-foreground)); font-size: 0.75rem; }
+.kiln-cost-scope { color: hsl(var(--muted-foreground)); font-size: 0.625rem; white-space: nowrap; }
+.kiln-signature-label { color: hsl(var(--celadon)); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.shop-panel.kiln-processing-banner { padding: 0.75rem 1rem; }
+.kiln-processing-banner .kiln-signature { gap: 0.5rem; }
+.kiln-run-row .kiln-cost[data-handler="recipe"] { color: hsl(var(--celadon)); }
+.kiln-cost[data-handler="neutral"],
+.kiln-run-row .kiln-cost[data-handler="neutral"] { color: hsl(var(--muted-foreground)); }
+@media (max-width: 63.99rem) {
+  .shop-inbox-list .shop-inbox-columns { display: none; }
+  .shop-inbox-list .shop-inbox-row { grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; }
+  .shop-inbox-list .shop-inbox-row > div:first-child { grid-column: 1 / -1; }
+  .shop-inbox-row > .kiln-row-handling { grid-column: 1 / -1; grid-row: 3; }
+  .kiln-row-handling:empty { display: none; }
+  .shop-inbox-row > .kiln-row-status { grid-column: 1; grid-row: 2; }
+  .shop-inbox-row > .shop-inbox-age { grid-column: 2; grid-row: 2; }
+}

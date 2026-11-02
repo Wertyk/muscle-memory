@@ -32,6 +32,7 @@ export class Demonstrations {
   ) {}
 
   start(input: {
+    source?: Demonstration["source"];
     scope: DemonstrationScope;
     subjectId: string;
     references: Readonly<Record<string, string>>;
@@ -46,6 +47,7 @@ export class Demonstrations {
       const previous = await records.latest(input.scope, input.subjectId);
       const demonstration: Demonstration = {
         ...input,
+        source: input.source ?? { kind: "teach" },
         id: this.nextId(),
         status: "recording",
         startedAt: Math.max(this.clock.now(), (previous?.startedAt ?? -1) + 1),
@@ -62,6 +64,9 @@ export class Demonstrations {
 
   get(owner: DemonstrationOwner, id: string): Promise<Demonstration | null> {
     return this.store.transaction((records) => records.get(owner, id));
+  }
+  active(scope: DemonstrationScope): Promise<Demonstration | null> {
+    return this.store.transaction((records) => records.active(scope));
   }
   current(
     scope: DemonstrationScope,
@@ -169,6 +174,9 @@ export class Demonstrations {
       await records.save({
         ...demo,
         pending: demo.pending.filter((n) => n !== ticket.sequence),
+        ...(step?.runId && demo.source?.kind === "agent_run" ? {
+          source: { ...demo.source, runIds: [...new Set([...demo.source.runIds, step.runId])] },
+        } : {}),
         steps,
       });
     });

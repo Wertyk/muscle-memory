@@ -1,6 +1,8 @@
 export const recipeMessages = {
   title: "Recipes",
   crystallize: "Crystallize with agent",
+  learnedFromAgent: "Learned from an agent run · thread {{thread}}",
+  learnedFromTeach: "Learned from Teach · {{demonstration}}",
   crystallizePrompt: "Crystallize this draft into a named, reusable recipe. Follow the crystallize skill: read the draft and source demonstration, resolve the listed ambiguities, ask at most two questions if needed, then update and save through Recipe Studio with proposal notes. Dry-run a different request of the same type and report its arguments and tokens. Keep activation for my review.",
   proposal: "Recipe proposal",
   proposalSaved: "Saved v{{version}} · activation is a separate choice",

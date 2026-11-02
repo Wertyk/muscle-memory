@@ -8,6 +8,16 @@ metadata:
 
 # Crystallize
 
+For an agent-resolved request that no recipe completed (including seed/manual
+requests and recipe handoffs), read
+`get-agent-run-demonstration({requestId})`. A non-null result is a complete,
+owned, forward-recorded action trace (`source.kind: "agent_run"`, thread and run
+IDs). Pass its `id` to `draft-recipe-from-demonstration({demonstrationId:id})`:
+this is the request page's **Crystallize this run** control. Continue through the
+same Studio workflow below. Null means unavailable or incomplete; never rebuild
+a trace from chat messages, prompts, audit events or earlier history. Question-only
+turns may contribute reads, but only a recorded resolution completes the trace.
+
 Starting from a completed, non-incomplete demonstration? Read it with
 `get-demonstration({demonstrationId})`, then use
 `draft-recipe-from-demonstration({demonstrationId})`. This is the same action as

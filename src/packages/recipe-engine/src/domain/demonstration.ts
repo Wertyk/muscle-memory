@@ -8,6 +8,7 @@ export interface DemonstrationScope extends DemonstrationOwner {
   readonly sessionId: string;
 }
 export interface DemonstrationStep extends TraceStep {
+  readonly runId?: string | undefined;
   readonly sequence: number;
   readonly caller: string | null;
   readonly navigation: JsonValue;
@@ -16,6 +17,7 @@ export interface DemonstrationStep extends TraceStep {
 }
 /** Domain-agnostic subject and reference keys are supplied by the host app. */
 export interface Demonstration extends Trace {
+  readonly source?: { readonly kind: "teach" } | { readonly kind: "agent_run"; readonly threadId: string; readonly runIds: readonly string[] } | undefined;
   readonly scope: DemonstrationScope;
   readonly subjectId: string;
   readonly references: Readonly<Record<string, string>>;

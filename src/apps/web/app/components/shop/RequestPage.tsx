@@ -28,6 +28,7 @@ import { OrderOperations } from "./OrderOperations";
 import { ReplyForm, RequestControls, TagForm } from "./RequestControls";
 import { RequestProcessingBanner } from "./RequestProcessingBanner";
 import { TeachBar } from "./TeachBar";
+import { CrystallizeRunControl } from "./CrystallizeRunControl";
 import {
   QueryError,
   ShopMasthead,
@@ -302,6 +303,7 @@ export function RequestPage({ requestId }: { requestId: string }) {
         </div>
       </header>
       <RequestProcessingBanner requestId={requestId} />
+      <CrystallizeRunControl request={request} />
       <TeachBar key={request.id} request={request} order={order.data} />
       <div role="status" aria-live="polite">
         {saved && (

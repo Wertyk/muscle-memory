@@ -1,0 +1,688 @@
+{
+  "requestId": "req_0061",
+  "targetRequestId": "req_0014",
+  "handlingThreadId": "thread-5b4e892f-1ef7-4467-8414-18124d71f72d",
+  "model": "deepseek-v4-pro:0813",
+  "demonstrationId": "demo_9462f451794445a9",
+  "source": {
+    "kind": "agent_run",
+    "threadId": "thread-5b4e892f-1ef7-4467-8414-18124d71f72d",
+    "runIds": [
+      "run-1793589333943-v28bbv"
+    ]
+  },
+  "capturedActions": [
+    {
+      "sequence": 1,
+      "action": "get-request",
+      "runId": "run-1793589333943-v28bbv"
+    },
+    {
+      "sequence": 2,
+      "action": "get-customer",
+      "runId": "run-1793589333943-v28bbv"
+    },
+    {
+      "sequence": 3,
+      "action": "get-order",
+      "runId": "run-1793589333943-v28bbv"
+    },
+    {
+      "sequence": 4,
+      "action": "get-shipment-status",
+      "runId": "run-1793589333943-v28bbv"
+    },
+    {
+      "sequence": 5,
+      "action": "update-shipping-address",
+      "runId": "run-1793589333943-v28bbv"
+    },
+    {
+      "sequence": 6,
+      "action": "send-reply",
+      "runId": "run-1793589333943-v28bbv"
+    },
+    {
+      "sequence": 7,
+      "action": "tag-request",
+      "runId": "run-1793589333943-v28bbv"
+    },
+    {
+      "sequence": 8,
+      "action": "set-request-status",
+      "runId": "run-1793589333943-v28bbv"
+    }
+  ],
+  "recipeId": "recipe_de8faebe4379c901",
+  "originalVersionId": "ver_813e7a5eade7de81",
+  "originalDraftSteps": [
+    {
+      "id": "step_5",
+      "kind": "action",
+      "action": "update-shipping-address",
+      "args": {
+        "address": {
+          "mode": "path",
+          "path": "trigger.address"
+        },
+        "orderId": {
+          "mode": "path",
+          "path": "trigger.orderId"
+        }
+      }
+    },
+    {
+      "id": "step_6",
+      "kind": "action",
+      "action": "send-reply",
+      "args": {
+        "requestId": {
+          "mode": "path",
+          "path": "trigger.requestId"
+        },
+        "template": {
+          "mode": "fixed",
+          "value": "Hi {{name}}, we've redirected your order to the new shipping address you provided ({{line1}}{{line2}}, {{city}}, {{region}} {{postalCode}}). Your order is still unshipped, so this change was applied in time with no impact on delivery."
+        },
+        "variables": {
+          "city": {
+            "mode": "path",
+            "path": "trigger.address.city"
+          },
+          "line1": {
+            "mode": "path",
+            "path": "trigger.address.line1"
+          },
+          "line2": {
+            "mode": "template",
+            "template": ", {{trigger.address.line2}}"
+          },
+          "name": {
+            "mode": "path",
+            "path": "trigger.address.name"
+          },
+          "postalCode": {
+            "mode": "path",
+            "path": "trigger.address.postalCode"
+          },
+          "region": {
+            "mode": "path",
+            "path": "trigger.address.region"
+          }
+        }
+      }
+    },
+    {
+      "id": "step_7",
+      "kind": "action",
+      "action": "tag-request",
+      "args": {
+        "requestId": {
+          "mode": "path",
+          "path": "trigger.requestId"
+        },
+        "tag": {
+          "mode": "path",
+          "path": "trigger.type"
+        }
+      }
+    },
+    {
+      "id": "step_8",
+      "kind": "action",
+      "action": "set-request-status",
+      "args": {
+        "requestId": {
+          "mode": "path",
+          "path": "trigger.requestId"
+        },
+        "status": {
+          "mode": "fixed",
+          "value": "resolved"
+        }
+      }
+    }
+  ],
+  "ambiguities": [
+    {
+      "stepId": "step_6",
+      "argumentPath": "variables.city",
+      "kind": "multiple-candidates",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "path",
+            "path": "trigger.address.city"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "trigger.address.city"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "path",
+            "path": "steps.step_5.output.shippingAddress.city"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "steps.step_5.output.shippingAddress.city"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": "Harbor Ridge"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    },
+    {
+      "stepId": "step_6",
+      "argumentPath": "variables.line1",
+      "kind": "multiple-candidates",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "path",
+            "path": "trigger.address.line1"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "trigger.address.line1"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "path",
+            "path": "steps.step_5.output.shippingAddress.line1"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "steps.step_5.output.shippingAddress.line1"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": "48 Willowmere Lane"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    },
+    {
+      "stepId": "step_6",
+      "argumentPath": "variables.line2",
+      "kind": "multiple-candidates",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "template",
+            "template": ", {{trigger.address.line2}}"
+          },
+          "reason": "template",
+          "sourcePaths": [
+            "trigger.address.line2"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "template",
+            "template": ", {{steps.step_5.output.shippingAddress.line2}}"
+          },
+          "reason": "template",
+          "sourcePaths": [
+            "steps.step_5.output.shippingAddress.line2"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": ", Apt 2"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    },
+    {
+      "stepId": "step_6",
+      "argumentPath": "variables.line2",
+      "kind": "constant-or-variable",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "template",
+            "template": ", {{trigger.address.line2}}"
+          },
+          "reason": "template",
+          "sourcePaths": [
+            "trigger.address.line2"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "template",
+            "template": ", {{steps.step_5.output.shippingAddress.line2}}"
+          },
+          "reason": "template",
+          "sourcePaths": [
+            "steps.step_5.output.shippingAddress.line2"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": ", Apt 2"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    },
+    {
+      "stepId": "step_6",
+      "argumentPath": "variables.name",
+      "kind": "multiple-candidates",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "path",
+            "path": "trigger.address.name"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "trigger.address.name"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "path",
+            "path": "steps.step_5.output.shippingAddress.name"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "steps.step_5.output.shippingAddress.name"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": "Clara Sorrel"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    },
+    {
+      "stepId": "step_6",
+      "argumentPath": "variables.postalCode",
+      "kind": "multiple-candidates",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "path",
+            "path": "trigger.address.postalCode"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "trigger.address.postalCode"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "path",
+            "path": "steps.step_5.output.shippingAddress.postalCode"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "steps.step_5.output.shippingAddress.postalCode"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": "98335"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    },
+    {
+      "stepId": "step_6",
+      "argumentPath": "variables.region",
+      "kind": "multiple-candidates",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "path",
+            "path": "trigger.address.region"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "trigger.address.region"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "path",
+            "path": "steps.step_5.output.shippingAddress.region"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "steps.step_5.output.shippingAddress.region"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": "WA"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    },
+    {
+      "stepId": "step_6",
+      "argumentPath": "variables.region",
+      "kind": "constant-or-variable",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "path",
+            "path": "trigger.address.region"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "trigger.address.region"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "path",
+            "path": "steps.step_5.output.shippingAddress.region"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "steps.step_5.output.shippingAddress.region"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": "WA"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    },
+    {
+      "stepId": "step_7",
+      "argumentPath": "requestId",
+      "kind": "multiple-candidates",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "path",
+            "path": "trigger.requestId"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "trigger.requestId"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "path",
+            "path": "steps.step_6.output.requestId"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "steps.step_6.output.requestId"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": "req_0061"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    },
+    {
+      "stepId": "step_8",
+      "argumentPath": "requestId",
+      "kind": "multiple-candidates",
+      "candidates": [
+        {
+          "binding": {
+            "mode": "path",
+            "path": "trigger.requestId"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "trigger.requestId"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "path",
+            "path": "steps.step_6.output.requestId"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "steps.step_6.output.requestId"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "path",
+            "path": "steps.step_7.output.id"
+          },
+          "reason": "exact-match",
+          "sourcePaths": [
+            "steps.step_7.output.id"
+          ]
+        },
+        {
+          "binding": {
+            "mode": "fixed",
+            "value": "req_0061"
+          },
+          "reason": "constant",
+          "sourcePaths": []
+        }
+      ]
+    }
+  ],
+  "crystallizeThreadId": "thread-b9e4421c-a32f-4c01-8cb8-26d9313839bb",
+  "greetingCorrection": "Saved v2 omitted the customer lookup; matching the recipient name on this seed is insufficient evidence.",
+  "proposalWidget": true,
+  "savedVersionId": "ver_eb5ef31d9fc6f42f",
+  "savedVersion": 3,
+  "noTargetWrites": true,
+  "dryRun": {
+    "requestId": "req_0014",
+    "runId": "run_d1981c677c48747a",
+    "status": "completed",
+    "tokens": {
+      "input": 0,
+      "output": 0
+    },
+    "steps": [
+      {
+        "action": "update-shipping-address",
+        "input": {
+          "address": {
+            "name": "Adrian Vale",
+            "line1": "16 Mossbank Court",
+            "line2": "Apt 4",
+            "city": "Harbor Ridge",
+            "region": "WA",
+            "postalCode": "98335",
+            "countryCode": "US"
+          },
+          "orderId": "ord_1014"
+        },
+        "status": "planned"
+      },
+      {
+        "action": "get-customer",
+        "input": {
+          "customerId": "cus_0014"
+        },
+        "status": "completed"
+      },
+      {
+        "action": "send-reply",
+        "input": {
+          "template": "Hi {{name}}, we've redirected your order to the new shipping address you provided ({{line1}}{{line2}}, {{city}}, {{region}} {{postalCode}}). Your order is still unshipped, so this change was applied in time with no impact on delivery.",
+          "requestId": "req_0014",
+          "variables": {
+            "city": "Harbor Ridge",
+            "name": "Adrian",
+            "line1": "16 Mossbank Court",
+            "line2": ", Apt 4",
+            "region": "WA",
+            "postalCode": "98335"
+          }
+        },
+        "status": "planned"
+      },
+      {
+        "action": "tag-request",
+        "input": {
+          "tag": "address_change",
+          "requestId": "req_0014"
+        },
+        "status": "planned"
+      },
+      {
+        "action": "set-request-status",
+        "input": {
+          "status": "resolved",
+          "requestId": "req_0014"
+        },
+        "status": "planned"
+      }
+    ]
+  },
+  "correct": true,
+  "savedSteps": [
+    {
+      "id": "step_5",
+      "args": {
+        "address": {
+          "mode": "path",
+          "path": "trigger.address"
+        },
+        "orderId": {
+          "mode": "path",
+          "path": "trigger.orderId"
+        }
+      },
+      "kind": "action",
+      "action": "update-shipping-address"
+    },
+    {
+      "id": "step_6",
+      "args": {
+        "customerId": {
+          "mode": "path",
+          "path": "trigger.customerId"
+        }
+      },
+      "kind": "action",
+      "action": "get-customer"
+    },
+    {
+      "id": "step_7",
+      "args": {
+        "template": {
+          "mode": "fixed",
+          "value": "Hi {{name}}, we've redirected your order to the new shipping address you provided ({{line1}}{{line2}}, {{city}}, {{region}} {{postalCode}}). Your order is still unshipped, so this change was applied in time with no impact on delivery."
+        },
+        "requestId": {
+          "mode": "path",
+          "path": "trigger.requestId"
+        },
+        "variables": {
+          "city": {
+            "mode": "path",
+            "path": "trigger.address.city"
+          },
+          "name": {
+            "expr": {
+              "firstWord": [
+                {
+                  "var": "steps.step_6.output.name"
+                }
+              ]
+            },
+            "mode": "expr"
+          },
+          "line1": {
+            "mode": "path",
+            "path": "trigger.address.line1"
+          },
+          "line2": {
+            "mode": "template",
+            "template": ", {{trigger.address.line2}}"
+          },
+          "region": {
+            "mode": "path",
+            "path": "trigger.address.region"
+          },
+          "postalCode": {
+            "mode": "path",
+            "path": "trigger.address.postalCode"
+          }
+        }
+      },
+      "kind": "action",
+      "action": "send-reply"
+    },
+    {
+      "id": "step_8",
+      "args": {
+        "tag": {
+          "mode": "path",
+          "path": "trigger.type"
+        },
+        "requestId": {
+          "mode": "path",
+          "path": "trigger.requestId"
+        }
+      },
+      "kind": "action",
+      "action": "tag-request"
+    },
+    {
+      "id": "step_9",
+      "args": {
+        "status": {
+          "mode": "fixed",
+          "value": "resolved"
+        },
+        "requestId": {
+          "mode": "path",
+          "path": "trigger.requestId"
+        }
+      },
+      "kind": "action",
+      "action": "set-request-status"
+    }
+  ],
+  "customerGreetingBindingVerified": true,
+  "activeVersionId": null
+}

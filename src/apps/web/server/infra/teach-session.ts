@@ -38,3 +38,8 @@ export function demonstrationScope(
 }
 export const teachNavigation = () =>
   readAppStateForCurrentTab("navigation", { fallbackToGlobal: false });
+
+export function isAgentTool(context?: ActionRunContext) {
+  return context?.caller === "tool" && Boolean(context.runId && context.threadId) &&
+    !context.toolCallId?.startsWith(`${context.runId}:`);
+}

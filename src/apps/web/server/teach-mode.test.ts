@@ -12,8 +12,11 @@ import { runWithRequestContext } from "@agent-native/core/server";
 import {
   buildRequestTrigger,
   MatchRequest,
+  Demonstrations,
+  parseRecipeVersion,
   type JsonObject,
 } from "@muscle-memory/recipe-engine";
+import { eq } from "drizzle-orm";
 import {
   afterAll,
   beforeAll,
@@ -37,9 +40,13 @@ import sendReply from "../actions/send-reply.js";
 import start from "../actions/start-demonstration.js";
 import stop from "../actions/stop-demonstration.js";
 import tag from "../actions/tag-request.js";
+import setStatus from "../actions/set-request-status.js";
+import getAgentTrace from "../actions/get-agent-run-demonstration.js";
+import draftRecipe from "../actions/draft-recipe-from-demonstration.js";
+import { traced } from "./infra/traced.js";
 import * as composition from "./composition.js";
 import { getDb, type ShopDb } from "./db/index.js";
-import { demonstrations, demoSteps, recipes, recipeVersions, requestProcessing } from "./db/schema.js";
+import { demonstrations, demoSteps, recipes, recipeVersions, requestProcessing, requests } from "./db/schema.js";
 import { createShopDemoData, DEMO_NOW } from "./db/shop-demo-data.js";
 import { resetShop, seedShop } from "./infra/shop-demo-store.js";
 import { damagedItemFixture } from "./fixtures/intake-recipes.js";
@@ -126,6 +133,173 @@ describe("Teach with real actions and PGlite", () => {
     vi.unstubAllEnvs();
     if (directory) await rm(directory, { recursive: true, force: true });
   });
+
+  const agent = { caller: "tool" as const, userEmail: context.userEmail, runId: "run_agent_first", threadId: "thread_agent", toolCallId: "call_first" };
+  async function unmatched() {
+    const trigger = buildRequestTrigger(request.content.source === "structured" ? request.content.fields as unknown as JsonObject : {},
+      { requestId: request.id, customerId: request.customerId, subject: request.subject });
+    await db.insert(requestProcessing).values({ requestId: request.id, runId: "run_intake_agent", match: {
+      trigger, recipe: null, reason: "no_match", tokens: { input: 0, output: 0 },
+    } });
+  }
+  it.each(["seed", "no_match", "handed_off", "completed", "completed_manual", "dry_run", "unknown", "extraction_failed"])("agent trace eligibility for %s requests", async scenario => session(async () => {
+    const trigger = buildRequestTrigger(request.content.source === "structured" ? request.content.fields as unknown as JsonObject : {},
+      { requestId: request.id, customerId: request.customerId, subject: request.subject });
+    if (scenario === "no_match" || scenario === "extraction_failed") await unmatched();
+    if (["handed_off", "completed", "completed_manual", "dry_run"].includes(scenario)) {
+      const recipe = parseRecipeVersion({ ...damagedItemFixture, id: "ver_trace_eligibility", recipeId: "recipe_trace_eligibility",
+        steps: scenario === "handed_off"
+          ? [{ id: "handoff", kind: "handoff", to: "agent", note: { mode: "fixed", value: "Agent must handle this request" } }]
+          : [{ id: "request", kind: "action", action: "get-request", args: { requestId: { mode: "path", path: "trigger.requestId" } } }],
+      });
+      const run = await composition.createRecipeUseCases(db).runRecipe.execute({ recipe, trigger, mode: scenario === "dry_run" ? "dry-run" : "execute" });
+      expect(run.status).toBe(scenario === "handed_off" ? "handed_off" : "completed");
+      if (scenario === "handed_off" || scenario === "completed")
+        await db.insert(requestProcessing).values({ requestId: request.id, runId: run.id,
+          match: { trigger, recipe, reason: "matched", tokens: { input: 0, output: 0 } } });
+    }
+    await getRequest.run({ requestId: request.id }, agent);
+    if (scenario === "unknown" || scenario === "extraction_failed") {
+      // Keep a valid recorded trace, but simulate missing/failed type classification.
+      await db.update(requests).set({ content: { source: "free_text", text: "Please help with my order.", type: null } }).where(eq(requests.id, request.id));
+      if (scenario === "extraction_failed")
+        await db.update(requestProcessing).set({ match: { trigger, recipe: null, reason: "extraction_failed", tokens: { input: 0, output: 0 } } }).where(eq(requestProcessing.requestId, request.id));
+    }
+    await sendReply.run({ requestId: request.id, template: "Handled by the agent", variables: {} }, agent);
+    await setStatus.run({ requestId: request.id, status: "resolved" }, agent);
+    const captured = (await composition.getTeachUseCases().demonstrations.current({ userId: context.userEmail, workspaceId: "shop", sessionId: `agent:${agent.threadId}` }, request.id))!;
+    expect(captured.status).toBe("completed");
+    const eligible = await getAgentTrace.run({ requestId: request.id }, context);
+    if (["seed", "no_match", "handed_off", "dry_run"].includes(scenario)) {
+      expect(eligible?.id).toBe(captured.id);
+      expect((await draftRecipe.run({ demonstrationId: eligible!.id }, context)).demonstrationId).toBe(captured.id);
+    } else expect(eligible).toBeNull();
+  }));
+  it("captures agent first reads across question-only turns, omits failures and drafts the completed resolution through the same pipeline", async () => session(async () => {
+    await unmatched();
+    await tag.run({ requestId: request.id, tag: "before-capture" }, context);
+    await Promise.all([getRequest.run({ requestId: request.id }, agent), getOrder.run({ orderId: order.id }, agent),
+      getOrder.run({ orderId: order.id }, agent)]);
+    const demos = composition.getTeachUseCases().demonstrations;
+    const scope = { userId: context.userEmail, workspaceId: "shop", sessionId: `agent:${agent.threadId}` };
+    const questioning = (await demos.current(scope, request.id))!;
+    expect(questioning.status).toBe("recording");
+    expect(questioning.steps.map(s => s.action)).toEqual(["get-request", "get-order"]);
+    expect(await getAgentTrace.run({ requestId: request.id }, context)).toBeNull();
+    const second = { ...agent, runId: "run_agent_second", toolCallId: "call_second" };
+    await expect(traced("tag-request", async () => { throw new Error("rejected"); }, composition.shopTraceCapture)({ requestId: request.id, tag: "failed" }, second)).rejects.toThrow("rejected");
+    await getOrder.run({ orderId: order.id }, second);
+    const reply = await sendReply.run({ requestId: request.id, template: "Handled", variables: {} }, second);
+    await tag.run({ requestId: request.id, tag: "agent-handled" }, second);
+    await setStatus.run({ requestId: request.id, status: "resolved" }, second);
+    const trace = (await getAgentTrace.run({ requestId: request.id }, context))!;
+    expect(trace.status).toBe("completed");
+    expect(trace.source).toEqual({ kind: "agent_run", threadId: agent.threadId, runIds: [agent.runId, second.runId] });
+    expect(trace.pending).toEqual([]);
+    expect(trace.steps.slice(0, 2)).toEqual(questioning.steps);
+    expect(trace.steps.map(s => s.action)).toEqual(["get-request", "get-order", "send-reply", "tag-request", "set-request-status"]);
+    expect(trace.steps[2]).toMatchObject({ input: { requestId: request.id, template: "Handled", variables: {} }, output: reply, runId: second.runId, caller: "tool" });
+    expect(trace.steps.every(s => s.durationMs >= 0 && s.navigation !== null)).toBe(true);
+    await tag.run({ requestId: request.id, tag: "reviewed-after-resolution" }, context);
+    expect(await getAgentTrace.run({ requestId: request.id }, context)).toEqual(trace);
+    const result = await draftRecipe.run({ demonstrationId: trace.id }, context);
+    expect(result.demonstrationId).toBe(trace.id);
+    expect(result.draft.steps.some(s => s.kind === "action" && s.action === "set-request-status")).toBe(true);
+    await expect(stop.run({ demonstrationId: trace.id }, context)).rejects.toMatchObject({ errorCode: "TEACH_INPUT" });
+    await session(async () => expect(await getAgentTrace.run({ requestId: request.id }, { ...context, userEmail: "other@example.test" })).toBeNull(), "other@example.test");
+    await session(async () => expect(await getAgentTrace.run({ requestId: request.id }, context)).toBeNull(), context.userEmail, "other", "other-shop");
+    await db.update(requestProcessing).set({ match: { trigger: trace.trigger, recipe: damagedItemFixture, reason: "matched", tokens: { input: 0, output: 0 } } });
+    expect(await getAgentTrace.run({ requestId: request.id }, context)).toBeNull();
+  }));
+
+  it("isolates agent request/thread/owner references and excludes recipe, frontend and historical calls", async () => session(async () => {
+    await unmatched();
+    await writeAppStateForCurrentTab("navigation", { view: "inbox" });
+    await getOrder.run({ orderId: order.id }, agent); // No request scope yet: never backfilled.
+    await navigation();
+    await getRequest.run({ requestId: request.id }, agent);
+    const other = fixtures.requests.find(r => r.id !== request.id && r.orderId && r.orderId !== order.id && r.customerId !== request.customerId)!;
+    await getRequest.run({ requestId: other.id }, agent);
+    await getOrder.run({ orderId: other.orderId! }, agent);
+    await getCustomer.run({ customerId: other.customerId }, agent);
+    await listRequests.run({}, agent);
+    expect(await composition.shopTraceCapture.recording(agent, { actionName: "create-request", input: { customerId: request.customerId } })).toBeNull();
+    await getOrder.run({ orderId: order.id }, { ...agent, toolCallId: `${agent.runId}:recipe-step` });
+    await getOrder.run({ orderId: order.id }, { ...agent, threadId: "other-thread" });
+    await getOrder.run({ orderId: order.id }, { ...agent, userEmail: "other@example.test" });
+    await getOrder.run({ orderId: order.id }, context);
+    await navigation(other.id); // Agent recording is independent of a moving browser tab.
+    await getCustomer.run({ customerId: request.customerId }, agent);
+    await setStatus.run({ requestId: request.id, status: "resolved" }, agent);
+    const trace = (await getAgentTrace.run({ requestId: request.id }, context))!;
+    expect(trace.steps.map(s => s.action)).toEqual(["get-request", "get-customer", "set-request-status"]);
+    await getOrder.run({ orderId: order.id }, agent);
+    expect(await get.run({ demonstrationId: trace.id }, context)).toEqual(trace);
+  }));
+
+  it("never completes on human resolution and hides superseded agent resolutions", async () => session(async () => {
+    await unmatched();
+    await getRequest.run({ requestId: request.id }, agent);
+    await setStatus.run({ requestId: request.id, status: "resolved" }, context);
+    expect(await getAgentTrace.run({ requestId: request.id }, context)).toBeNull();
+    const demo = (await composition.getTeachUseCases().demonstrations.active({ userId: context.userEmail, workspaceId: "shop", sessionId: `agent:${agent.threadId}` }))!;
+    expect(demo.status).toBe("recording");
+    await expect(draftRecipe.run({ demonstrationId: demo.id }, context)).rejects.toMatchObject({ errorCode: "DRAFT_INPUT" });
+    await setStatus.run({ requestId: request.id, status: "open" }, context);
+    await setStatus.run({ requestId: request.id, status: "resolved" }, agent);
+    expect(await getAgentTrace.run({ requestId: request.id }, context)).not.toBeNull();
+    await setStatus.run({ requestId: request.id, status: "open" }, context);
+    expect(await getAgentTrace.run({ requestId: request.id }, context)).toBeNull();
+  }));
+
+  it("keeps an agent resolution incomplete when capture is interrupted", async () => session(async () => {
+    await unmatched();
+    await getRequest.run({ requestId: request.id }, agent);
+    const demos = composition.getTeachUseCases().demonstrations;
+    const scope = { userId: context.userEmail, workspaceId: "shop", sessionId: `agent:${agent.threadId}` };
+    await demos.begin({ scope, subjectId: request.id, references: {} });
+    await setStatus.run({ requestId: request.id, status: "resolved" }, agent);
+    const demo = (await demos.current(scope, request.id))!;
+    expect(demo.status).toBe("incomplete");
+    expect(demo.pending).toHaveLength(1);
+    expect(await getAgentTrace.run({ requestId: request.id }, context)).toBeNull();
+    await expect(draftRecipe.run({ demonstrationId: demo.id }, context)).rejects.toMatchObject({ errorCode: "DRAFT_INPUT" });
+  }));
+
+  it("omits failed agent capture and never claims completion after a successful shop effect was lost", async () => session(async () => {
+    await unmatched();
+    await getRequest.run({ requestId: request.id }, agent);
+    await getDbExec().execute(`CREATE FUNCTION reject_agent_capture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.snapshot->>'action' = 'tag-request' THEN RAISE EXCEPTION 'private capture failure'; END IF; RETURN NEW; END $$;`);
+    await getDbExec().execute("CREATE TRIGGER reject_agent_capture BEFORE INSERT ON demo_steps FOR EACH ROW EXECUTE FUNCTION reject_agent_capture()");
+    try {
+      const result = await tag.run({ requestId: request.id, tag: "agent-capture-failure" }, agent);
+      expect(result.tags).toContain("agent-capture-failure");
+      await setStatus.run({ requestId: request.id, status: "resolved" }, agent);
+      const trace = (await composition.getTeachUseCases().demonstrations.current({ userId: context.userEmail, workspaceId: "shop", sessionId: `agent:${agent.threadId}` }, request.id))!;
+      expect(trace.status).toBe("incomplete");
+      expect(trace.incompleteReason).toContain("tag-request");
+      expect(trace.steps.map(s => s.action)).toEqual(["get-request"]);
+      expect(await getAgentTrace.run({ requestId: request.id }, context)).toBeNull();
+    } finally {
+      await getDbExec().execute("DROP TRIGGER reject_agent_capture ON demo_steps");
+      await getDbExec().execute("DROP FUNCTION reject_agent_capture()");
+    }
+  }));
+
+  it("marks an existing agent trace incomplete when session lookup fails before reserving a successful mutation", async () => session(async () => {
+    await unmatched();
+    await getRequest.run({ requestId: request.id }, agent);
+    const lookup = vi.spyOn(Demonstrations.prototype, "active").mockRejectedValueOnce(new Error("private lookup failure"));
+    try {
+      const result = await tag.run({ requestId: request.id, tag: "lookup-capture-failure" }, agent);
+      expect(result.tags).toContain("lookup-capture-failure");
+      await setStatus.run({ requestId: request.id, status: "resolved" }, agent);
+      const trace = (await composition.getTeachUseCases().demonstrations.current({ userId: context.userEmail, workspaceId: "shop", sessionId: `agent:${agent.threadId}` }, request.id))!;
+      expect(trace.status).toBe("incomplete");
+      expect(trace.steps.map(s => s.action)).toEqual(["get-request"]);
+      expect(await getAgentTrace.run({ requestId: request.id }, context)).toBeNull();
+    } finally { lookup.mockRestore(); }
+  }));
 
   it("stores reads, mutations and exact intake trigger, and retrieves a detached trace from a fresh adapter", async () =>
     session(async () => {

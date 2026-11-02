@@ -62,6 +62,7 @@ let savedReplies: Reply[];
 let savedRefunds: Refund[];
 let savedReplacements: Order[];
 let demonstration: Demonstration | null;
+let agentDemonstration: Demonstration | null;
 let captureFailure: boolean;
 let calls: { name: string; input: Record<string, unknown>; method: string }[];
 let processing: RequestProcessing[];
@@ -287,6 +288,7 @@ beforeEach(() => {
   recipeRun = awaitingRun();
   remoteSync = false;
   demonstration = null;
+  agentDemonstration = null;
   captureFailure = false;
   agent.send.mockReset();
   client = new QueryClient({
@@ -379,6 +381,8 @@ beforeEach(() => {
       switch (name) {
         case "draft-recipe-from-demonstration":
           return result({ demonstrationId: input.demonstrationId, recipe: { id: "recipe_ui" }, draft: { id: "ver_ui" }, ambiguities: [] });
+        case "get-agent-run-demonstration":
+          return result(agentDemonstration);
         case "get-demonstration":
           return result(demonstration);
         case "start-demonstration": {
@@ -946,6 +950,47 @@ describe("shop workspace with real framework action hooks and an offline action 
     expect(writes("draft-recipe-from-demonstration")).toHaveLength(1);
     expect(writes("draft-recipe-from-demonstration")[0]?.input).toEqual({ demonstrationId: "demo_ui" });
     expect(agent.send).not.toHaveBeenCalled();
+  });
+
+  async function agentTrace() {
+    request = { ...request, status: "resolved" };
+    await mount();
+    await click(byText("Teach"));
+    await settle(() => expect(demonstration?.status).toBe("recording"));
+    await click(byText("Stop & save"));
+    await settle(() => expect(demonstration?.status).toBe("completed"));
+    const step: DemonstrationStep = { id: "step_1", sequence: 1, action: "set-request-status", input: { requestId: request.id, status: "resolved" },
+      output: request as unknown as DemonstrationStep["output"], caller: "tool", navigation: null, startedAt: 1, durationMs: 0 };
+    agentDemonstration = { ...demonstration!, id: "demo_agent", source: { kind: "agent_run", threadId: "thread_ui", runIds: ["run_ui"] }, steps: [step] };
+    demonstration = null;
+    await act(async () => root.render(null));
+    client.clear();
+  }
+  it("crystallizes an eligible resolved agent trace through the shared draft action and navigates to Studio", async () => {
+    await agentTrace();
+    await mount();
+    await settle(() => expect(byText("Crystallize this run").hasAttribute("disabled")).toBe(false));
+    await click(byText("Crystallize this run"));
+    await settle(() => expect(container.querySelector('[data-testid="current-path"]')?.textContent).toBe("/recipes/recipe_ui"));
+    expect(writes("draft-recipe-from-demonstration").map(c => c.input)).toEqual([{ demonstrationId: "demo_agent" }]);
+    expect(agent.send).not.toHaveBeenCalled();
+  });
+  it.each(["open", "unmatched-missing", "recording", "incomplete", "pending", "reason", "not-stopped", "teach", "empty", "failed-query"])("hides agent crystallization for %s", async condition => {
+    await agentTrace();
+    if (condition === "open") request = { ...request, status: "open" };
+    if (condition === "unmatched-missing") agentDemonstration = null; // Shared projection returns null for matched/manual/missing traces.
+    if (condition === "recording" || condition === "incomplete") agentDemonstration = { ...agentDemonstration!, status: condition };
+    if (condition === "pending") agentDemonstration = { ...agentDemonstration!, pending: [2] };
+    if (condition === "reason") agentDemonstration = { ...agentDemonstration!, incompleteReason: "Capture failed" };
+    if (condition === "not-stopped") agentDemonstration = { ...agentDemonstration!, stoppedAt: null };
+    if (condition === "teach") agentDemonstration = { ...agentDemonstration!, source: { kind: "teach" } };
+    if (condition === "empty") agentDemonstration = { ...agentDemonstration!, steps: [] };
+    if (condition === "failed-query") failure = "get-agent-run-demonstration";
+    await mount();
+    await settle(() => expect(container.textContent).toContain(request.subject));
+    await settle(() => expect(client.isFetching()).toBe(0));
+    expect(container.textContent).not.toContain("Crystallize this run");
+    expect(writes("draft-recipe-from-demonstration")).toHaveLength(0);
   });
 
   it("shows draft creation progress immediately and prevents double submission", async () => {

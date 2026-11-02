@@ -1,5 +1,6 @@
 export const shopMessages = {
   inbox: "Inbox",
+  crystallizeRun: "Crystallize this run",
   studio: "Kiln & Co.",
   support: "Customer care",
   allStatuses: "All statuses",

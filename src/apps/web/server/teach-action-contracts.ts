@@ -20,6 +20,10 @@ const jsonObject = z.custom<JsonObject>(
 );
 export const demonstrationSchema: z.ZodType<Demonstration> = z.object({
   id: demonstrationIdSchema,
+  source: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("teach") }),
+    z.object({ kind: z.literal("agent_run"), threadId: z.string(), runIds: z.array(z.string()) }),
+  ]).optional(),
   scope: z.object({
     userId: z.string(),
     workspaceId: z.string(),
@@ -37,6 +41,7 @@ export const demonstrationSchema: z.ZodType<Demonstration> = z.object({
   steps: z.array(
     z.object({
       id: z.string(),
+      runId: z.string().optional(),
       action: z.string(),
       sequence: z.number().int().positive(),
       input: jsonObject,

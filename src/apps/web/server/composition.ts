@@ -46,6 +46,7 @@ import { RequestIntake } from "./infra/request-intake.js";
 import { DrizzleRequestProcessing } from "./infra/request-processing.js";
 import { DrizzleRunRepository } from "./infra/run-repository.js";
 import { ShopDemonstrations } from "./infra/shop-demonstrations.js";
+import { AgentRunTraces } from "./infra/agent-run-traces.js";
 import { ShopHistoricalCaseSource } from "./infra/shop-historical-cases.js";
 import { ShopMutationNormalizer } from "./infra/shop-mutation-normalizer.js";
 import { ShopRecipeBacktests } from "./infra/shop-recipe-backtests.js";
@@ -104,7 +105,11 @@ export function getDraftRecipeUseCases() {
 }
 export const shopTraceCapture = createShopTraceCapture(
   () => getTeachUseCases().demonstrations,
+  (context, action) => getAgentRunTraces().session(context, action),
 );
+export function getAgentRunTraces() {
+  return new AgentRunTraces(getDb(), getTeachUseCases());
+}
 shopTraceCapture.succeeded = (action, context) => new AgentRequestUsage(getDb()).succeeded(action, context);
 
 export function getHandlingStats(context?: ActionRunContext) {

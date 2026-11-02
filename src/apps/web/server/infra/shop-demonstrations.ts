@@ -44,6 +44,9 @@ export class ShopDemonstrations {
       throw new TeachInputError(
         "Open this request in the current tab before starting Teach.",
       );
+    return this.demonstrations.start({ scope, ...await this.snapshot(input) });
+  }
+  async snapshot(input: { requestId: RequestId; fields?: StructuredRequestFields | undefined }) {
     const request = await this.shop.getRequest(input.requestId);
     if (!request) throw new TeachInputError("Request not found.");
     let fields: StructuredRequestFields;
@@ -82,8 +85,7 @@ export class ShopDemonstrations {
         );
     }
     const orderId = "orderId" in fields ? fields.orderId : request.orderId;
-    return this.demonstrations.start({
-      scope,
+    return {
       subjectId: request.id,
       references: {
         requestId: request.id,
@@ -95,7 +97,7 @@ export class ShopDemonstrations {
         customerId: request.customerId,
         subject: request.subject,
       }),
-    });
+    };
   }
   scope(context?: ActionRunContext) {
     const scope = demonstrationScope(context);
@@ -118,7 +120,10 @@ export class ShopDemonstrations {
       return this.demonstrations.get(owner, input.demonstrationId);
     return this.demonstrations.current(this.scope(context), input.requestId!);
   }
-  finish(id: string, cancel: boolean, context?: ActionRunContext) {
+  async finish(id: string, cancel: boolean, context?: ActionRunContext) {
+    const demo = await this.demonstrations.get(this.scope(context), id);
+    if (demo?.source?.kind === "agent_run")
+      throw new TeachInputError("Agent traces finish only through their recorded resolution action.");
     return this.demonstrations.finish(this.scope(context), id, cancel);
   }
 }

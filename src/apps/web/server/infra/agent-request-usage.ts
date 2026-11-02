@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { ShopDb } from "../db/index.js";
 import { requestAgentRuns, requests } from "../db/schema.js";
-import { demonstrationOwner } from "./teach-session.js";
+import { demonstrationOwner, isAgentTool } from "./teach-session.js";
 
 /** Supported action context supplies the exact framework run, without prompt parsing. */
 export class AgentRequestUsage {
@@ -28,12 +28,7 @@ export class AgentRequestUsage {
     const resolving =
       action.actionName === "set-request-status" && input.status === "resolved";
     const owner = demonstrationOwner(context);
-    const agent =
-      context?.caller === "tool" &&
-      context.runId &&
-      context.threadId &&
-      owner &&
-      !context.toolCallId?.startsWith(`${context.runId}:`);
+    const agent = isAgentTool(context) && owner;
     if (action.actionName === "set-request-status") {
       // Reopening or a human resolution supersedes a prior attribution.
       await this.db

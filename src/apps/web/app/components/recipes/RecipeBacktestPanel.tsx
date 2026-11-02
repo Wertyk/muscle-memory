@@ -1,6 +1,6 @@
 import { actionErrorMessage, callAction } from "@agent-native/core/client/hooks";
 import { useT } from "@agent-native/core/client/i18n";
-import type { BacktestCaseResult, JsonDifference, JsonValue, Mutation } from "@muscle-memory/recipe-engine";
+import type { BacktestCaseResult, JsonDifference, JsonValue, Mutation, Run } from "@muscle-memory/recipe-engine";
 import type { RequestType } from "@muscle-memory/shop-domain";
 import { useRef, useState } from "react";
 import { Link } from "react-router";
@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { backtestRequestType } from "@/lib/recipe-backtests";
 import { moneyLabel } from "@/lib/recipe-money";
-import { argumentLabel, atPath, isObject, words, type RecipeDetail } from "@/lib/recipe-studio";
+import { argumentLabel, atPath, isObject, type RecipeDetail } from "@/lib/recipe-studio";
+import { actionLabel, mutationSummary, presentationContext, valueSummary } from "@/lib/recipe-presentation";
+import { useRecipePresentation } from "@/hooks/use-recipe-presentation";
 
 type Version = RecipeDetail["history"][number]["version"];
 export type RememberBacktests = (reports: readonly ShopBacktestResult[], type: RequestType, source: "backtest" | "comparison", totalTokens: number) => void;
@@ -39,25 +41,23 @@ function VersionSelect({ label, value, versions, onChange, disabled }: {
 }
 
 /** Backtest-specific evidence display; use Studio's existing labels and money formatting. */
-function OutcomeDiff({ diff, before, after }: {
-  diff: readonly JsonDifference[]; before: readonly Mutation[]; after: readonly Mutation[];
+function OutcomeDiff({ diff, before, after, run }: {
+  diff: readonly JsonDifference[]; before: readonly Mutation[]; after: readonly Mutation[]; run?: Run | null | undefined;
 }) {
   const t = useT();
-  function actionLabel(action: string) {
-    const key = `shop.teachActions.${action}`;
-    return t(key) === key ? words(action) : t(key);
-  }
+  const source = useRecipePresentation();
+  const presentation = run ? presentationContext(run) : source;
   function valueLabel(value: JsonValue | undefined, path: string[], mutations: readonly Mutation[]) {
     if (value === undefined) return t("recipes.backtests.absent");
     if (path[path.length - 1] === "amountMinor" && typeof value === "number") {
       const mutation = mutations[Number(path[0])];
       const currency = mutation && atPath(mutation.input, [...path.slice(2, -1), "currency"]);
-      return moneyLabel(value, currency);
+      return moneyLabel(value, currency, presentation);
     }
-    if (path[path.length - 1] === "action" && typeof value === "string") return actionLabel(value);
+    if (path[path.length - 1] === "action" && typeof value === "string") return actionLabel(value, t);
     if (isObject(value) && typeof value.action === "string")
-      return `${actionLabel(value.action)} · ${JSON.stringify(value.input)}`;
-    return typeof value === "string" ? value : JSON.stringify(value);
+      return mutationSummary(value.action, value.input ?? null, presentation, t);
+    return valueSummary(value, presentation);
   }
   return <ul className="recipe-diff">
     {diff.map((difference, index) => {
@@ -104,7 +104,7 @@ function BacktestCases({ report }: { report: ShopBacktestResult }) {
         <details open={item.status !== "identical"}>
           <summary>{t("recipes.backtests.reasonAndDiff")}</summary>
           <CaseReasons item={item} />
-          <OutcomeDiff diff={item.diff} before={item.historicalMutations} after={item.intendedMutations} />
+          <OutcomeDiff diff={item.diff} before={item.historicalMutations} after={item.intendedMutations} run={item.run} />
         </details>
       </li>)}
     </ul>
@@ -210,7 +210,7 @@ export function RecipeBacktestPanel({ detail, reports, remember }: {
               <details><summary>{t("recipes.backtests.reasonAndDiff")}</summary>
                 {before && <><p>v{baseline?.version}</p><CaseReasons item={before} /></>}
                 {after && <><p>v{candidate?.version}</p><CaseReasons item={after} /></>}
-                <OutcomeDiff diff={item.diff} before={before?.intendedMutations ?? []} after={after?.intendedMutations ?? []} />
+                <OutcomeDiff diff={item.diff} before={before?.intendedMutations ?? []} after={after?.intendedMutations ?? []} run={after?.run ?? before?.run} />
               </details>
             </li>;
           })}

@@ -157,7 +157,7 @@ describe("registered recipe-proposal renderer in the actual AgentKit transcript"
         const card = node.querySelector("[data-recipe-proposal]")!;
         expect(card.textContent).toContain(damagedItemFixture.name);
         expect(card.textContent).toContain("Damaged item");
-        expect(card.textContent).toContain("issue refund");
+        expect(card.textContent).toContain("Issue refund");
         expect(card.querySelector("a")?.getAttribute("href")).toBe(
           `/recipes/${damagedItemFixture.recipeId}`,
         );

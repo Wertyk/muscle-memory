@@ -4,12 +4,14 @@ import { IconArrowFork } from "@tabler/icons-react";
 
 import {
   argumentLabel,
+  atPath,
   expressionLabel,
   isObject,
   words,
   type RecipeDraft,
 } from "@/lib/recipe-studio";
-import { moneyText } from "@/lib/shop-workspace";
+import { moneyLabel, resolvedCurrency, valueSummary } from "@/lib/recipe-presentation";
+import { useRecipePresentation } from "@/hooks/use-recipe-presentation";
 
 import { ApprovalEditor } from "./ApprovalEditor";
 import {
@@ -40,6 +42,7 @@ function BindingFields({
   labels: Record<string, string>;
   disabled: boolean;
 }) {
+  const presentation = useRecipePresentation();
   if (
     isObject(value) &&
     isObject(value.amountMinor) &&
@@ -47,10 +50,13 @@ function BindingFields({
   ) {
     const amount = value.amountMinor as unknown as Binding;
     const currency = value.currency as unknown as Binding;
-    const currencyLabel =
-      currency.mode === "fixed"
-        ? String(currency.value)
-        : "Currency · selected line";
+    const argsIndex = path.lastIndexOf("args");
+    const step = atPath(draft.content, path.slice(0, argsIndex));
+    const currencyLabel = resolvedCurrency(value.currency, presentation,
+      isObject(step) ? String(step.id) : undefined,
+      [...path.slice(argsIndex + 1), "amountMinor"].join("."));
+    const amountLabel = amount.mode === "fixed" && typeof amount.value === "number"
+      ? moneyLabel(amount.value, currencyLabel) : undefined;
     return (
       <RecipeField
         label={label}
@@ -59,7 +65,7 @@ function BindingFields({
         {...{ draft, onChange, disabled }}
       >
         <div className="recipe-money-values">
-          <WireChip binding={amount} labels={labels} />
+          <WireChip binding={amount} labels={labels} {...(amountLabel ? { compactLabel: amountLabel } : {})} />
           <div className="recipe-currency-field">
             <RecipeField
               label="Currency"
@@ -85,15 +91,7 @@ function BindingFields({
     typeof value.value.amountMinor === "number" &&
     typeof value.value.currency === "string"
   ) {
-    let amount = `${value.value.amountMinor / 100} ${value.value.currency}`;
-    try {
-      amount = moneyText({
-        amountMinor: value.value.amountMinor,
-        currency: value.value.currency,
-      });
-    } catch {
-      /* Invalid drafts remain editable. */
-    }
+    const amount = valueSummary(value.value, presentation);
     return (
       <RecipeField
         {...{ path, label, draft, onChange, disabled }}

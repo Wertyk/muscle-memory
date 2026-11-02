@@ -31,12 +31,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { RECIPE_BACKTEST_STATE, type ShownBacktest, type ShopBacktestResult } from "@shared/recipe-backtests";
 import { TAB_ID } from "@/lib/tab-id";
+import { RecipePresentationProvider } from "@/hooks/use-recipe-presentation";
+import { stepLabel } from "@/lib/recipe-presentation";
 import {
   expressionLabel,
   isObject,
   RECIPES_PATH,
   replaceAtPath,
-  words,
   type RecipeDetail,
   type RecipeDraft,
 } from "@/lib/recipe-studio";
@@ -142,13 +143,7 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
     if (!Array.isArray(steps)) return;
     for (const step of steps)
       if (isObject(step)) {
-        const action = typeof step.action === "string" ? step.action : "";
-        const key = action
-          ? `shop.teachActions.${action}`
-          : `recipes.kinds.${step.kind}`;
-        const translated = t(key);
-        labels[String(step.id)] =
-          translated === key ? words(action || String(step.kind)) : translated;
+        labels[String(step.id)] = stepLabel({ kind: String(step.kind), action: typeof step.action === "string" ? step.action : null }, t);
         collect(step.then);
         collect(step.else);
       }
@@ -156,6 +151,7 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
   collect(draft.content.steps);
   const disabled = pending || detail.isError || draftQuery.isError;
   return (
+    <RecipePresentationProvider recipeId={recipeId} originalVersionId={history[0]?.version.id}>
     <div className="shop-page recipe-page">
       <ShopMasthead agentToggle={false} />
       <Link to={RECIPES_PATH} className="shop-back-link">
@@ -398,5 +394,6 @@ function RecipeStudioPage({ recipeId }: { recipeId: string }) {
         </aside>
       </div>
     </div>
+    </RecipePresentationProvider>
   );
 }

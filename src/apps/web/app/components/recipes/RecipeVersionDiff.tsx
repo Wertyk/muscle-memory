@@ -2,6 +2,8 @@ import { useT } from "@agent-native/core/client/i18n";
 import { recipeContent, type Binding, type JsonValue } from "@muscle-memory/recipe-engine";
 
 import { approvalDescription } from "@/lib/recipe-approval";
+import { useRecipePresentation } from "@/hooks/use-recipe-presentation";
+import { resolvedCurrency, valueSummary } from "@/lib/recipe-presentation";
 import { moneyCurrency, moneyLabel } from "@/lib/recipe-money";
 import { argumentLabel, atPath, differenceLabel, expressionLabel, isObject, wireSource, type RecipeDetail } from "@/lib/recipe-studio";
 
@@ -29,6 +31,7 @@ export function RecipeVersionDiff({ entry, previous, labels }: {
   labels: Readonly<Record<string, string>>;
 }) {
   const t = useT();
+  const presentation = useRecipePresentation();
   const after = recipeContent(entry.version);
   const before = previous ? recipeContent(previous) : {};
   const paths = new Map<string, string[]>();
@@ -52,12 +55,12 @@ export function RecipeVersionDiff({ entry, previous, labels }: {
   function value(content: JsonValue, path: readonly string[]) {
     const field = atPath(content, path);
     const step = stepAt(content, path);
-    if (path[path.length - 1] === "approval") return approvalDescription(step, labels, true);
+    if (path[path.length - 1] === "approval") return approvalDescription(step, labels, true, presentation);
     if (field === undefined) return "—";
     if (isBinding(field)) {
       const argument = path.slice(path.lastIndexOf("args") + 1).join(".");
       const compactLabel = field.mode === "fixed" && typeof field.value === "number" && argument.endsWith("amountMinor")
-        ? moneyLabel(field.value, moneyCurrency(step, argument), labels)
+        ? moneyLabel(field.value, resolvedCurrency(moneyCurrency(step, argument), presentation, String(step.id), argument), presentation)
         : undefined;
       return <span>
         {messageParts(field) && <span className="recipe-wire-source">{t(`recipes.sources.${wireSource(field)}`)} · </span>}
@@ -70,7 +73,7 @@ export function RecipeVersionDiff({ entry, previous, labels }: {
       return labels[String(field.id)] ?? String(field.kind);
     return path[0] === "trigger" || path[path.length - 1] === "condition"
       ? expressionLabel(field, labels)
-      : typeof field === "string" ? field : JSON.stringify(field);
+      : valueSummary(field, presentation);
   }
   return (
     <ul className="recipe-diff">

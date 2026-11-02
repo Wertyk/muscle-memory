@@ -73,12 +73,12 @@ export function CrystallizeControl({
                     ]),
                 )
               : null,
-            ambiguities: questions.slice(0, 20).map(({ entry, question }) => ({
+            ambiguities: questions.slice(0, 20).map(({ entry, question, candidates }) => ({
               kind:
                 typeof entry === "object" && entry && "kind" in entry
                   ? entry.kind
                   : "review",
-              question: question.slice(0, 600),
+              question: [question, ...(candidates ?? [])].join("\n").slice(0, 600),
             })),
             omittedAmbiguities: Math.max(0, questions.length - 20),
           }),

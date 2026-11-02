@@ -1,4 +1,4 @@
-import { completeText, readDeployCredentialEnv, type CompleteTextOptions, type CompleteTextResult } from "@agent-native/core/server";
+import { completeText, FeatureNotConfiguredError, readDeployCredentialEnv, type CompleteTextOptions, type CompleteTextResult } from "@agent-native/core/server";
 import { z } from "zod";
 import type { JsonObject, TextExtractor } from "@muscle-memory/recipe-engine";
 import { REQUEST_TYPES } from "@muscle-memory/shop-domain";
@@ -12,9 +12,18 @@ export const extractedRequestSchema = z.object({
 
 type Complete = (options: CompleteTextOptions) => Promise<CompleteTextResult>;
 
+/** Safe diagnostics only: never retain provider messages, responses or customer text. */
+export class ExtractionError extends Error {
+  override readonly name = "ExtractionError";
+  constructor(readonly code: "not-configured" | "provider" | "input" | "usage" | "output", message: string) { super(message); }
+}
+
 async function completion(options: CompleteTextOptions, complete: Complete): Promise<CompleteTextResult> {
   try { return await complete(options); }
-  catch { throw new Error("Extraction provider request failed."); }
+  catch (error) {
+    if (error instanceof FeatureNotConfiguredError) throw new ExtractionError("not-configured", "Extraction is not configured.");
+    throw new ExtractionError("provider", "Extraction provider request failed.");
+  }
 }
 
 /** Recipe fields define the provider's output schema. The executor validates
@@ -27,9 +36,10 @@ export class CompleteTextExtractor implements TextExtractor {
 
   async extract(input: Parameters<TextExtractor["extract"]>[0]) {
     const config = this.configuration();
+    if (!config.model) throw new ExtractionError("not-configured", "Extraction is not configured. Set EXTRACT_MODEL and the provider credential.");
     const entries = Object.entries(input.fields);
     if (!input.text.trim() || input.text.length > 64_000 || !config.model || !entries.length || entries.length > 64) {
-      throw new Error("Invalid extraction input or configuration.");
+      throw new ExtractionError("input", "Invalid extraction input or configuration.");
     }
     const fields = Object.fromEntries(entries.map(([name, field]) => {
       let schema: z.ZodType = field.type === "string" ? z.string() : field.type === "number" ? z.number() : z.boolean();
@@ -48,14 +58,14 @@ export class CompleteTextExtractor implements TextExtractor {
     }, this.complete);
     const tokens = { input: result.usage?.inputTokens, output: result.usage?.outputTokens };
     if (!Number.isSafeInteger(tokens.input) || tokens.input! < 0 || !Number.isSafeInteger(tokens.output) || tokens.output! < 0) {
-      throw new Error("Extraction returned invalid token usage.");
+      throw new ExtractionError("usage", "Extraction returned invalid token usage.");
     }
     try {
       if (result.stopReason === "max_tokens") throw new Error();
       const output: unknown = JSON.parse(result.text);
       if (!isRecipeJson(output) || output === null || typeof output !== "object" || Array.isArray(output)) throw new Error();
       return { output: output as JsonObject, tokens: { input: tokens.input!, output: tokens.output! } };
-    } catch { throw new Error("Extraction returned invalid structured output."); }
+    } catch { throw new ExtractionError("output", "Extraction returned invalid structured output."); }
   }
 }
 

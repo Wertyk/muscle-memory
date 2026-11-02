@@ -186,8 +186,9 @@ Unsaved snapshots are validated and never persisted. Missing IDs and non
 `requestType` selects the recipe's historical cohort; arbitrary JSONLogic trigger
 conditions cannot in general be inverted into a SQL type selector. The engine
 still evaluates the complete trigger condition for every selected request.
-These actions remain discoverable through tool search. Recipe Studio is TASK-13;
-there is no UI or activation change in this phase.
+These actions remain discoverable through tool search. Recipe Studio runs them
+only on explicit clicks and displays version-specific session evidence before
+activation; a backtest never blocks activation.
 
 ### Historical inputs and outcomes
 
@@ -203,6 +204,54 @@ If extraction cannot produce complete validated fields, the operation rejects
 instead of silently dropping that case or presenting an incomplete cohort.
 Provider details are sanitized at the action boundary; failed operations may
 still have spent tokens without producing a report.
+
+Missing extraction configuration and incomplete free-text fields retain the
+failing request ID in the public error. Server diagnostics log safe error names,
+messages and request/step IDs when available; raw SQL, provider errors, model
+output and customer text are withheld. Output-schema failures are logged inside
+the same action boundary. The UI shows the reason and one usage caveat.
+
+### Reproduce a Studio backtest on the seed
+
+From the repository root, with the dev server stopped, use the normal local
+environment in `src/apps/web/.env`: `EXTRACT_MODEL`, `OPENAI_API_KEY` and
+`OPENAI_BASE_URL` must be configured for free-text history. A chat model setting
+alone does not configure extraction. Never put key values in commands or notes.
+
+```sh
+pnpm -C src seed:shop
+pnpm -C src/apps/web exec tsx scripts/seed-backtests.ts
+PORT=8094 pnpm -C src dev
+```
+
+Open `/recipes/recipe_backtest_damaged`, named **Seeded damaged item: half refund**.
+Select saved **v1** (`ver_backtest_damaged`) and click **Run backtest**. Expected:
+**10 requests, 7 identical / 3 different / 0 not handled**. `req_0038` historically
+got a replacement instead of a refund; `req_0039` got $380 instead of the recipe's
+$190; `req_0040` has a different reply requesting packaging photos. The other
+seven intended outcomes match. Token usage is measured from five real free-text
+extractions and varies by model; it must never be replaced with a fixture total.
+The script installs only the explicit immutable recipe fixture; it does not
+activate it, rewrite history or install a fake extractor. Reseed after upgrading
+older data: damaged-item free-text seed messages now include the product code and
+quantity that strict reconstruction requires, rather than relying on invented IDs.
+
+For the reviewer's exact constant-refund path, also run
+`pnpm -C src/apps/web exec tsx scripts/seed-runs.ts` before starting the server.
+Open `/recipes/recipe_run_approval` (**Review damaged platter refund**), change
+**Only when** to `{"===":[{"var":"trigger.type"},"damaged_item"]}`, update the draft
+and save a new version. Select that newly saved version (v2 on a fresh catalog)
+and run the backtest. Expected: **0 identical / 10 different / 0 not handled**:
+it plans a constant $140 refund with approval plus the `run-rehearsal` tag, while
+the recorded outcomes contain different reasons/amounts, replies and tags. The
+approval gate is planned in simulation; no real refund or tag is issued.
+
+To compare versions, save another version of the explicit backtest fixture in
+Studio. Choose v1 and the newly saved version, then click **Compare versions**.
+An unchanged copy has 7 identical / 3 different in both reports and zero paired
+outcome changes; combined usage counts the five shared request extractions once.
+No report action auto-runs on navigation, selection or save. Without extraction
+configuration, expect a specific configuration error and no fabricated report.
 
 Outcomes reconstruct **action inputs**, excluding generated record metadata:
 
@@ -636,8 +685,8 @@ returns Studio content, revision, ambiguity entries and issues. No model runs.
 Routes: /recipes, /recipes/:recipeId. Source chips distinguish trigger, earlier
 output, constant, formula and template using labels and light/dark colours.
 JSONLogic rendering supports the merged find/firstWord/money/cat operators.
-Backtest actions from TASK-18 remain wired; the Studio panel is still a reserved
-slot for its UI integration.
+Backtest actions from TASK-18 remain wired; the Studio panel displays explicit
+backtest/comparison results and session summaries before activation.
 
 ### Approval input and Studio presentation (review refinements)
 

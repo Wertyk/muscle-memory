@@ -110,7 +110,9 @@ though shop mutations are suppressed. Summary `tokens`/`totalTokens` include bot
 comparison's combined summary counts shared request extraction once. A repeated
 action call extracts again. Dry-run reads use **current** shop data (acceptable
 for the seed), not historical snapshots. Do not treat results as proof of policy
-success. Recipe Studio UI is TASK-13. Details: `server/recipe-execution.md`.
+success. Recipe Studio exposes both actions on explicit clicks; its tab-scoped
+last-shown summary is in `view-screen.backtest` (null when none). Version history
+shows session evidence before activation without blocking it. Details: `server/recipe-execution.md`.
 
 ## Application state
 
@@ -260,8 +262,9 @@ report real arguments/tokens. Never activate implicitly or claim untested succes
 `/recipes` lists the catalog; `/recipes/:recipeId` inspects editable bindings,
 trigger, approvals, ambiguities and immutable history. Read
 `.agents/skills/recipe-studio/SKILL.md` for the editing sequence. All UI edits use
-these shared actions; no Studio operation calls a model. The TASK-18 Backtest
-panel is a reserved slot only.
+these shared actions. Editing never calls a model. Run backtest and Compare versions
+are explicit, token-spending simulations over saved versions; their cohort comes
+from the selected trigger. Save draft edits before testing them.
 
 | Action | Input | Result / use |
 | --- | --- | --- |

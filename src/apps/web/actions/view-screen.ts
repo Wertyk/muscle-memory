@@ -14,6 +14,7 @@ import {
 import { shopId, shopResult } from "../server/shop-action-contracts.js";
 import { runFiltersSchema } from "../server/recipe-action-contracts.js";
 import { PROCESSING_STATES } from "../shared/request-processing.js";
+import { RECIPE_BACKTEST_STATE, shownBacktestSchema } from "../shared/recipe-backtests.js";
 
 export default defineAction({
   description:
@@ -78,10 +79,15 @@ export default defineAction({
       navigation?.view === "recipe" &&
       typeof navigation.recipeId === "string"
     ) {
-      screen.recipe = await getRecipeStudio(context).get(navigation.recipeId);
+      const detail = await getRecipeStudio(context).get(navigation.recipeId);
+      screen.recipe = detail;
       screen.draft = await getRecipeStudio(context).getDraft(
         navigation.recipeId,
       );
+      const shown = shownBacktestSchema.safeParse(await readAppStateForCurrentTab(RECIPE_BACKTEST_STATE));
+      screen.backtest = shown.success && shown.data.recipeId === navigation.recipeId &&
+        shown.data.reports.every((report) => detail.history.some((entry) => entry.version.id === report.recipeVersionId))
+        ? shown.data : null;
     } else if (navigation?.view === "inbox") {
       const url = await readAppStateForCurrentTab("__url__");
       const params = z

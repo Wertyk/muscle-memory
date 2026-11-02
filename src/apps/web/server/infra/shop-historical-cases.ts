@@ -7,6 +7,21 @@ import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import type { ShopDb } from "../db/index.js";
 import { orders, refunds, replies, requests } from "../db/schema.js";
+import { ExtractionError } from "./complete-text-extraction.js";
+
+export class HistoricalReconstructionError extends Error {
+  override readonly name = "HistoricalReconstructionError";
+  readonly extractionError: ExtractionError | undefined;
+  readonly unexpectedFailure: boolean;
+  constructor(readonly requestId: string, failure: unknown) {
+    const extractionError = failure instanceof ExtractionError ? failure : undefined;
+    const unexpectedFailure = failure !== undefined && !extractionError;
+    super(unexpectedFailure ? "Unexpected historical reconstruction failure (private details withheld)."
+      : `Request ${requestId} could not be reconstructed: ${extractionError?.message ?? "free-text fields missing or invalid."}`);
+    this.extractionError = extractionError;
+    this.unexpectedFailure = unexpectedFailure;
+  }
+}
 
 export const historicalSelectionSchema = z.object({
   event: z.literal("request.created"), requestType: z.enum(REQUEST_TYPES),
@@ -39,10 +54,17 @@ export class ShopHistoricalCaseSource implements HistoricalCaseSource {
 
     const cases: HistoricalCase[] = [];
     for (const { category: _category, ...request } of snapshot.selected) {
+      let extractionError: unknown;
       // Exactly the intake pipeline: validated extraction, trusted context and
       // buildRequestTrigger inside MatchRequest; no classification/persistence.
       const match = await new MatchRequest({
-        recipes: { listActive: async () => [] }, extractor: this.extractor(request),
+        recipes: { listActive: async () => [] }, extractor: { extract: async (text) => {
+          try { return await this.extractor(request).extract(text); }
+          catch (error) {
+            extractionError = error ?? new Error("Unexpected extraction failure");
+            throw error;
+          }
+        } },
       }).execute({
         event: query.event,
         context: { requestId: request.id, customerId: request.customerId, subject: request.subject },
@@ -51,7 +73,7 @@ export class ShopHistoricalCaseSource implements HistoricalCaseSource {
           : { source: "free_text", text: request.content.text },
       });
       this.usage = { input: this.usage.input + match.tokens.input, output: this.usage.output + match.tokens.output };
-      if (match.reason === "extraction_failed") throw new Error(`Historical request ${request.id} could not be extracted. No backtest report was produced.`);
+      if (match.reason === "extraction_failed") throw new HistoricalReconstructionError(request.id, extractionError);
 
       const effects: { at: string; rank: number; id: string; mutation: Mutation }[] = [];
       const withinRequest = (at: string) => at >= request.createdAt && at <= request.updatedAt;

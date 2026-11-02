@@ -1,5 +1,5 @@
 import {
-  parseRecipeVersion, type BacktestRecipe, type BacktestResult, type BacktestVersionComparison,
+  parseRecipeVersion, type BacktestRecipe, type BacktestResult,
   type JsonDifference, type RecipeVersion, type TokenUsage,
 } from "@muscle-memory/recipe-engine";
 import type { RequestType } from "@muscle-memory/shop-domain";
@@ -7,9 +7,12 @@ import { eq } from "drizzle-orm";
 import type { ShopDb } from "../db/index.js";
 import { recipeVersions } from "../db/schema.js";
 import type { ShopHistoricalCaseSource } from "./shop-historical-cases.js";
+import type { ShopBacktestResult, ShopBacktestComparison } from "../../shared/recipe-backtests.js";
+export type { ShopBacktestResult, ShopBacktestComparison } from "../../shared/recipe-backtests.js";
 
 export type RecipeReference = string | RecipeVersion;
 export class BacktestInputError extends Error {
+  override readonly name = "BacktestInputError";
   constructor(readonly code: "VERSION_NOT_FOUND" | "INVALID_BACKTEST", message: string) { super(message); }
 }
 const zero = (): TokenUsage => ({ input: 0, output: 0 });
@@ -23,22 +26,6 @@ const limitations = [
   "Extraction uses the real configured extractor and spends tokens. Provider failures may have unreported usage.",
   "Stored outcomes reconstruct action inputs; they do not prove original click order or mutation policy success.",
 ];
-
-export type ShopBacktestResult = BacktestResult & {
-  readonly summary: BacktestResult["summary"] & {
-    readonly tokens: TokenUsage;
-    readonly totalTokens: number;
-    readonly requestExtractionTokens: TokenUsage;
-    readonly recipeExtractionTokens: TokenUsage;
-  };
-  readonly readData: typeof readData;
-  readonly limitations: readonly string[];
-};
-export type ShopBacktestComparison = Omit<BacktestVersionComparison, "baseline" | "candidate"> & {
-  readonly baseline: ShopBacktestResult;
-  readonly candidate: ShopBacktestResult;
-  readonly summary: { readonly tokens: TokenUsage; readonly totalTokens: number; readonly sharedRequestExtractionTokens: TokenUsage };
-};
 
 function differenceReason(diff: JsonDifference): string {
   const show = (value: unknown) => JSON.stringify(value).slice(0, 240);

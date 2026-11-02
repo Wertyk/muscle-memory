@@ -647,6 +647,19 @@ describe("shop workspace with real framework action hooks and an offline action 
     expect(writes()).toHaveLength(0);
   });
 
+  it("opens the completed checkpoint from the processing banner without shop effects", async () => {
+    processing = [processingRow("auto_handled")];
+    recipeRun = { ...recipeRun, status: "completed", awaitingApprovalStepId: null, steps: recipeRun.steps.map((step) => ({ ...step, status: "completed" })) };
+    await mount();
+    await settle(() => expect(byText("Replay")).toBeDefined());
+    await click(byText("Replay"));
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Saved run checkpoint · Read-only replay");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("$125.00");
+    await click(byText("Exit replay"));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(writes()).toHaveLength(0);
+  });
+
   it.each(["approve", "reject"] as const)("shows the saved step and amount and sends exact %s decision, refreshing the banner", async (decision) => {
     processing = [processingRow("awaiting_approval")];
     await mount();

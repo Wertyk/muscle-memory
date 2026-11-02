@@ -268,3 +268,37 @@ The shared shop lookup classification is verified against action readOnly metada
 The Teach bar numbers mutations and shows compact lookup chips and separate counts;
 Inspect and the retrieval action retain the full ordered trace. Historical traces
 are not rewritten.
+
+## Recipe Studio (TASK-13)
+
+RecipeStudio in recipe-engine/application owns draft revision checks, DSL
+validation, immutable version numbering, content diffs and explicit catalog
+activation/deactivation. DrizzleRecipeStudioStore is its DB port adapter;
+composition.ts is the only wiring site. Existing catalog/intake APIs are unchanged.
+The Studio never calls an LLM or executes the recipe during editing.
+
+The independent task13-studio-drafts migration adds recipe_studio_drafts. Invalid
+JSONLogic/references/templates can be persisted as editable draft content with
+field issues; save validates before inserting an immutable snapshot. A DB-only,
+non-retrying transaction locks versions, catalog and Studio drafts in parent-first
+order, atomically checks expectedRevision and allocates the next version number.
+Every save advances the revision, including identical-content saves. Active
+pointers stay pinned until an explicit activate-recipe action; runs stay pinned
+to their original immutable snapshots. --all reset clears Studio drafts too.
+
+TASK-11 is concurrent in a separate tree. Its recipe_drafts evidence table is
+optional here: the adapter reads it only if present, through static parameterized
+SQL, filtered by authenticated owner/workspace. get-recipe-draft accepts the
+original versionId contract as well as the additive recipeId Studio contract.
+Original evidence is re-read on every draft read and is never copied into the
+shared editable row. Integration tests recreate the exact TASK-11 table contract,
+including cross-owner/workspace checks. When reconciling the branches, retain
+both get-recipe-draft inputs and TASK-11's original output/authorization path;
+replace the optional SQL seam with its typed adapter if convenient.
+
+Routes: /recipes, /recipes/:recipeId. Source chips label trigger, earlier output,
+constant, formula and template independently of colour, with light/dark tokens.
+JSONLogic rendering understands the existing allowlist and TASK-11's find,
+firstWord and money operators without changing execution semantics. Those new
+operators remain invalid in this base until TASK-11's engine changes are merged.
+The Backtest slot is explicitly reserved for TASK-18; no simulation is provided.

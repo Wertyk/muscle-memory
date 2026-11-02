@@ -2,6 +2,7 @@ import type {
   Customer, Order, Product, Refund, Reply, Request, RequestType, Shipment,
 } from "@muscle-memory/shop-domain";
 import type { Demonstration, DemonstrationStep, HandoffContext, Recipe, RecipeVersion, RequestMatch, Run } from "@muscle-memory/recipe-engine";
+import type { StudioDraft } from "@muscle-memory/recipe-engine";
 import { sql } from "drizzle-orm";
 import { bigint, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, uniqueIndex, varchar, type AnyPgColumn } from "drizzle-orm/pg-core";
 
@@ -107,6 +108,14 @@ export const requestProcessing = pgTable("request_processing", {
   // Reserved before execution; the checkpoint can survive a crash before run creation.
   runId: varchar("run_id", { length: 31 }).notNull().unique(),
   match: jsonb("match").$type<RequestMatch>(),
+});
+
+export const recipeStudioDrafts = pgTable("recipe_studio_drafts", {
+  recipeId: varchar("recipe_id", { length: 31 }).primaryKey().references(() => recipes.id, { onDelete: "cascade" }),
+  revision: integer("revision").notNull(),
+  baseVersionId: varchar("base_version_id", { length: 31 }),
+  content: jsonb("content").$type<StudioDraft["content"]>().notNull(),
+  ambiguities: jsonb("ambiguities").$type<StudioDraft["ambiguities"]>().notNull(),
 });
 
 export const recipeRuns = pgTable("recipe_runs", {

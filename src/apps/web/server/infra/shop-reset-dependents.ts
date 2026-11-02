@@ -1,7 +1,7 @@
 import { getTableName, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { ShopDb } from "../db/index.js";
-import { demoSteps, demonstrations, recipeHandoffs, recipeRuns, recipes, recipeVersions, requestProcessing } from "../db/schema.js";
+import { demoSteps, demonstrations, recipeHandoffs, recipeRuns, recipes, recipeVersions, recipeStudioDrafts, requestProcessing } from "../db/schema.js";
 import { lockShopWrites } from "./shop-repository.js";
 
 export type ShopResetTransaction = Parameters<Parameters<ShopDb["transaction"]>[0]>[0];
@@ -31,6 +31,7 @@ export const shopResetDependents: readonly ResetDependent[] = [
     isNotNull(recipeHandoffs.requestId), inArray(recipeHandoffs.runId, [...scope.requestRunIds]),
   ) },
   { table: recipeRuns, where: scope => scope.all ? undefined : inArray(recipeRuns.id, [...scope.requestRunIds]) },
+  { table: recipeStudioDrafts, allOnly: true },
   { table: recipes, allOnly: true },
   { table: recipeVersions, allOnly: true },
 ];

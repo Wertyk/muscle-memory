@@ -10,3 +10,5 @@ export { BacktestRecipe } from "./application/backtest-recipe.js";
 export type { StartBacktest, CompareBacktestVersions } from "./application/backtest-recipe.js";
 export type * from "./domain/demonstration.js";
 export { Demonstrations, DemonstrationError } from "./application/demonstrations.js";
+export { RecipeStudio, RecipeStudioError, recipeContent, validateStudioContent } from "./application/recipe-studio.js";
+export type * from "./application/recipe-studio.js";

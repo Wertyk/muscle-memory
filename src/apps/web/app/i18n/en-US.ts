@@ -1,7 +1,9 @@
+import { recipeMessages } from "./recipes-en";
 import { shopMessages } from "./shop-en";
 
 const messages = {
   shop: shopMessages,
+  recipes: recipeMessages,
   composer: {
     removeAttachment: "Remove {{name}}",
     removeReference: "Remove {{name}} reference",

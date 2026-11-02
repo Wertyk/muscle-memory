@@ -5,11 +5,12 @@ import { z } from "zod";
 
 import {
   getRequestIntake,
+  getRecipeStudio,
   getShopUseCases,
   getCurrentDemonstration,
 } from "../server/composition.js";
-import { PROCESSING_STATES } from "../shared/request-processing.js";
 import { shopId, shopResult } from "../server/shop-action-contracts.js";
+import { PROCESSING_STATES } from "../shared/request-processing.js";
 
 export default defineAction({
   description:
@@ -34,7 +35,8 @@ export default defineAction({
         }),
       );
       screen.request = request;
-      screen.processing = (await getRequestIntake().processing.list([request.id]))[0] ?? null;
+      screen.processing =
+        (await getRequestIntake().processing.list([request.id]))[0] ?? null;
       const demonstration = await getCurrentDemonstration(request.id, context);
       screen.demonstration = demonstration
         ? {
@@ -58,6 +60,16 @@ export default defineAction({
           useCases.getShipmentStatus.execute({ orderId: request.orderId }),
         );
       }
+    } else if (navigation?.view === "recipes") {
+      screen.recipes = await getRecipeStudio(context).list();
+    } else if (
+      navigation?.view === "recipe" &&
+      typeof navigation.recipeId === "string"
+    ) {
+      screen.recipe = await getRecipeStudio(context).get(navigation.recipeId);
+      screen.draft = await getRecipeStudio(context).getDraft(
+        navigation.recipeId,
+      );
     } else if (navigation?.view === "inbox") {
       const url = await readAppStateForCurrentTab("__url__");
       const params = z
@@ -74,16 +86,28 @@ export default defineAction({
         ...(type ? { type } : {}),
       };
       const processing = PROCESSING_STATES.find(
-        (value) => value === (params.success ? params.data.processing : undefined),
+        (value) =>
+          value === (params.success ? params.data.processing : undefined),
       );
       const rows = await getRequestIntake().processing.list();
-      screen.activeFilters = { ...filter, ...(processing ? { processing } : {}) };
+      screen.activeFilters = {
+        ...filter,
+        ...(processing ? { processing } : {}),
+      };
       const requests = await shopResult(
         getShopUseCases().listRequests.execute(filter),
       );
-      const visible = requests.filter((request) => !processing || rows.some((row) => row.requestId === request.id && row.state === processing));
+      const visible = requests.filter(
+        (request) =>
+          !processing ||
+          rows.some(
+            (row) => row.requestId === request.id && row.state === processing,
+          ),
+      );
       screen.requests = visible;
-      screen.processing = rows.filter((row) => visible.some((request) => request.id === row.requestId));
+      screen.processing = rows.filter((row) =>
+        visible.some((request) => request.id === row.requestId),
+      );
     }
     return Object.keys(screen).length
       ? screen

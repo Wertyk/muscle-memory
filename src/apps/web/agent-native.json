@@ -17,7 +17,8 @@
       "recipe_runs": "Durable engine checkpoints for the single shared synthetic demo shop; access through recipe run actions and DrizzleRunRepository.",
       "recipe_handoffs": "Deduplicated escalation work for the single shared synthetic shop inbox; access through DrizzleAgentHandoff and recipe run actions.",
       "recipes": "Catalog metadata and active version pointers for the existing single shared synthetic shop; access through DrizzleRecipeCatalog.",
-      "request_processing": "Intake checkpoints for the existing single shared synthetic shop inbox; read through list-request-processing, writes through RequestIntake."
+      "request_processing": "Intake checkpoints for the existing single shared synthetic shop inbox; read through list-request-processing, writes through RequestIntake.",
+      "recipe_studio_drafts": "Editable recipe content for the existing single shared synthetic shop; access through RecipeStudio actions with revision checks. Original trace ambiguity evidence remains owner/workspace scoped in TASK-11 recipe_drafts and is never copied here."
     }
   }
 }

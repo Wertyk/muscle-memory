@@ -16,6 +16,7 @@ import { AgentNativeIcon } from "@agent-native/toolkit/app/shared/AgentNativeIco
 import {
   IconEdit,
   IconInbox,
+  IconRoute,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
   IconLoader2,
@@ -118,15 +119,24 @@ function persistActiveThreadId(threadId: string) {
   } catch {}
 }
 
-function InboxNavLink({ collapsed }: { collapsed: boolean }) {
+function InboxNavLink({
+  collapsed,
+  recipes = false,
+}: {
+  collapsed: boolean;
+  recipes?: boolean;
+}) {
   const t = useT();
   const { pathname } = useLocation();
-  const active = pathname === INBOX_PATH || pathname.startsWith("/requests/");
+  const active = recipes
+    ? pathname.startsWith("/recipes")
+    : pathname === INBOX_PATH || pathname.startsWith("/requests/");
+  const label = recipes ? t("recipes.title") : t("shop.inbox");
   const link = (
     <Link
-      to={INBOX_PATH}
+      to={recipes ? "/recipes" : INBOX_PATH}
       aria-current={active ? "page" : undefined}
-      aria-label={t("shop.inbox")}
+      aria-label={label}
       className={cn(
         "shop-inbox-nav flex items-center text-sidebar-accent-foreground transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
         active && "bg-sidebar-accent",
@@ -135,16 +145,18 @@ function InboxNavLink({ collapsed }: { collapsed: boolean }) {
           : "mb-3 h-10 w-full gap-3 rounded-lg px-3 text-sm font-medium",
       )}
     >
-      <IconInbox className="size-4 shrink-0" strokeWidth={1.8} />
-      <span className={collapsed ? "sr-only" : "truncate"}>
-        {t("shop.inbox")}
-      </span>
+      {recipes ? (
+        <IconRoute className="size-4 shrink-0" strokeWidth={1.8} />
+      ) : (
+        <IconInbox className="size-4 shrink-0" strokeWidth={1.8} />
+      )}
+      <span className={collapsed ? "sr-only" : "truncate"}>{label}</span>
     </Link>
   );
   return collapsed ? (
     <Tooltip>
       <TooltipTrigger asChild>{link}</TooltipTrigger>
-      <TooltipContent side="right">{t("shop.inbox")}</TooltipContent>
+      <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
   ) : (
     <div className="px-2">{link}</div>
@@ -406,6 +418,7 @@ export function Sidebar({
         )}
       >
         <InboxNavLink collapsed={collapsed} />
+        <InboxNavLink collapsed={collapsed} recipes />
         <ChatThreadsSection collapsed={collapsed} />
       </nav>
 

@@ -43,6 +43,17 @@ describe("shop route state", () => {
       "/requests/req_0007",
     );
     expect(pathForCommand({ view: "inbox" })).toBe("/inbox");
+    expect(navigationStateForPath("/recipes/recipe_care")).toMatchObject({
+      view: "recipe",
+      recipeId: "recipe_care",
+    });
+    expect(navigationStateForPath("/recipes")).toMatchObject({
+      view: "recipes",
+    });
+    expect(pathForCommand({ view: "recipe", recipeId: "recipe_care" })).toBe(
+      "/recipes/recipe_care",
+    );
+    expect(pathForCommand({ view: "recipes" })).toBe("/recipes");
     expect(commandPathForNavigation({ path: "/inbox?status=pending" })).toBe(
       "/inbox?status=pending",
     );

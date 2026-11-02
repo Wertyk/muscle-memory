@@ -323,3 +323,22 @@ truncation sets `exhaustive:false` and emits `candidate-limit`. Exhaustiveness r
 the documented heuristics, not all possible mathematical or textual interpretations.
 The first candidate is a deterministic suggestion, not a confidence claim. Argument
 paths identify review locations, rather than executable source paths.
+
+## Recipe Studio (TASK-13)
+
+`RecipeStudio` takes a `RecipeStudioStore` and a short version-ID generator. Its
+`list`/`get` methods expose catalog summaries and history with content-only diffs.
+`getDraft` returns `{recipeId,revision,baseVersionId,content,ambiguities,issues}`;
+content is `{name,trigger,steps}`. `update({recipeId,expectedRevision,content})`
+preserves invalid but bounded finite JSON for correction and returns field issues.
+`save({recipeId,expectedRevision})` validates the DSL, allocates the next number
+and NEW identity, and atomically advances the draft revision. Even identical
+content creates a new version; stale edit/save retries fail with `CONFLICT`.
+
+`activate({recipeId,versionId})` validates a stored snapshot and changes only its
+catalog pointer; `deactivate(recipeId)` clears that pointer. Saving never activates.
+Existing versions/runs remain unchanged. The store serializes mutation callbacks,
+commits their DB writes atomically and never retries callbacks automatically.
+No executor, action invoker, extractor or model is used by this editing workflow.
+The web adapter optionally reads TASK-11's original owned draft evidence; it does
+not copy that private evidence into the shared editable row.

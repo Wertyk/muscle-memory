@@ -11,7 +11,7 @@ import { DrizzleShopRepository } from "./infra/shop-repository.js";
 import { DrizzleTraceStore } from "./infra/trace-store.js";
 import { ShopDemonstrations } from "./infra/shop-demonstrations.js";
 import { createShopTraceCapture } from "./infra/shop-trace-capture.js";
-import { demonstrationScope } from "./infra/teach-session.js";
+import { demonstrationOwner, demonstrationScope } from "./infra/teach-session.js";
 import { CompleteTextExtractor } from "./infra/complete-text-extraction.js";
 import { DrizzleAgentHandoff } from "./infra/agent-handoff.js";
 import { RecipeActionInvoker } from "./infra/recipe-action-invoker.js";
@@ -23,6 +23,13 @@ import { DrizzleRequestProcessing } from "./infra/request-processing.js";
 import { ShopRequestExtractor } from "./infra/shop-request-extractor.js";
 import { DemoIntake } from "./infra/demo-intake.js";
 import { shopResult } from "./shop-action-contracts.js";
+import { RecipeStudio } from "@muscle-memory/recipe-engine";
+import { DrizzleRecipeStudioStore } from "./infra/recipe-studio-store.js";
+
+export function createRecipeStudio(db: ShopDb, context?: ActionRunContext) {
+  return new RecipeStudio(new DrizzleRecipeStudioStore(db, demonstrationOwner(context)), () => `ver_${randomBytes(8).toString("hex")}`);
+}
+export function getRecipeStudio(context?: ActionRunContext) { return createRecipeStudio(getDb(), context); }
 
 export function createTeachUseCases(db: ShopDb) {
   const demonstrations = new Demonstrations(

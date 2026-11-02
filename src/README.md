@@ -322,11 +322,7 @@ The screenshot references are for captures of this app supplied during review.
 Planning notes and hackathon research (`docs/source/` in the private working
 repository) are not application code and are not included in this public repository.
 
-## AI tools and models
-
-**Development:** OpenAI Codex CLI (**gpt-6.1-sol**) wrote code from task work orders.
-Claude Code (**Claude Opus 5.5**) planned the work, wrote tasks, reviewed every accepted change,
-ran browser verification, and merged accepted work.
+## Models
 
 **In the app:** both models use Ollama Cloud's OpenAI-compatible API.
 
@@ -336,7 +332,7 @@ ran browser verification, and merged accepted work.
 | Free-text extraction | `glm-5.3-flash` | Validated intake fields and explicit recipe extraction steps, including backtests. |
 | Deterministic recipe path | None | Structured matching, bindings, branches, and action execution need no model. |
 
-**Demo video:** Claude Code recorded it by driving the running app in headless Chrome with real clicks and the live model. A drawn pointer marks where each click lands. Waits for the model and idle pauses are cut; nothing is re-staged or sped up. The narration is synthetic speech from Ollama Phonon (voice "Easton"). The terminal shot is a real Claude Code session calling the app's MCP tools.
+**Demo video:** it was recorded by driving the running app in headless Chrome with real clicks and the live model. A drawn pointer marks where each click lands. Waits for the model and idle pauses are cut; nothing is re-staged or sped up. The narration is synthetic speech from Ollama Phonon (voice "Easton"). The terminal shot is a real Claude Code session calling the app's MCP tools.
 
 Selection evidence and its scope: [Ollama benchmark](benchmarks/ollama-2026-11-01.md).
 Its filename uses UTC; the measurements were taken on 2026-11-02 in Moscow.

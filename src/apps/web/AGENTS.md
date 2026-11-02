@@ -86,6 +86,29 @@ PGlite with `pnpm -C src seed:shop`, checks CLI/frontend parity, then calls the
 real local chat endpoint using the configured model and verifies persisted effects.
 Only sanitized assertions/metadata are saved to `scripts/shop-actions-evidence.json`.
 
+## Recipe backtesting
+
+| Action | Input | Result / use |
+| --- | --- | --- |
+| `backtest-recipe` | `recipe` (version ID or snapshot), `requestType` | Summary, per-request differences and dry-run evidence |
+| `compare-recipe-versions` | `baseline`, `candidate` (version IDs or snapshots), `requestType` | Paired reports on one case set, status changes, intended-mutation differences and combined tokens |
+
+`backtest-recipe({recipe, requestType})` accepts a saved version ID or a complete
+immutable snapshot. `compare-recipe-versions({baseline, candidate, requestType})`
+accepts the same references for both versions. These read-only GET actions are
+discoverable through `tool-search`; they never save snapshots, runs or shop data.
+Select the recipe trigger's request type explicitly; only resolved requests of
+that type are loaded, then the engine evaluates all trigger conditions per case.
+Preserve the summary, per-request status/reasons/diff, and dry-run evidence.
+`not_handled` includes blocked mutation-output dependencies and handoffs.
+
+Real free-text request extraction and recipe extract steps spend tokens, even
+though shop mutations are suppressed. Summary `tokens`/`totalTokens` include both;
+comparison's combined summary counts shared request extraction once. A repeated
+action call extracts again. Dry-run reads use **current** shop data (acceptable
+for the seed), not historical snapshots. Do not treat results as proof of policy
+success. Recipe Studio UI is TASK-13. Details: `server/recipe-execution.md`.
+
 ## Application state
 
 - `navigation` describes the view and selected ids. Inbox is `{ view: "inbox", path: "/inbox" }`; an open request is `{ view: "request", requestId, path: "/requests/<requestId>" }`. The same id is in tab-scoped `selection:<TAB_ID>`; leaving the request clears selection. Filters (`status`, `type`) live in URL search params. Chat is `chat` at `/chat` and `/chat/<threadId>`; legacy `/home` links redirect to the inbox.
@@ -170,6 +193,31 @@ five first lookup snapshots + three mutations despite refetches, a 50%-platter
 refund and trigger shape, tests overlap/cancellation/isolation, then
 stops the server and removes its temporary database. No model is called.
 
+## Draft recipes (TASK-11)
+
+| Action | Input | Result / use |
+| --- | --- | --- |
+| `draft-recipe-from-demonstration` | `demonstrationId` from a completed Teach recording | `{demonstrationId, recipe, draft, ambiguities}`; saves a new immutable version and draft catalog entry without a model or activation |
+| `get-recipe-draft` | `versionId: draft.id` | Owned saved draft and ambiguity evidence, or null; read-only GET for UI, agent, MCP and CLI |
+
+Draft only after Stop and saved-trace readback. Recording, incomplete, cancelled,
+empty or foreign demonstrations cannot be drafted. Each call creates a new draft;
+keep `draft.id` and retrieve it for review. Inspect every ambiguity before later
+crystallization/activation. Unused lookups are removed; trigger matches the recorded
+request type, with IDs rebound from intake fields. Native reply templates infer
+variables; plain replies infer first names and formatted money from recorded sources
+and prior outputs. Keyed lookups select the trigger product independently of line order,
+and currency follows the same money object. Inspect `positional-array` fallbacks and
+`request-specific-text` warnings (including literal partial product descriptions).
+Drafts do not appear in active intake
+matching. `run-recipe({recipe:draft, trigger:<other intake-shaped payload>, dryRun:true})`
+shows rebound arguments without shop writes; generated mutation outputs can still
+block later steps. No Recipe Studio or activation UI is introduced here.
+
+The Teach HTTP smoke now also drafts, reads the saved version and dry-runs another
+damaged request, asserting zero tokens and unchanged target activity. See
+`server/recipe-execution.md` and the engine README for persistence/pruning details.
+
 
 ### Menu-launched dialogs (TASK-8 regression fixed in TASK-9)
 
@@ -206,4 +254,4 @@ selection carry the recipe ID; `view-screen` includes current history/draft.
 A stale draft revision is a conflict, requiring readback before retrying. Draft
 validation failures stay editable but cannot become executable versions. Saving
 also increments the revision; repeated uncertain saves must read back first.
-Original ambiguity evidence is owner-scoped, not copied to shared Studio rows.
+Original ambiguity evidence and editable Studio state share TASK-11’s canonical owner/workspace-scoped recipe_drafts row; original version reads preserve their output.

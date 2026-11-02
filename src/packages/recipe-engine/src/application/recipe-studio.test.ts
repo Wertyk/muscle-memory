@@ -133,7 +133,6 @@ describe("RecipeStudio application", () => {
     await expect(studio.getDraft("recipe_unknown")).rejects.toThrow(
       /not found/,
     );
-    expect(await studio.getOriginalDraft("ver_one")).toBeNull();
   });
   it("keeps version diffs focused on recipe content and can intentionally save identical content", async () => {
     const studio = setup();

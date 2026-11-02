@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateCondition, evaluateExpression, EvaluationError, expressionPaths, readPath, resolveArguments, resolveBinding } from "./evaluation.js";
+import { evaluateCondition, evaluateExpression, EvaluationError, expressionPaths, MAX_FIND_ITEMS, readPath, resolveArguments, resolveBinding } from "./evaluation.js";
 import type { BindingContext, Expression } from "./model.js";
 
 const context: BindingContext = {
@@ -86,6 +86,55 @@ describe("safe JSONLogic subset", () => {
     expect(expressionPaths({ if: [{ var: "trigger.id" }, { var: ["trigger.other", { var: "steps.order.output.price" }] }, 0] })).toEqual([
       "trigger.id", "trigger.other", "steps.order.output.price",
     ]);
+  });
+});
+
+describe("keyed selection and derived text operators", () => {
+  const input: BindingContext = { trigger: { productId: "prd_b", name: "  Zoë   O’Connor ", amount: 14000 }, steps: {
+    order: { output: { items: [{ productId: "prd_a", price: { amountMinor: 9999, currency: "EUR" } }, { productId: "prd_b", price: { amountMinor: 4400, currency: "USD" } }] } },
+  } };
+  const find: Expression = { find: [{ var: "steps.order.output.items" }, "productId", { var: "trigger.productId" }, "price.amountMinor"] };
+  it("finds the unique key independently of ordering and reports all dependencies", () => {
+    expect(evaluateExpression(find, input)).toBe(4400);
+    expect(expressionPaths(find)).toEqual(["steps.order.output.items", "trigger.productId"]);
+    expect(evaluateExpression({ money: [{ "*": [find, 0.5] }, "USD"] }, input)).toBe("$22.00");
+    expect(evaluateExpression({ firstWord: [{ var: "trigger.name" }] }, input)).toBe("Zoë");
+    expect(evaluateExpression({ find: [{ var: "steps.order.output.items" }, "productId", "prd_b", ""] }, input)).toMatchObject({ productId: "prd_b" });
+  });
+  it("returns null for absent/duplicate keys, missing properties and null arrays", () => {
+    for (const expr of [
+      { find: [[], "id", "x", "value"] }, { find: [null, "id", "x", "value"] },
+      { find: [[{ var: "trigger.item" }, { var: "trigger.item" }], "id", "x", "value"] },
+      { find: [[{ var: "trigger.item" }], "id", "x", "missing"] },
+    ]) expect(evaluateExpression(expr, { trigger: { item: { id: "x", value: 1 } }, steps: {} })).toBeNull();
+  });
+  it("does not read inherited key/return properties", () => {
+    const inherited = Object.create({ id: "x", value: 4 });
+    expect(evaluateExpression({ find: [{ var: "trigger.items" }, "id", "x", "value"] }, { trigger: { items: [inherited] }, steps: {} })).toBeNull();
+    const item = Object.assign(Object.create({ value: 4 }), { id: "x" });
+    expect(evaluateExpression({ find: [{ var: "trigger.items" }, "id", "x", "value"] }, { trigger: { items: [item] }, steps: {} })).toBeNull();
+  });
+  it.each<Expression>([
+    { find: [[], "__proto__", "x", "value"] }, { find: [[], "id", "x", "constructor.secret"] },
+    { find: [[], { var: "trigger.key" }, "x", "value"] }, { find: [[], "id", "x", { var: "trigger.path" }] },
+    { find: [[], "id", "x", "value()"] }, { find: [[], "id", "x"] },
+    { find: [42, "id", "x", "value"] }, { find: [[], "id", [], "value"] },
+    { firstWord: [4] }, { firstWord: ["x", "y"] }, { firstWord: ["x".repeat(4097)] },
+    { money: [1.5, "USD"] }, { money: [Number.MAX_SAFE_INTEGER + 1, "USD"] },
+    { money: [14000, "unknown"] }, { money: [14000, "__proto__"] },
+    { money: ["14000", "USD"] }, { money: [14000, "USD", "arbitrary"] },
+  ])("rejects unsafe or incorrectly typed expression %j", expr => {
+    expect(() => evaluateExpression(expr, input)).toThrow(EvaluationError);
+  });
+  it("bounds array scans and safely formats integer money without locale/float rounding", () => {
+    expect(() => evaluateExpression({ find: [{ var: "trigger.items" }, "id", "x", "value"] }, { trigger: { items: Array(MAX_FIND_ITEMS + 1).fill(null) }, steps: {} })).toThrow(/bounded/);
+    for (const [amount, symbol, decimal] of [[14000, "$140.00", "140.00"], [1250, "$12.50", "12.50"], [1, "$0.01", "0.01"], [-1, "-$0.01", "-0.01"], [0, "$0.00", "0.00"]] as const) {
+      expect(evaluateExpression({ money: [amount, "USD"] }, input)).toBe(symbol);
+      expect(evaluateExpression({ money: [amount, "USD", "decimal"] }, input)).toBe(decimal);
+    }
+    expect(evaluateExpression({ money: [Number.MAX_SAFE_INTEGER, "EUR"] }, input)).toBe("€90071992547409.91");
+    expect(evaluateExpression({ firstWord: ["  "] }, input)).toBe("");
+    expect(evaluateExpression({ firstWord: ["Maya"] }, input)).toBe("Maya");
   });
 });
 

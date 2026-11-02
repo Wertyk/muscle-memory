@@ -85,6 +85,121 @@ to `sendToAgentChat`, letting the agent read the saved context via actions.
 Dry-run writes only its immutable recipe snapshot and run checkpoints. Integration
 tests compare every shop table and handoff records before/after simulation.
 
+## Historical backtesting (TASK-18 Phase 2 backend)
+
+`createRecipeBacktests` is additive to executor composition. It wires the engine's
+`BacktestRecipe` to `ShopHistoricalCaseSource`, `ShopMutationNormalizer`, and the
+same registry invoker and configured `TextExtractor` used for execution/intake.
+The two thin, read-only GET actions are:
+
+| Action | Input |
+| --- | --- |
+| `backtest-recipe` | `{recipe: versionIdOrSnapshot, requestType}` |
+| `compare-recipe-versions` | `{baseline: versionIdOrSnapshot, candidate: versionIdOrSnapshot, requestType}` |
+
+For example, after saving a version, call
+`backtest-recipe({recipe:"ver_damaged_v1",requestType:"damaged_item"})` through the
+normal action transport. CLI accepts a positional JSON object for nested snapshots.
+Unsaved snapshots are validated and never persisted. Missing IDs and non
+`request.created` recipes fail with typed errors before extraction. The explicit
+`requestType` selects the recipe's historical cohort; arbitrary JSONLogic trigger
+conditions cannot in general be inverted into a SQL type selector. The engine
+still evaluates the complete trigger condition for every selected request.
+These actions remain discoverable through tool search. Recipe Studio is TASK-13;
+there is no UI or activation change in this phase.
+
+### Historical inputs and outcomes
+
+The source selects only `status = resolved` and the requested generated category.
+A repeatable-read, read-only transaction loads requests and batches related
+orders, refunds and replies. It closes before any extraction. Structured fields
+are passed through the exact intake `MatchRequest` path; free text uses
+`ShopRequestExtractor` with `ValidateRequestFields`, then the same public
+`buildRequestTrigger(fields,{requestId,customerId,subject})` inside `MatchRequest`.
+There is no extra source/envelope field, classification write, synthetic field
+default, or seed-specific extraction oracle. The original customer text is used.
+If extraction cannot produce complete validated fields, the operation rejects
+instead of silently dropping that case or presenting an incomplete cohort.
+Provider details are sanitized at the action boundary; failed operations may
+still have spent tokens without producing a report.
+
+Outcomes reconstruct **action inputs**, excluding generated record metadata:
+
+- Refund → `issue-refund({orderId,amount,reason})`.
+- Replacement order → `create-replacement-order({orderId:replacementForOrderId,
+  items:[{productId,quantity}]})`.
+- Reply → `send-reply({requestId,template,variables})`.
+- Each recorded tag → `tag-request({requestId,tag})`.
+- Return cohort's stored return label → `generate-return-label({orderId})`;
+  address-change cohort's stored shipping address →
+  `update-shipping-address({orderId,address})`.
+
+Refunds/replacements are linked by order, not request: only records between the
+request's creation and last update (inclusive) are attributed to it. Return
+labels use the same time window. Replies have a direct request link. Events sort
+by timestamp, then refund/replacement/return-label-or-address/reply, then record
+ID for ties. Tags follow as recorded final state. Resolution selects the cohort;
+no `set-request-status` invocation is inferred solely from that selection.
+Tags have no per-tag history, addresses have no pre-change snapshot/timestamp,
+and overlapping request windows on one order can make attribution ambiguous.
+This reconstruction is suitable for the authored seed; it is not an audit trace.
+
+### Comparison equivalences
+
+`ShopMutationNormalizer` is pure and applied symmetrically. Original action input
+lists and dry-run logs remain intact. For known shop mutation actions it drops
+only top-level `id`, `createdAt`, `updatedAt` record metadata. It always retains
+semantic `requestId`, `orderId`, `productId`, amounts/currencies, quantities,
+meaningful reason/reply text, unknown fields and nested fields. Unknown actions
+are compared exactly. It never removes IDs embedded in prose.
+
+Valid `send-reply` templates are reduced to the literal rendered body using the
+shop's one-pass `{{variable}}` substitution semantics. Equivalent template/variable
+layouts and unused variables compare equally; punctuation, spacing and line
+breaks stay significant. Invalid placeholders, missing variables and conflicting
+extra `body` fields retain their exact input. Refund/escalation reasons and tags
+are trimmed as their use-cases trim them. Contiguous exact `tag-request` operations
+are sorted/deduplicated as an idempotent set; tags are never moved past another
+action. All other mutation/array order remains significant. Omitted refund amounts
+or replacement selections are **not** expanded: their defaults depend on data
+unavailable to a pure normalizer. No semantic similarity or reason-text synonym
+matching is performed.
+
+### Read and token semantics
+
+Dry-run shop reads use **current data, not historical snapshots**. This is the
+reviewer-authorized limitation for seeded history; the report exposes
+`readData:"current"` and limitations. Both versions share a detached historical
+case set, but their read actions still execute separately against current data.
+Concurrent edits can change what the two simulations see. The simulation also
+cannot prove that live mutations would pass policy checks.
+
+Free-text preparation calls the real configured extractor, as do any recipe
+`extract` steps. `summary.requestExtractionTokens` reports cohort preparation;
+`summary.recipeExtractionTokens` sums actual case-local run usage, including
+schema-invalid extract output. `summary.tokens` adds input/output tokens from
+both sources and `summary.totalTokens` adds those two totals. Structured cases
+with action/branch-only recipes consume zero tokens. Known provider usage is
+counted; usage unavailable after provider failures/process death is not invented.
+
+Version comparison loads/extracts the cohort once, using the engine's detached
+case set as a per-operation cache. Each version's report attributes that shared
+request usage to its own scenario. The **combined** `summary.tokens` and
+`summary.totalTokens` count `sharedRequestExtractionTokens` once plus both versions'
+recipe extract-step usage. Use this combined summary for actual comparison cost;
+do not add the two scenario totals. Repeat action calls prepare/extract again.
+No persistent extraction cache, run checkpoint, recipe snapshot or handoff is
+written by these backtest actions.
+
+PGlite tests seed the real 30 handled requests. The hand-written
+`fixtures/backtest-recipes.ts` damage fixture uses read/formula bindings and the
+seed's whole-dollar half-prices, avoiding invented mutation outputs. Ten damage
+cases yield seven identical and three different (replacement/no refund, full
+high-value refund, and distinct reply). Readable field reasons accompany exact
+JSON Pointer diffs. Tests assert every shop row and table count remains unchanged,
+including engine/teaching table counts; existing mutation-output-dependent intake
+fixtures remain conservatively `not_handled`.
+
 ## Request intake (TASK-15 Phase 1)
 
 `create-request` accepts `customerId`, `subject`, and `content` with either
@@ -136,8 +251,8 @@ primary keys and CHECK constraints remain. Legacy alphanumeric IDs are untouched
 executor's immutable snapshot checks. `save` writes metadata; a composite FK ensures
 an active version exists and belongs to that recipe. Drafts have a null pointer.
 An ad hoc run can still persist a version without adding it to the catalog.
-The catalog does not yet publish skills, draft recipes, expose editing/activation
-UI, or auto-install the test fixtures. Later tasks build those workflows on top.
+The catalog does not yet publish skills, expose editing/activation UI, or
+auto-install the test fixtures. TASK-11 drafting builds on this catalog below.
 
 An intake lock, separate from the run lock, serializes repeated request events.
 `request_processing` reserves one run ID before matching, then checkpoints the
@@ -257,6 +372,62 @@ them, and results after Stop cannot turn an incomplete trace back into completed
 Raw persistence/provider errors are never returned in capture-failure reasons.
 
 
+## Drafting demonstrations (TASK-11)
+
+`draft-recipe-from-demonstration({demonstrationId})` calls the pure engine
+`DraftRecipeFromDemonstration` through composition. Only the authenticated
+operator/workspace's completed stored demonstrations are eligible, across browser
+tabs or agent/MCP/CLI calls. Recording, incomplete, cancelled and empty traces
+are rejected. Action metadata comes from the installed registry's `describe`;
+drafting never invokes an action, extraction or a model.
+
+The response is `{demonstrationId, recipe, draft, ambiguities}`. `draft` is a
+validated immutable executable version; `recipe` has draft status and a null
+active pointer. `get-recipe-draft({versionId: draft.id})` is the shared read-only
+GET action and returns the same review evidence (null for absent/foreign drafts).
+Each draft call creates a fresh recipe/version; retrying is not idempotent.
+Keep the returned version ID for retrieval. Neither action activates a recipe.
+Recipe Studio and crystallization remain TASK-13/TASK-12.
+
+`DrizzleRecipeCatalog.createDraft` inserts version, metadata and owner/workspace
+review evidence in one non-retrying transaction. Plain inserts reject collisions
+without changing existing active recipes. The additive named TASK-11 migration
+adds `recipe_drafts`; immutable version triggers and catalog constraints remain
+unchanged. Review evidence records the source demonstration ID without a foreign
+key, so ordinary shop reset/reseed can clear traces while preserving the draft
+and its doubts. `--all` removes review evidence before version deletion.
+
+Inference consumes the recorded intake-shaped trigger and ordered trace. Drafts
+match `request.created` on `trigger.type`, without pinning customer/order IDs.
+Unused lookups and lookup chains are pruned after inference. Copied mutation
+input values can be rebound to their inferred input bindings, with an additional
+review ambiguity, so a refund/reply dry-run does not need invented refund output.
+Generated outputs still block dependent dry-run steps. Literal reply templates
+with derived placeholders use DSL `cat`; native `send-reply` template/variables
+retain their action placeholders and inferred variables. Inference also derives
+first-name and formatted-money tokens with the allowlisted `firstWord` and `money`
+operators. Item prices and currency use a bounded `find` keyed by `trigger.productId`,
+so line reordering cannot change the selected product. Positional fallbacks are
+flagged. Unsourced/partial detail phrases stay literal with a `request-specific-text`
+ambiguity for crystallization; they are never rewritten by a model during drafting.
+
+The real-action PGlite regression records `req_0001`'s broken Ember platter,
+refunds 14000 (half its 28000 unit price), replies and tags `damaged`. Stored
+fixtures in `server/fixtures/broken-platter-*.json` include the EXACT browser trace
+`demo_de81093c7e515f12`, with unchanged inputs, outputs, identities, timing and
+navigation, plus its resulting draft (only generated recipe/version IDs normalized).
+The trace's plain reply begins "Hi Maya" and includes "$140.00". Tests draft/retrieve
+it, prune five lookups to one, and dry-run a different seeded damaged request after
+moving its damaged product behind a decoy line in the isolated database. Refund,
+currency, first name and formatted amount rebind with no shop writes or tokens.
+Inference identifies the refund output as the reply amount source; copied-input
+rebasing retains that candidate while making the proposed dry-run independent of
+unexecuted mutation output. Literal "Ember serving platter" remains explicitly flagged. The
+opt-in `scripts/teach-mode-smoke.ts` exercises this through authenticated frontend
+action transport on an isolated seeded dev app, including persisted draft readback.
+
+## Demonstration read identity (TASK-9 review)
+
 Reviewer round 1: demonstration read identity is the action name plus structural
 JSON equality (object key order ignored; arrays/types preserved). The engine skips
 already-saved reads at reservation and deduplicates concurrent completions, keeping
@@ -277,28 +448,29 @@ activation/deactivation. DrizzleRecipeStudioStore is its DB port adapter;
 composition.ts is the only wiring site. Existing catalog/intake APIs are unchanged.
 The Studio never calls an LLM or executes the recipe during editing.
 
-The independent task13-studio-drafts migration adds recipe_studio_drafts. Invalid
-JSONLogic/references/templates can be persisted as editable draft content with
-field issues; save validates before inserting an immutable snapshot. A DB-only,
-non-retrying transaction locks versions, catalog and Studio drafts in parent-first
-order, atomically checks expectedRevision and allocates the next version number.
-Every save advances the revision, including identical-content saves. Active
-pointers stay pinned until an explicit activate-recipe action; runs stay pinned
-to their original immutable snapshots. --all reset clears Studio drafts too.
+TASK-11's recipe_drafts is the single canonical draft store. Its existing schema
+and applied migrations are unchanged. The optional evidence.studio JSON property
+holds {content,revision,baseVersionId}; original demonstrationId and ambiguities
+stay intact. Catalog-only fixture edits omit demonstrationId rather than invent
+provenance; original versionId reads therefore return null for those rows.
+DrizzleRecipeCatalog owns both original and editable draft reads/writes. The
+Studio port delegates to it, under authenticated owner/workspace scope. There is
+no optional-table SQL bridge, duplicate table or additional migration.
 
-TASK-11 is concurrent in a separate tree. Its recipe_drafts evidence table is
-optional here: the adapter reads it only if present, through static parameterized
-SQL, filtered by authenticated owner/workspace. get-recipe-draft accepts the
-original versionId contract as well as the additive recipeId Studio contract.
-Original evidence is re-read on every draft read and is never copied into the
-shared editable row. Integration tests recreate the exact TASK-11 table contract,
-including cross-owner/workspace checks. When reconciling the branches, retain
-both get-recipe-draft inputs and TASK-11's original output/authorization path;
-replace the optional SQL seam with its typed adapter if convenient.
+Invalid JSONLogic/references/templates remain editable with field issues; save
+validates before inserting an immutable snapshot. A non-retrying DB-only
+transaction locks versions, catalog and recipe_drafts in parent-first order,
+checks expectedRevision and allocates the next version number. Saves advance the
+revision, including identical content. Active pointers change only on explicit
+activation; runs keep their original immutable snapshot. Ordinary reseed retains
+canonical evidence and edits; --all removes draft rows before catalog/versions.
 
-Routes: /recipes, /recipes/:recipeId. Source chips label trigger, earlier output,
-constant, formula and template independently of colour, with light/dark tokens.
-JSONLogic rendering understands the existing allowlist and TASK-11's find,
-firstWord and money operators without changing execution semantics. Those new
-operators remain invalid in this base until TASK-11's engine changes are merged.
-The Backtest slot is explicitly reserved for TASK-18; no simulation is provided.
+get-recipe-draft has one action with exactly one of recipeId or versionId. The
+versionId path uses TASK-11's original use-case/authorization/output. recipeId
+returns Studio content, revision, ambiguity entries and issues. No model runs.
+
+Routes: /recipes, /recipes/:recipeId. Source chips distinguish trigger, earlier
+output, constant, formula and template using labels and light/dark colours.
+JSONLogic rendering supports the merged find/firstWord/money/cat operators.
+Backtest actions from TASK-18 remain wired; the Studio panel is still a reserved
+slot for its UI integration.

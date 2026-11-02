@@ -1,22 +1,46 @@
-import { defineAction } from "@agent-native/core/action";
+import { defineAction, defineActionErrors } from "@agent-native/core/action";
+import { z } from "zod";
 
-import { getRecipeStudio } from "../server/composition.js";
 import {
-  studioErrors,
-  studioLink,
+  getDraftRecipeUseCases,
+  getRecipeStudio,
+} from "../server/composition.js";
+import {
+  draftOperation,
+  draftOwner,
+  recipeDraftSchema,
+} from "../server/draft-action-contracts.js";
+import {
   studioDraftRead,
+  studioDraftOutputSchema,
+  studioLink,
   studioResult,
 } from "../server/studio-action-contracts.js";
+
 export default defineAction({
   description:
-    "Read by recipeId for the editable Studio draft, or versionId for the owned TASK-11 original draft (null if unavailable). Studio result: content {name, trigger, steps}, revision, baseVersionId, ambiguities and inline validation issues. Reading never writes or calls a model.",
+    "Read by versionId for the original owned TASK-11 draft (null if absent or no access), or recipeId for editable Studio content, revision, base version, ambiguities and inline issues. Both use the canonical recipe_drafts store. No model calls.",
   schema: studioDraftRead,
-  errors: studioErrors,
-  http: { method: "GET" },
+  outputSchema: z
+    .union([recipeDraftSchema, studioDraftOutputSchema])
+    .nullable(),
+  errors: defineActionErrors(
+    "DRAFT_INPUT",
+    "DRAFT_NOT_FOUND",
+    "DRAFT_UNAVAILABLE",
+    "RECIPE_NOT_FOUND",
+    "RECIPE_CONFLICT",
+    "RECIPE_INVALID",
+  ),
   readOnly: true,
+  http: { method: "GET" },
   link: ({ result }) => studioLink(result),
-  run: async (input, context) =>
-    input.versionId
-      ? studioResult(getRecipeStudio(context).getOriginalDraft(input.versionId))
-      : studioResult(getRecipeStudio(context).getDraft(input.recipeId!)),
+  run: async (input, context) => {
+    const owner = draftOwner(context);
+    return input.versionId
+      ? draftOperation(() =>
+          getDraftRecipeUseCases().get(owner, input.versionId!),
+        )
+      : studioResult(getRecipeStudio(context).getDraft(input.recipeId!));
+  },
 });

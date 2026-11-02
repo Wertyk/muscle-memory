@@ -37,18 +37,10 @@ export interface StudioWrites {
 export interface RecipeStudioStore {
   list(): Promise<readonly StudioRecord[]>;
   get(recipeId: string): Promise<StudioRecord | null>;
-  getOriginalDraft?(versionId: string): Promise<OriginalStudioDraft | null>;
   transaction<T>(
     recipeId: string,
     work: (records: StudioWrites) => Promise<T>,
   ): Promise<T>;
-}
-/** Compatible with TASK-11's immutable, owner-scoped draft read contract. */
-export interface OriginalStudioDraft {
-  readonly demonstrationId: string;
-  readonly recipe: Recipe;
-  readonly draft: RecipeVersion;
-  readonly ambiguities: readonly JsonValue[];
 }
 export interface StudioIssue {
   readonly path: string;
@@ -163,11 +155,6 @@ export class RecipeStudio {
       ...draft,
       issues: validateStudioContent(recipeId, draft.content).issues,
     });
-  }
-  async getOriginalDraft(versionId: string) {
-    return this.store.getOriginalDraft
-      ? this.store.getOriginalDraft(versionId)
-      : null;
   }
   async update(input: {
     recipeId: string;

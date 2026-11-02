@@ -1,14 +1,39 @@
 export * from "./domain/index.js";
-export { bindingSchema, expressionSchema, parseRecipeVersion, recipeVersionSchema } from "./application/recipe-schema.js";
+export {
+  bindingSchema,
+  expressionSchema,
+  parseRecipeVersion,
+  recipeVersionSchema,
+} from "./application/recipe-schema.js";
 export type * from "./application/ports.js";
 export { RunRecipe } from "./application/run-recipe.js";
 export type { StartRun, ResumeRun } from "./application/run-recipe.js";
 export { MatchRequest } from "./application/match-request.js";
-export type { MatchInput, RequestMatch, MatchReason } from "./application/match-request.js";
+export type {
+  MatchInput,
+  RequestMatch,
+  MatchReason,
+} from "./application/match-request.js";
 export { buildRequestTrigger } from "./application/request-trigger.js";
 export { BacktestRecipe } from "./application/backtest-recipe.js";
-export type { StartBacktest, CompareBacktestVersions } from "./application/backtest-recipe.js";
+export type {
+  StartBacktest,
+  CompareBacktestVersions,
+} from "./application/backtest-recipe.js";
 export type * from "./domain/demonstration.js";
-export { Demonstrations, DemonstrationError } from "./application/demonstrations.js";
-export { RecipeStudio, RecipeStudioError, recipeContent, validateStudioContent } from "./application/recipe-studio.js";
+export {
+  Demonstrations,
+  DemonstrationError,
+} from "./application/demonstrations.js";
+export {
+  RecipeStudio,
+  RecipeStudioError,
+  recipeContent,
+  validateStudioContent,
+} from "./application/recipe-studio.js";
 export type * from "./application/recipe-studio.js";
+export {
+  DraftRecipeFromDemonstration,
+  DraftRecipeError,
+} from "./application/draft-recipe-from-demonstration.js";
+export type { RecipeDraft } from "./application/draft-recipe-from-demonstration.js";

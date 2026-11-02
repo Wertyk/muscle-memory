@@ -1,9 +1,13 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { closeDbExec, withMigrationRuntime } from "@agent-native/core/db";
-import { recipeContent } from "@muscle-memory/recipe-engine";
+import {
+  recipeContent,
+  type Demonstration,
+  type RecipeDraft,
+} from "@muscle-memory/recipe-engine";
 import { sql } from "drizzle-orm";
 import {
   afterAll,
@@ -18,6 +22,7 @@ import {
 
 import activateRecipe from "../actions/activate-recipe.js";
 import deactivateRecipe from "../actions/deactivate-recipe.js";
+import draftRecipe from "../actions/draft-recipe-from-demonstration.js";
 import getDraft from "../actions/get-recipe-draft.js";
 import getRecipe from "../actions/get-recipe.js";
 import listRecipes from "../actions/list-recipes.js";
@@ -33,6 +38,7 @@ import {
 } from "./fixtures/intake-recipes.js";
 import { DrizzleRecipeCatalog } from "./infra/recipe-catalog.js";
 import { seedShop } from "./infra/shop-demo-store.js";
+import { DrizzleTraceStore } from "./infra/trace-store.js";
 import migrateApp from "./plugins/db.js";
 import { studioDraftRead } from "./studio-action-contracts.js";
 
@@ -59,13 +65,8 @@ describe("Recipe Studio real actions on PGlite", () => {
       await migrateApp(undefined);
     });
     db = getDb();
-    // Exact TASK-11 table contract, independently of its pending migration.
-    await db.execute(
-      sql`CREATE TABLE recipe_drafts (version_id VARCHAR(31) PRIMARY KEY REFERENCES recipe_versions(id), owner_email TEXT NOT NULL, workspace_id TEXT NOT NULL, evidence JSONB NOT NULL)`,
-    );
   }, 30_000);
   beforeEach(async () => {
-    await db.execute(sql`DELETE FROM recipe_drafts`);
     await seedShop(db, { all: true });
     const catalog = new DrizzleRecipeCatalog(db);
     for (const version of [damagedItemFixture, whereIsMyOrderFixture]) {
@@ -115,7 +116,7 @@ describe("Recipe Studio real actions on PGlite", () => {
     expect(await getRecipe.run({ recipeId }, context)).toMatchObject({
       history: [{ version: damagedItemFixture, diff: [] }],
     });
-    expect(await db.select().from(tables.recipeStudioDrafts)).toEqual([]);
+    expect(await db.select().from(tables.recipeDrafts)).toEqual([]);
   });
   it("edits bindings, trigger and approval via the same actions, saves immutable history, and selects an active pointer", async () => {
     await activateRecipe.run(
@@ -202,6 +203,7 @@ describe("Recipe Studio real actions on PGlite", () => {
           argumentPath: "amount",
           kind: "constant-or-variable",
           message: "Choose a reusable refund rule",
+          candidates: [],
         },
       ],
     };
@@ -243,8 +245,11 @@ describe("Recipe Studio real actions on PGlite", () => {
       foreign && "content" in foreign ? foreign.ambiguities : null,
     ).toEqual([]);
     expect(
-      (await db.select().from(tables.recipeStudioDrafts))[0]?.ambiguities,
-    ).toEqual([]);
+      (await db.select().from(tables.recipeDrafts))[0]?.evidence.ambiguities,
+    ).toEqual(evidence.ambiguities);
+    expect(
+      await getDraft.run({ versionId: damagedItemFixture.id }, context),
+    ).not.toHaveProperty("studio");
     await expect(
       saveVersion.run({ recipeId, expectedRevision: draft.revision }, context),
     ).rejects.toThrow(/validation/);
@@ -303,6 +308,77 @@ describe("Recipe Studio real actions on PGlite", () => {
     await expect(
       updateDraft.run({ recipeId, expectedRevision: 0, content }, context),
     ).rejects.toThrow(/changed/);
+  });
+  it("opens a TASK-11 draft from the stored broken-platter demonstration, edits the same canonical row and preserves its original read", async () => {
+    const demo = JSON.parse(
+      await readFile(
+        new URL(
+          "./fixtures/broken-platter-demonstration.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ) as Demonstration;
+    const actor = {
+      caller: "frontend" as const,
+      userEmail: demo.scope.userId,
+      orgId: demo.scope.workspaceId,
+    };
+    await new DrizzleTraceStore(db).transaction((records) =>
+      records.save(demo),
+    );
+    const original: RecipeDraft = await draftRecipe.run(
+      { demonstrationId: demo.id },
+      actor,
+    );
+    const read = await getDraft.run({ recipeId: original.recipe.id }, actor);
+    if (!read || !("content" in read)) throw new Error("Expected Studio draft");
+    expect(read.issues).toEqual([]);
+    expect(read.ambiguities).toEqual(original.ambiguities);
+    const source = JSON.stringify(read.content);
+    for (const operator of ["find", "firstWord", "money", "cat"])
+      expect(source).toContain(`"${operator}"`);
+    const updated = await updateDraft.run(
+      {
+        recipeId: original.recipe.id,
+        expectedRevision: read.revision,
+        content: { ...read.content, name: "Broken platter care" },
+      },
+      actor,
+    );
+    const saved = await saveVersion.run(
+      { recipeId: original.recipe.id, expectedRevision: updated.revision },
+      actor,
+    );
+    expect(saved.version).toBe(2);
+    expect(await getDraft.run({ versionId: original.draft.id }, actor)).toEqual(
+      {
+        ...original,
+        recipe: { ...original.recipe, name: "Broken platter care" },
+      },
+    );
+    const rows = await db.select().from(tables.recipeDrafts);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.versionId).toBe(original.draft.id);
+    expect(rows[0]?.evidence.studio?.baseVersionId).toBe(saved.id);
+    expect(rows[0]?.evidence.studio?.revision).toBe(2);
+    const forbidden = await db.execute(
+      sql`SELECT table_name FROM information_schema.tables WHERE table_name = 'recipe_studio_drafts'`,
+    );
+    expect((forbidden as unknown as { rows: unknown[] }).rows).toEqual([]);
+    await seedShop(db);
+    const afterReset = await getDraft.run(
+      { recipeId: original.recipe.id },
+      actor,
+    );
+    expect(afterReset).toMatchObject({
+      revision: 2,
+      content: { name: "Broken platter care" },
+    });
+    await seedShop(db, { all: true });
+    expect(
+      await getDraft.run({ versionId: original.draft.id }, actor),
+    ).toBeNull();
   });
   it("reports actual run counts/results across versions using persisted run actions", async () => {
     // Dry-run handoff uses no shop mutations or model; it is a real executor action.

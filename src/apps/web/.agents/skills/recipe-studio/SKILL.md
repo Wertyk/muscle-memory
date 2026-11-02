@@ -37,4 +37,6 @@ UI-owned navigation key. The Backtest slot is reserved for TASK-18.
 Draft edits never execute shop actions or invoke a model. Money uses integer
 minor units; USD 100 is 10000. References may use only earlier unconditional
 outputs/ancestors. Do not add operators: the engine owns its allowlist. A conflict
-means another UI/agent edit won; read the latest draft and reapply deliberately.
+can mean a stale revision or another operator’s owned draft; read the reason and
+the latest permitted state before reapplying. Studio edits and original provenance
+use the canonical recipe_drafts row, under the same owner/workspace scope.

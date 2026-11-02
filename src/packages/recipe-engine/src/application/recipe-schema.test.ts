@@ -101,6 +101,17 @@ describe("recipe version schema", () => {
   it("disallows step-output dependencies in a trigger match", () => {
     expect(recipeVersionSchema.safeParse({ ...fixture(), trigger: { event: "x", match: { var: "steps.order.output.id" } } }).success).toBe(false);
   });
+  it("validates keyed/text operators and checks their nested dependencies", () => {
+    const find = { find: [{ var: "steps.order.output.items" }, "productId", { var: "trigger.productId" }, "unitPrice.amountMinor"] };
+    const steps: Step[] = [fixture().steps[0]!, { id: "reply", kind: "action", action: "send-reply", args: { text: {
+      mode: "expr", expr: { cat: ["Hi ", { firstWord: [{ var: "steps.order.output.shippingAddress.name" }] }, ": ", { money: [{ "*": [find, 0.5] }, "USD"] }] },
+    } } }];
+    expect(parseRecipeVersion({ ...fixture(), steps }).steps).toEqual(steps);
+    expect(recipeVersionSchema.safeParse({ ...fixture(), steps: steps.slice(1) }).success).toBe(false);
+    expect(recipeVersionSchema.safeParse({ ...fixture(), trigger: { event: "request.created", match: find } }).success).toBe(false);
+    expect(bindingSchema.safeParse({ mode: "expr", expr: { find: [[], "id", 1, "__proto__.x"] } }).success).toBe(false);
+    expect(bindingSchema.safeParse({ mode: "expr", expr: { money: [100, "USD", { var: "trigger.format" }] } }).success).toBe(false);
+  });
 
   it("rejects duplicate step IDs including duplicates across mutually exclusive branches", () => {
     const step: Step = { id: "x", kind: "action", action: "lookup", args: {} };

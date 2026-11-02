@@ -1,4 +1,5 @@
 import {
+  parseRecipeVersion,
   RecipeStudio,
   type RecipeStudioStore,
   type StudioRecord,
@@ -14,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import enUS from "@/i18n/en-US";
 import { atPath, expressionLabel } from "@/lib/recipe-studio";
 
+import brokenPlatterDraft from "../../../server/fixtures/broken-platter-draft.json";
 import { damagedItemFixture } from "../../../server/fixtures/intake-recipes";
 import { RecipePage } from "./RecipePage";
 import { RecipesPage } from "./RecipesPage";
@@ -214,6 +216,24 @@ describe("Recipe Studio UI", () => {
     ).toBeGreaterThan(0);
     expect(node.textContent).toContain("Reserved for TASK-18");
   });
+  it("opens the accepted stored broken-platter draft and labels all derived bindings readably", async () => {
+    const version = parseRecipeVersion(brokenPlatterDraft);
+    record = {
+      ...record,
+      recipe: { ...record.recipe, id: version.recipeId, name: version.name },
+      versions: [version],
+    };
+    await mount(`/recipes/${version.recipeId}`);
+    expect(node.textContent).toContain(
+      "50% × unit price of the line matching productId",
+    );
+    expect(node.textContent).toContain("First name of");
+    expect(node.textContent).toContain("Money amount of");
+    expect(node.textContent).toContain("Ember serving platter");
+    expect(node.textContent).not.toContain("[object Object]");
+    expect(button("Save new version").disabled).toBe(false);
+    expect(record.versions[0]).toEqual(version);
+  });
   it("edits a constant via action transport, saves an immutable v2 and activates that selected version", async () => {
     await mount();
     await click(
@@ -367,7 +387,7 @@ describe("readable safe expression display", () => {
       ],
     };
     expect(expressionLabel({ round: [{ "*": [price, 0.5] }] })).toContain(
-      "50% × price (minor units) of damaged line",
+      "50% × unit price of the line matching productId",
     );
     expect(
       expressionLabel({
@@ -377,7 +397,10 @@ describe("readable safe expression display", () => {
           { money: [10000, "USD", "symbol"] },
         ],
       }),
-    ).toContain("First word");
+    ).toContain("First name");
+    expect(expressionLabel({ money: [10000, "USD"] })).toBe(
+      "$ amount of 10000",
+    );
     expect(expressionLabel({ floor: [price] })).toContain("Round down(");
     expect(expressionLabel({ ceil: [price] })).toContain("Round up(");
     for (const op of [

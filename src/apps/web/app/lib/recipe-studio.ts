@@ -95,15 +95,23 @@ export function expressionLabel(
       args[2].var === "trigger.productId";
     const field =
       args[3] === "unitPrice.amountMinor"
-        ? "price (minor units)"
+        ? "unit price"
         : words(String(args[3] ?? "value")).replace(/\./g, " → ");
     return damaged
-      ? `${field} of damaged line · ${render(args[0]!)}`
+      ? `${field} of the line matching productId · ${render(args[0]!)}`
       : `${field} of item in ${render(args[0]!)} where ${words(String(args[1]))} is ${render(args[2]!)}`;
   }
-  if (op === "firstWord") return `First word of ${render(args[0] ?? null)}`;
-  if (op === "money")
-    return `Format ${render(args[0] ?? null)} as ${render(args[1] ?? null)}${args[2] === "decimal" ? " (decimal)" : " money"}`;
+  if (op === "firstWord") {
+    const path = isObject(args[0]) ? args[0].var : undefined;
+    return `${typeof path === "string" && path.endsWith(".name") ? "First name" : "First word"} of ${render(args[0] ?? null)}`;
+  }
+  if (op === "money") {
+    if (args[2] === "decimal")
+      return `Decimal amount of ${render(args[0] ?? null)} in ${render(args[1] ?? null)}`;
+    return args[1] === "USD"
+      ? `$ amount of ${render(args[0] ?? null)}`
+      : `Money amount of ${render(args[0] ?? null)} in ${render(args[1] ?? null)}`;
+  }
   if (op === "cat") return args.map(render).join(" + ");
   if (op === "!" || op === "!!")
     return `${op === "!" ? "Not" : "Is true"} (${args.map(render).join(", ")})`;

@@ -4,7 +4,62 @@ Pure, domain-agnostic recipe DSL, evaluation, demonstration provenance inference
 Import the public API from `@muscle-memory/recipe-engine`.
 The domain has no external dependencies; application validation depends only on Zod.
 Execution uses injected ports; this package contains no framework, DB, or LLM adapters.
-Selecting/resolving a draft's trigger and doubts remains a subsequent use-case.
+Drafting proposes a request-type trigger; resolving its doubts and activating it remain subsequent workflows.
+
+## Drafting a stored demonstration (TASK-11)
+
+`DraftRecipeFromDemonstration` takes `traces` (`TraceStore`), `recipes`
+(`RecipeRepository`), action-effect metadata (`Pick<ActionInvoker, "describe">`),
+and a `nextId("recipe" | "version")` function. It has no extractor, invocation or
+LLM capability. `execute({demonstrationId, owner})` returns
+`{demonstrationId, recipe, draft, ambiguities}`; `get(owner, versionId)` retrieves it.
+
+Only an owned, completed, nonempty trace with no pending/failed captures and a
+recorded `trigger.type` can be drafted. Sequence order is validated and preserved.
+Inference uses the recorded trigger verbatim, which Teach builds with
+`buildRequestTrigger` using the same fields/context as intake. Free text must
+already have confirmed or saved extracted fields; drafting does not read or
+extract the original message. The proposed trigger is
+`{event:"request.created", match:{"===":[{var:"trigger.type"}, recordedType]}}`.
+Customer/order/request IDs, subject and description never narrow that match.
+
+The use-case runs `inferBindings` on the full ordered input/output projection,
+then prunes reads by walking backwards from mutations. A retained step keeps all
+reads referenced by its bindings, including transitive lookup dependencies. An
+unused lookup chain disappears together. Ambiguities for deleted steps and
+candidates requiring deleted reads are omitted; inference's fixed alternatives
+and applicable ambiguity kinds remain available.
+
+When a proposed source points to a mutation result value equal to one of that
+mutation's recorded input values, drafting proposes the input's inferred binding
+instead. For example, a reply variable copied from `refund.output.amount.amountMinor`
+can reuse the refund input's price formula. This remains a hypothesis: original
+result/fixed candidates are retained and the substitution adds an ambiguity for
+review. Every rewritten argument must reproduce the demonstration exactly.
+Generated result IDs remain result dependencies; dry-run still blocks on them.
+Native reply templates keep their literal placeholders and bind their variables.
+Literal text inferred as a template keeps path placeholders when possible; a
+derived placeholder uses the existing `cat` expression with path/formula operands.
+No mutation output is simulated and executor semantics are unchanged.
+
+`RecipeRepository.createDraft` must insert a fresh immutable version, catalog
+metadata (`status:"draft", activeVersionId:null`) and review evidence atomically,
+rejecting collisions rather than overwriting or deactivating an existing recipe.
+Draft retrieval is owner/workspace scoped. Each execution creates a new draft;
+it never activates one or resolves the ambiguities. Single-example proposals
+(including money rounding and literal request-specific text) require review before use.
+
+The reference fixture is the unmodified browser recording
+`demo_de81093c7e515f12`: refund 14000 for a 28000-unit-price platter, a plain-text
+"Hi Maya ... $140.00" reply, and tag `damaged`. Its draft uses a product-keyed
+half-price formula and matching currency, plus `cat`/`firstWord`/`money` for the
+reply. Inference first identifies the formatted amount in the prior refund
+output; the existing copied-input rebasing replaces that result dependency with
+the same inferred input formula for dry-run. The output/fixed alternatives remain
+in the review evidence. "Ember serving platter" stays literal and is flagged.
+The app regression dry-runs another seeded request after moving its selected
+product behind a decoy line in the isolated test database. It verifies the selected
+price, currency, first name, formatted refund, zero tokens and unchanged shop effects.
 
 ## Execution (TASK-14 Phase 1)
 
@@ -239,7 +294,8 @@ Trigger matches can depend only on the trigger.
 `resolveBinding`, `resolveBindingTree`, and `resolveArguments` use the same evaluator.
 
 Supported operators: `var`, `==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=`, `+`, `-`,
-`*`, `/`, `%`, `min`, `max`, `round`, `floor`, `ceil`, `and`, `or`, `!`, `!!`, `if`, `cat`, `in`.
+`*`, `/`, `%`, `min`, `max`, `round`, `floor`, `ceil`, `and`, `or`, `!`, `!!`, `if`, `cat`, `in`,
+`find`, `firstWord`, `money`.
 Expressions use single-key JSONLogic operator objects, scalars, and arrays. This is an
 explicit subset, with no custom operators, JavaScript evaluation, or method calls.
 Arithmetic requires finite numbers, ordered comparisons require two numbers or two strings,
@@ -255,6 +311,30 @@ Zero results are normalized to zero. These operators allow explicit minor-unit r
 for example `{round:[{"*":[{var:"steps.order.output.price"}, 0.5]}]}` for a half-price
 refund when money is integer cents. Strings, booleans, null, arrays, and non-finite
 inputs/results are rejected rather than coerced into numbers.
+
+`find` takes `[arrayExpression, "keyField", valueExpression, "relative.returnPath"]`.
+It reads only own properties, compares scalar keys strictly, and returns the
+selected JSON value or null for no match, duplicate keys, a missing property or
+a null array. Empty return path returns the selected element. Key field and return
+path must be static safe strings, never expressions; prototype keys, methods and
+arbitrary code are rejected. Array scans are limited to 1,024 elements; non-arrays,
+oversized arrays and non-scalar keys throw. Array and key-value expression dependencies
+participate in the usual schema/scope validation and dry-run blocking.
+
+```ts
+{ find: [{var:"steps.order.output.items"}, "productId",
+         {var:"trigger.productId"}, "unitPrice.amountMinor"] }
+```
+
+`firstWord: [textExpression]` trims whitespace and returns the first whitespace-separated
+word (empty text returns ""). Input must be a string of at most 4,096 characters.
+`money: [minorUnitsExpression, currencyExpression]` formats integer minor units as
+`$140.00`; optional third argument `"decimal"` yields `140.00` instead. The default
+format is `"symbol"`. Supported currencies are explicitly USD (`$`), EUR (`€`),
+GBP (`£`), CAD (`CA$`) and AUD (`A$`), each with two decimal places. No locale or
+provider is consulted. Negative amounts use a leading minus. Safe integer minor
+units are required; fractional/unsafe amounts, unknown currencies, dynamic or
+unknown format options and coercions are rejected. Rounding must be explicit.
 
 Unknown operators, unsafe paths, malformed templates, non-finite values/results, cycles,
 and excessive input complexity fail explicitly. Expressions allow at most 32 nested levels,
@@ -286,18 +366,34 @@ array elements and structurally equal objects. Object keys are traversed in sort
 so property insertion order does not affect proposals. Priority is:
 
 1. Exact structural matches (with all matching source paths as competing candidates).
+   Direct trigger matches take priority over read outputs. When an array element has
+   a unique sibling key equal to a trigger scalar, inference also creates a `find`
+   source and ranks it above positional sources. Matching field names and informative
+   values outrank weak/coincidental keys. Nested keyed arrays are supported. The
+   positional alternatives remain visible. A stronger keyed numeric formula can
+   outrank an incidental exact positional price match.
 2. Otherwise, recurse into nonempty object/array arguments to infer their leaves.
+   Money objects (`amountMinor` + `currency`) always infer their leaves together:
+   currency follows the proposed amount's source money object/selected element,
+   retaining a fixed alternative without unrelated equal-currency candidates.
 3. For numbers, exact products using bounded scale factors (`INFERENCE_SCALES`, including
    0.5), then exact differences of two source numbers. These unrounded formulas rank ahead
-   of integer-rounded products from every source. For an integer observation, when a
+   of integer-rounded products within each source-priority tier. For an integer observation, when a
    product differs from the observed value, matching `round`, `floor`, and `ceil` wrappers
    are proposed with reason `rounded-scale`, in that order. Thus 2499 × 0.5 → 1250 proposes
    `round` (with `ceil` as an alternative), and → 1249 proposes `floor`; 2400 × 0.5 → 1200
    stays an exact scale without redundant rounding wrappers. Every proposed binding must
    reproduce the observation exactly. No arbitrary ratio fitting or offsets are invented.
 4. For text, longest non-overlapping whole source tokens, including numeric tokens, become
-   placeholders. Repeated equal tokens use the same source within a candidate. Competing
-   source assignments produce alternative templates. Existing literal `{{` / `}}` syntax
+   placeholders. Derived tokens include first names from person-name fields (explicit
+   full/customer/shipping names, address names or customer/person/contact action results)
+   and symbol/decimal money from `amountMinor`/`currency` objects, including earlier
+   step outputs. Product-name first words are not person-name tokens. A recorded money
+   result outranks a coincidentally equal array-item price for text interpolation.
+   Derived selections/formatting use `cat` expressions with `firstWord`/`money`; plain
+   path-only interpolations keep template mode. Repeated equal tokens use the same
+   source within a candidate. Competing source assignments produce alternatives.
+   Existing literal `{{` / `}}` syntax
    is kept fixed. Keys outside the identifier grammar cannot be inferred as source paths.
 5. Otherwise, a fixed value.
 
@@ -315,7 +411,13 @@ High-information exact matches (for example IDs, emails, names of at least 4 cha
 or prices outside that small-integer range) do not raise a constant-or-variable question.
 All proposals still retain the observed fixed value as an alternative candidate.
 `multiple-candidates` and `candidate-limit` ambiguities are independent of this heuristic
-and remain visible even for high-information values. No-match constants have no ambiguity.
+and remain visible even for high-information values. `positional-array` flags a proposed
+binding that still uses an index, including a positional relative path inside `find`.
+`request-specific-text` includes the message "Text may contain request-specific details."
+and bounded literal fragments: partial/case-changed source labels or unknown proper labels
+after reference words stay literal for crystallization review. This is a conservative
+heuristic, not complete detection of personal details. No-match constants can receive
+this text warning; ordinary no-match constants have no ambiguity.
 These are proposals for review, never evidence that a recipe is ready to activate.
 
 There are at most 64 variable hypotheses per argument, plus the fixed alternative;
@@ -323,6 +425,8 @@ truncation sets `exhaustive:false` and emits `candidate-limit`. Exhaustiveness r
 the documented heuristics, not all possible mathematical or textual interpretations.
 The first candidate is a deterministic suggestion, not a confidence claim. Argument
 paths identify review locations, rather than executable source paths.
+
+Every candidate, including derived text, is re-evaluated against the demonstration.
 
 ## Recipe Studio (TASK-13)
 
@@ -340,5 +444,6 @@ catalog pointer; `deactivate(recipeId)` clears that pointer. Saving never activa
 Existing versions/runs remain unchanged. The store serializes mutation callbacks,
 commits their DB writes atomically and never retries callbacks automatically.
 No executor, action invoker, extractor or model is used by this editing workflow.
-The web adapter optionally reads TASK-11's original owned draft evidence; it does
-not copy that private evidence into the shared editable row.
+The web adapter uses TASK-11's canonical owner/workspace-scoped recipe_drafts
+store. Editable content/revision/base identity live in an optional studio property
+of its evidence JSON. Original version reads and provenance remain unchanged.

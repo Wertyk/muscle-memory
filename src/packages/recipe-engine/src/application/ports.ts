@@ -2,6 +2,13 @@ import type { Demonstration, DemonstrationOwner, DemonstrationScope } from "../d
 import type { ExtractField, JsonObject, JsonValue, RecipeVersion } from "../domain/model.js";
 import type { ActionEffect, HandoffContext, Run, TokenUsage } from "../domain/run.js";
 import type { HistoricalCase, Mutation } from "../domain/backtest.js";
+import type { RecipeDraft } from "./draft-recipe-from-demonstration.js";
+
+export interface RecipeRepository {
+  /** Atomically insert a fresh immutable version, draft catalog entry and review evidence. Never activate or overwrite. */
+  createDraft(owner: DemonstrationOwner, draft: RecipeDraft): Promise<void>;
+  getDraft(owner: DemonstrationOwner, versionId: string): Promise<RecipeDraft | null>;
+}
 
 export interface ActionInvoker {
   /** Fail closed for unknown actions. Classification must match the invoked action. */

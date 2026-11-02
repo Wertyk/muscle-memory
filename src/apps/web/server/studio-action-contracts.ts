@@ -1,6 +1,10 @@
 import { defineActionErrors } from "@agent-native/core/action";
 import { buildDeepLink } from "@agent-native/core/server";
-import { RecipeStudioError } from "@muscle-memory/recipe-engine";
+import {
+  RecipeStudioError,
+  type StudioDraft,
+  type StudioIssue,
+} from "@muscle-memory/recipe-engine";
 import { z } from "zod";
 
 import { recipeJsonSchema } from "./recipe-action-contracts.js";
@@ -19,6 +23,16 @@ export const studioDraftRead = z
     (input) => Boolean(input.recipeId) !== Boolean(input.versionId),
     "Provide exactly one of recipeId or versionId.",
   );
+export const studioDraftOutputSchema: z.ZodType<
+  StudioDraft & { readonly issues: readonly StudioIssue[] }
+> = z.object({
+  recipeId: studioId,
+  revision: studioRevision,
+  baseVersionId: studioId.nullable(),
+  content: studioContent,
+  ambiguities: z.array(recipeJsonSchema),
+  issues: z.array(z.object({ path: z.string(), message: z.string() })),
+});
 export const studioErrors = defineActionErrors(
   "RECIPE_NOT_FOUND",
   "RECIPE_CONFLICT",

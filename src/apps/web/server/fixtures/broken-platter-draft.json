@@ -1,0 +1,162 @@
+{
+  "id": "ver_reference",
+  "recipeId": "recipe_reference",
+  "version": 1,
+  "name": "Draft: damaged_item",
+  "trigger": {
+    "event": "request.created",
+    "match": {
+      "===": [
+        {
+          "var": "trigger.type"
+        },
+        "damaged_item"
+      ]
+    }
+  },
+  "steps": [
+    {
+      "id": "step_2",
+      "kind": "action",
+      "action": "get-order",
+      "args": {
+        "orderId": {
+          "mode": "path",
+          "path": "trigger.orderId"
+        }
+      }
+    },
+    {
+      "id": "step_6",
+      "kind": "action",
+      "action": "issue-refund",
+      "args": {
+        "amount": {
+          "amountMinor": {
+            "mode": "expr",
+            "expr": {
+              "*": [
+                {
+                  "find": [
+                    {
+                      "var": "steps.step_2.output.items"
+                    },
+                    "productId",
+                    {
+                      "var": "trigger.productId"
+                    },
+                    "unitPrice.amountMinor"
+                  ]
+                },
+                0.5
+              ]
+            }
+          },
+          "currency": {
+            "mode": "expr",
+            "expr": {
+              "find": [
+                {
+                  "var": "steps.step_2.output.items"
+                },
+                "productId",
+                {
+                  "var": "trigger.productId"
+                },
+                "unitPrice.currency"
+              ]
+            }
+          }
+        },
+        "orderId": {
+          "mode": "path",
+          "path": "trigger.orderId"
+        },
+        "reason": {
+          "mode": "fixed",
+          "value": "One platter arrived chipped - refund 50% of its price"
+        }
+      }
+    },
+    {
+      "id": "step_7",
+      "kind": "action",
+      "action": "send-reply",
+      "args": {
+        "requestId": {
+          "mode": "path",
+          "path": "trigger.requestId"
+        },
+        "template": {
+          "mode": "expr",
+          "expr": {
+            "cat": [
+              "Hi ",
+              {
+                "firstWord": [
+                  {
+                    "var": "steps.step_2.output.shippingAddress.name"
+                  }
+                ]
+              },
+              ", I am so sorry your Ember serving platter arrived chipped. We have refunded ",
+              {
+                "money": [
+                  {
+                    "*": [
+                      {
+                        "find": [
+                          {
+                            "var": "steps.step_2.output.items"
+                          },
+                          "productId",
+                          {
+                            "var": "trigger.productId"
+                          },
+                          "unitPrice.amountMinor"
+                        ]
+                      },
+                      0.5
+                    ]
+                  },
+                  {
+                    "find": [
+                      {
+                        "var": "steps.step_2.output.items"
+                      },
+                      "productId",
+                      {
+                        "var": "trigger.productId"
+                      },
+                      "unitPrice.currency"
+                    ]
+                  }
+                ]
+              },
+              ", half of its price. Warmly, Kiln & Co."
+            ]
+          }
+        },
+        "variables": {
+          "mode": "fixed",
+          "value": {}
+        }
+      }
+    },
+    {
+      "id": "step_8",
+      "kind": "action",
+      "action": "tag-request",
+      "args": {
+        "requestId": {
+          "mode": "path",
+          "path": "trigger.requestId"
+        },
+        "tag": {
+          "mode": "fixed",
+          "value": "damaged"
+        }
+      }
+    }
+  ]
+}

@@ -14,7 +14,6 @@ An entry for the [Builder.io Agent-Native Hackathon](https://www.builder.io/hack
 | Path | What it is |
 | --- | --- |
 | `src/` | pnpm workspace: `apps/web` (the Agent-Native app), `packages/recipe-engine` and `packages/shop-domain` (pure TypeScript domain and application layers) |
-| `backlog/` | Backlog.md task records with acceptance criteria, implementation notes and review evidence for every change |
-| `AGENTS.md`, `CLAUDE.md` | Instructions the coding agents followed during development |
+| `src/apps/web/AGENTS.md`, `src/apps/web/.agents/skills/` | Runtime instructions and skills of the in-app agent, e.g. crystallize, Recipe Studio and running recipes |
 
-This public repository mirrors the private working repository's history. Two things differ: the planning and research notes are not included, and author emails use the GitHub noreply address.
+This public repository mirrors the code history of the private working repository. Planning notes and development process records are not included, and author emails use the GitHub noreply address.

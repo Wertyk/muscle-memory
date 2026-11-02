@@ -326,8 +326,7 @@ repository) are not application code and are not included in this public reposit
 
 **Development:** OpenAI Codex CLI (**gpt-6.1-sol**) wrote code from task work orders.
 Claude Code (**Claude Opus 5.5**) planned the work, wrote tasks, reviewed every accepted change,
-ran browser verification, and merged accepted work. Backlog task records preserve
-implementation and review evidence; this README change remains subject to review.
+ran browser verification, and merged accepted work.
 
 **In the app:** both models use Ollama Cloud's OpenAI-compatible API.
 

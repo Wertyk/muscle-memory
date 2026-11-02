@@ -68,12 +68,12 @@ active recipes, with observed agent-versus-recipe comparisons for the same reque
 
 | Screen | Screenshot |
 | --- | --- |
-| Support inbox | ![Kiln & Co. support inbox](docs/screenshots/inbox.png) |
+| Support inbox: who handled each request, at what measured cost | ![Kiln & Co. support inbox](docs/screenshots/inbox.png) |
 | Teach a request | ![Teach recording in the request workspace](docs/screenshots/teach.png) |
-| Recipe Studio and binding wires | ![Recipe Studio](docs/screenshots/studio.png) |
+| Recipe Studio: the recipe drawn as a circuit of binding wires | ![Recipe Studio](docs/screenshots/studio.png) |
 | Crystallize with the agent | ![Agent crystallization](docs/screenshots/crystallize.png) |
 | Historical backtest | ![Backtest comparison](docs/screenshots/backtest.png) |
-| Runs and approval gates | ![Recipe runs](docs/screenshots/runs.png) |
+| A recipe run: maker's mark and step timings | ![Recipe run with maker's mark](docs/screenshots/runs.png) |
 | Measured AI dependency | ![Handling dashboard](docs/screenshots/dashboard.png) |
 
 ## Architecture

@@ -39,6 +39,12 @@ export function CrystallizeControl({
   const questions = reviewQuestions(draft.ambiguities, draft.content, {});
   const trigger = demonstration.data?.trigger;
   return (
+    <>
+    {demonstration.data && <span className="max-w-full self-center break-all text-xs text-muted-foreground">
+      {demonstration.data.source?.kind === "agent_run"
+        ? t("recipes.learnedFromAgent", { thread: demonstration.data.source.threadId })
+        : t("recipes.learnedFromTeach", { demonstration: demonstration.data.id })}
+    </span>}
     <Button
       variant="outline"
       disabled={disabled || original.isFetching || demonstration.isFetching}
@@ -90,5 +96,6 @@ export function CrystallizeControl({
       <IconMessage className="size-4" />
       {t("recipes.crystallize")}
     </Button>
+    </>
   );
 }

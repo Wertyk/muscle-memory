@@ -55,6 +55,7 @@ let root: Root,
   record: StudioRecord;
 let savedRun: Record<string, unknown> | null;
 let demonstrationSteps: JsonObject[];
+let agentSource: boolean;
 let calls: { name: string; input: Record<string, unknown>; method: string }[];
 let backtestResult: (input: { recipe: string; requestType: string }) => Promise<ShopBacktestResult>;
 let compareResult: (input: { baseline: string; candidate: string; requestType: string }) => Promise<ShopBacktestComparison>;
@@ -191,6 +192,7 @@ beforeEach(() => {
   studio = new RecipeStudio(store, () => "ver_ui2");
   calls = [];
   agent.send.mockClear();
+  agentSource = false;
   client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: Infinity },
@@ -232,7 +234,7 @@ beforeEach(() => {
             result = input.versionId ? { demonstrationId: "demo_ui", draft: record.versions[0] } : await studio.getDraft(input.recipeId);
             break;
           case "get-demonstration":
-            result = { id: "demo_ui", steps: demonstrationSteps, trigger: { type: "damaged_item", requestId: "req_0001", orderId: "ord_1001", productId: "prod_platter" } };
+            result = { id: "demo_ui", steps: demonstrationSteps, source: agentSource ? { kind: "agent_run", threadId: "thread_ui", runIds: ["run_ui"] } : { kind: "teach" }, trigger: { type: "damaged_item", requestId: "req_0001", orderId: "ord_1001", productId: "prod_platter" } };
             break;
           case "update-recipe-draft":
             result = await studio.update(input);
@@ -293,6 +295,11 @@ describe("Recipe Studio UI", () => {
     });
     expect(calls).toHaveLength(before);
     expect(calls.every(call => ["get-recipe", "get-recipe-draft", "get-demonstration", "list-recipe-runs", "get-recipe-run"].includes(call.name))).toBe(true);
+  });
+  it.each([false, true])("shows the stored source provenance in Studio (agent=%s)", async isAgent => {
+    agentSource = isAgent;
+    await mount(`/recipes/${record.recipe.id}`);
+    await settle(() => expect(node.textContent).toContain(isAgent ? "Learned from an agent run · thread thread_ui" : "Learned from Teach · demo_ui"));
   });
   it("lists status/version/runs/result and links into the detail route", async () => {
     await mount("/recipes");

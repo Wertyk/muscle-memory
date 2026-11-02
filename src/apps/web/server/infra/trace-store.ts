@@ -37,6 +37,7 @@ class Records implements DemonstrationRecords {
       .orderBy(asc(demoSteps.sequence));
     return structuredClone({
       ...row.checkpoint,
+      source: row.checkpoint.source ?? { kind: "teach" },
       steps: steps.map((s) => s.snapshot),
     });
   }

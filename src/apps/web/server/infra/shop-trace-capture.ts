@@ -1,9 +1,10 @@
 import { recordChange } from "@agent-native/core/server";
-import type { Demonstrations, JsonObject } from "@muscle-memory/recipe-engine";
+import type { Demonstrations, DemonstrationScope, JsonObject } from "@muscle-memory/recipe-engine";
+import type { ActionRunContext } from "@agent-native/core/action";
 
 import { isShopLookup } from "../../shared/shop-action-kinds.js";
 import { isRecipeJson } from "./recipe-json.js";
-import { demonstrationScope, teachNavigation } from "./teach-session.js";
+import { demonstrationScope, isAgentTool, teachNavigation } from "./teach-session.js";
 import type { TraceCapture } from "./traced.js";
 
 /** A read-only shop action mutates the demonstration, so publish that resource
@@ -20,11 +21,13 @@ function changed(owner: string) {
 }
 export function createShopTraceCapture(
   getDemonstrations: () => Demonstrations,
+  agentSession?: (context: ActionRunContext, action: { input: unknown }) => Promise<{ scope: DemonstrationScope; navigation: { view: string; requestId: string; path: string } } | null>,
 ): TraceCapture {
   return {
     async recording(context, action) {
       // Deterministic runs and intake must never become operator demonstrations.
       if (
+        action.actionName === "create-request" ||
         !context ||
         !["frontend", "tool"].includes(context.caller) ||
         (context.runId &&
@@ -32,9 +35,12 @@ export function createShopTraceCapture(
             context.toolCallId?.startsWith(`${context.runId}:`)))
       )
         return null;
-      const scope = demonstrationScope(context);
+      const agent = isAgentTool(context);
+      const session = agent ? await agentSession?.(context, action).catch(() => null) : null;
+      if (agent && !session) return null;
+      const scope = session?.scope ?? demonstrationScope(context);
       if (!scope) return null;
-      const navigation = await teachNavigation();
+      const navigation = session?.navigation ?? await teachNavigation();
       if (
         navigation?.view !== "request" ||
         typeof navigation.requestId !== "string"
@@ -113,6 +119,7 @@ export function createShopTraceCapture(
             ticket,
             {
               action: step.actionName,
+              ...(agent && context.runId ? { runId: context.runId } : {}),
               input: cleanInput as JsonObject,
               output: step.output,
               navigation: step.navigation,
@@ -122,6 +129,8 @@ export function createShopTraceCapture(
             },
             read ? "read" : "mutation",
           );
+          if (agent && step.actionName === "set-request-status" && (cleanInput as JsonObject).status === "resolved")
+            await demos.finish(scope, ticket.demonstrationId);
           changed(scope.userId);
         },
         async reject() {

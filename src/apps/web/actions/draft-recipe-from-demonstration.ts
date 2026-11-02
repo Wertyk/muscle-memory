@@ -6,7 +6,7 @@ import { demonstrationIdSchema } from "../server/teach-action-contracts.js";
 
 export default defineAction({
   description: "Draft a recipe from an owned, completed stored demonstration without a model. Returns immutable draft, catalog metadata and ambiguities for review; never activates. Each call creates a new draft.",
-  schema: z.object({ demonstrationId: demonstrationIdSchema.describe("Completed demonstration ID returned by stop-demonstration") }),
+  schema: z.object({ demonstrationId: demonstrationIdSchema.describe("Completed trace ID from stop-demonstration or get-agent-run-demonstration") }),
   outputSchema: recipeDraftSchema,
   errors: draftErrors,
   run: (input, context) => {

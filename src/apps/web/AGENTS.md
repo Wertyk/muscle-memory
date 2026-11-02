@@ -52,7 +52,7 @@ read the request/order/shipment, store an accurate reply, then resolve when hand
 Money is in minor units. `issue-refund` uses the shop-domain auto-refund policy
 for agent approval; omitted amounts conservatively require approval too. Frontend
 calls use the framework's UI capability and are not blocked by this agent gate.
-Every request-handling shop mutation and query uses `traced()`; capture is active only for the teaching operator’s tab and request.
+Every request-handling shop mutation and query uses `traced()`; Teach capture is scoped to the operator’s tab/request; authenticated agent tool calls also capture forward-only request traces scoped to owner/workspace/thread.
 
 Intake uses active catalog version pointers, not arbitrary saved versions. Structured
 fields match without extraction; free text gets one cheap extraction attempt and must
@@ -210,6 +210,24 @@ on port 5189, uses the normal authenticated frontend action transport, verifies
 five first lookup snapshots + three mutations despite refetches, a 50%-platter
 refund and trigger shape, tests overlap/cancellation/isolation, then
 stops the server and removes its temporary database. No model is called.
+
+## Agent-run learning (TASK-19)
+
+`get-agent-run-demonstration({requestId})` returns the owned completed agent trace
+when its type is known, no recipe completed its handling, and TASK-21 attributes
+the current resolution to that thread. Seed/manual requests without intake records,
+intake no-matches and recipe handoffs are eligible. Null means unavailable. Agent traces share the Teach
+store, first-read deduplication and full successful inputs/outputs; they never
+parse chat or backfill history. One request is recorded at a time per thread.
+Question-only turns retain reads; only a recorded `set-request-status` resolution
+closes the trace. Recipe invocations and unrelated request data are excluded.
+Capture failures or in-flight steps prevent completion. Free text requires saved
+validated intake fields; this capture never calls a model.
+
+The resolved request’s **Crystallize this run** control uses
+`draft-recipe-from-demonstration({demonstrationId:trace.id})` and opens Studio.
+The agent can do the same. Studio labels Teach vs agent-run/thread provenance;
+continue with **Crystallize with agent** and the existing crystallize skill.
 
 ## Draft recipes (TASK-11)
 

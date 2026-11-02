@@ -7,6 +7,7 @@ An entry for the [Builder.io Agent-Native Hackathon](https://www.builder.io/hack
 - **Demo (Clips, public):** https://clips.agent-native.com/share/IgzNxnFLER7y
 - **Full documentation:** [`src/README.md`](src/README.md): problem, how it works, architecture, shared actions, running locally, pre-existing vs built during the hackathon, AI tools, known limitations.
 - **Demo video file:** [`src/docs/video/muscle-memory-demo.mp4`](src/docs/video/muscle-memory-demo.mp4)
+- **Slides (PDF):** [`src/docs/slides/muscle-memory-slides.pdf`](src/docs/slides/muscle-memory-slides.pdf)
 
 ## Repository layout
 

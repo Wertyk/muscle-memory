@@ -68,6 +68,8 @@ active recipes, with observed agent-versus-recipe comparisons for the same reque
 
 [`docs/video/muscle-memory-demo.mp4`](docs/video/muscle-memory-demo.mp4) is a 3:47 walkthrough of the real app, recorded live on 2026-11-02: Teach → Recipe Studio → Crystallize with the agent → approval rule and backtest → incoming requests (approve in chat, wholesale handoff) → dashboard → Claude Code running the recipe over MCP.
 
+Slides (10 pages, PDF): [`docs/slides/muscle-memory-slides.pdf`](docs/slides/muscle-memory-slides.pdf).
+
 ## Screenshots
 
 | Screen | Screenshot |

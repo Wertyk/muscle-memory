@@ -1,6 +1,6 @@
 import {
   parseRecipeVersion, type BacktestRecipe, type BacktestResult,
-  type JsonDifference, type RecipeVersion, type TokenUsage,
+  type ClassifiedDifference, type RecipeVersion, type TokenUsage,
 } from "@muscle-memory/recipe-engine";
 import type { RequestType } from "@muscle-memory/shop-domain";
 import { eq } from "drizzle-orm";
@@ -27,25 +27,27 @@ const limitations = [
   "Stored outcomes reconstruct action inputs; they do not prove original click order or mutation policy success.",
 ];
 
-function differenceReason(diff: JsonDifference): string {
+function differenceReason(diff: ClassifiedDifference): string {
   const show = (value: unknown) => JSON.stringify(value).slice(0, 240);
+  const label = diff.classification === "wording" ? "Wording" : diff.classification === "bookkeeping" ? "Bookkeeping" : "Outcome";
   switch (diff.kind) {
-    case "added": return `${diff.path}: recipe adds ${show(diff.intended)}.`;
-    case "removed": return `${diff.path}: historical ${show(diff.historical)} is absent from the recipe outcome.`;
-    case "changed": return `${diff.path}: historical ${show(diff.historical)}; recipe ${show(diff.intended)}.`;
+    case "added": return `${label} ${diff.path}: recipe adds ${show(diff.intended)}.`;
+    case "removed": return `${label} ${diff.path}: historical ${show(diff.historical)} is absent from the recipe outcome.`;
+    case "changed": return `${label} ${diff.path}: historical ${show(diff.historical)}; recipe ${show(diff.intended)}.`;
   }
 }
 
 function report(result: BacktestResult, requestTokens: TokenUsage): ShopBacktestResult {
   const recipeTokens = add(...result.cases.flatMap((c) => c.run ? [c.run.tokens] : []));
   const tokens = add(requestTokens, recipeTokens);
+  const unknownUsageCases = result.cases.filter((item) => item.reasons.some((reason) => reason.code === "reconstruction-failed")).length;
   return {
     ...result, readData, limitations: [...limitations],
-    summary: { ...result.summary, tokens, totalTokens: total(tokens),
+    summary: { ...result.summary, tokens, totalTokens: unknownUsageCases ? null : total(tokens), unknownUsageCases,
       requestExtractionTokens: { ...requestTokens }, recipeExtractionTokens: recipeTokens },
     cases: result.cases.map((c) => ({ ...c, reasons: [
       ...c.reasons,
-      ...c.diff.map((diff) => ({ code: "different" as const, message: differenceReason(diff) })),
+      ...c.diff.map((diff) => ({ code: diff.classification === "outcome" ? "different" as const : diff.classification, message: differenceReason(diff) })),
     ] })),
   };
 }
@@ -85,6 +87,7 @@ export class ShopRecipeBacktests {
     // The shared case set was extracted once, not once per version.
     const tokens = add(cases.tokens, before.summary.recipeExtractionTokens, after.summary.recipeExtractionTokens);
     return { ...result, baseline: before, candidate: after,
-      summary: { tokens, totalTokens: total(tokens), sharedRequestExtractionTokens: cases.tokens } };
+      summary: { tokens, totalTokens: before.summary.unknownUsageCases ? null : total(tokens),
+        unknownUsageCases: before.summary.unknownUsageCases, sharedRequestExtractionTokens: cases.tokens } };
   }
 }

@@ -4,7 +4,7 @@ import { getRecipeBacktests } from "../server/composition.js";
 import { backtestErrors, backtestOperation, backtestOutputSchema, backtestRequestTypeSchema, recipeReferenceSchema } from "../server/backtest-action-contracts.js";
 
 export default defineAction({
-  description: "Backtest a saved recipe version ID or snapshot on resolved requests of requestType. Read-only simulation uses current shop data; free-text/extract steps spend tokens reported in summary.",
+  description: "Backtest a saved recipe version ID or snapshot on resolved requests of requestType. Counts compare customer outcomes; wording and internal tag differences remain visible. Unreconstructable messages stay not_handled; unknown usage makes totalTokens null with unknownUsageCases and measured token subtotals. DB/configuration errors still fail the report. Read-only simulation uses current shop data; free-text/extract steps spend tokens.",
   schema: z.object({
     recipe: recipeReferenceSchema.describe("Saved recipe version ID or complete immutable recipe version snapshot; snapshots are not persisted"),
     requestType: backtestRequestTypeSchema,

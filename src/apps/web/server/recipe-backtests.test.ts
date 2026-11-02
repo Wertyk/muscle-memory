@@ -20,7 +20,7 @@ import issueRefund from "../actions/issue-refund.js";
 import sendReply from "../actions/send-reply.js";
 import tagRequest from "../actions/tag-request.js";
 import createReplacement from "../actions/create-replacement-order.js";
-import { backtestOutputSchema, compareBacktestOutputSchema } from "./backtest-action-contracts.js";
+import { backtestOperation, backtestOutputSchema, compareBacktestOutputSchema } from "./backtest-action-contracts.js";
 import * as composition from "./composition.js";
 import { getDb, type ShopDb } from "./db/index.js";
 import * as tables from "./db/schema.js";
@@ -33,7 +33,7 @@ import { seedShop } from "./infra/shop-demo-store.js";
 import { RegistryActionInvoker } from "./infra/registry-action-invoker.js";
 import { ShopHistoricalCaseSource } from "./infra/shop-historical-cases.js";
 import { ShopRequestExtractor } from "./infra/shop-request-extractor.js";
-import { CompleteTextExtractor } from "./infra/complete-text-extraction.js";
+import { CompleteTextExtractor, ExtractionError } from "./infra/complete-text-extraction.js";
 import { DrizzleShopRepository } from "./infra/shop-repository.js";
 import { DrizzleTraceStore } from "./infra/trace-store.js";
 import migrateApp from "./plugins/db.js";
@@ -117,20 +117,20 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     return counts;
   }
 
-  it("reports 7 identical and the 3 deliberate deviations, readable reasons, tokens and zero writes (AC #1/#2/#4)", async () => {
+  it("reports 8 same outcomes and 2 outcome deviations, retaining wording, readable reasons, tokens and zero writes (AC #1/#2/#4)", async () => {
     vi.spyOn(composition, "getRecipeBacktests").mockImplementation(() => create());
     const before = await shopSnapshot();
     const counts = await tableCounts();
     const invoke = vi.spyOn(registry, "invoke");
     const result = await backtestRecipe.run({ recipe, requestType: "damaged_item" }, context);
     expect(backtestOutputSchema.parse(result)).toEqual(result);
-    expect(result.summary).toEqual({ total: 10, identical: 7, different: 3, notHandled: 0,
-      tokens: { input: 40, output: 20 }, totalTokens: 60,
+    expect(result.summary).toEqual({ total: 10, sameOutcome: 8, differentOutcome: 2, notHandled: 0, nonOutcomeOnly: 1,
+      tokens: { input: 40, output: 20 }, totalTokens: 60, unknownUsageCases: 0,
       requestExtractionTokens: { input: 40, output: 20 }, recipeExtractionTokens: { input: 0, output: 0 } });
-    expect(result.cases.filter((c) => c.status === "different").map((c) => c.caseId).sort()).toEqual(["req_0038", "req_0039", "req_0040"]);
+    expect(result.cases.filter((c) => c.status === "different").map((c) => c.caseId).sort()).toEqual(["req_0038", "req_0039"]);
     const changed = (id: string) => result.cases.find((c) => c.caseId === id)!;
     expect(changed("req_0038").reasons.map((r) => r.message).join(" ")).toContain('historical "create-replacement-order"; recipe "issue-refund"');
-    expect(changed("req_0039").diff).toContainEqual({ kind: "changed", path: "/0/input/amount/amountMinor", historical: 38000, intended: 19000 });
+    expect(changed("req_0039").diff).toContainEqual({ kind: "changed", classification: "outcome", path: "/0/input/amount/amountMinor", historical: 38000, intended: 19000 });
     expect(changed("req_0039").reasons.map((r) => r.message).join(" ")).toContain("38000; recipe 19000");
     expect(changed("req_0040").diff.some((d) => d.path === "/1/input/body")).toBe(true);
     expect(changed("req_0040").reasons.map((r) => r.message).join(" ")).toContain("packaging");
@@ -182,7 +182,7 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     const counts = await tableCounts();
     const result = await backtestRecipe.run({ recipe: saved.id, requestType: "damaged_item" }, context);
     expect(backtestOutputSchema.parse(result)).toEqual(result);
-    expect(result.summary).toMatchObject({ total: 10, identical: 0, different: 10, notHandled: 0 });
+    expect(result.summary).toMatchObject({ total: 10, sameOutcome: 0, differentOutcome: 10, notHandled: 0, nonOutcomeOnly: 0 });
     for (const item of result.cases) {
       expect(item.run?.steps.find((step) => step.stepId === "refund")).toMatchObject({ status: "planned", approvalRequired: true,
         input: { amount: { amountMinor: 14000, currency: "USD" } } });
@@ -201,11 +201,11 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     const before = await shopSnapshot();
     const counts = await tableCounts();
     const result = await backtestRecipe.run({ recipe: drafted.draft.id, requestType: "damaged_item" }, actor);
-    expect(result.summary).toMatchObject({ total: 10, identical: 0, different: 10, notHandled: 0, totalTokens: 60 });
+    expect(result.summary).toMatchObject({ total: 10, sameOutcome: 8, differentOutcome: 2, notHandled: 0, nonOutcomeOnly: 8, totalTokens: 60, unknownUsageCases: 0 });
     const fullRefund = result.cases.find((item) => item.caseId === "req_0039")!;
     expect(fullRefund.intendedMutations.find((mutation) => mutation.action === "issue-refund")?.input.amount).toEqual({ amountMinor: 19000, currency: "USD" });
-    expect(fullRefund.diff).toContainEqual({ kind: "changed", path: "/0/input/amount/amountMinor", historical: 38000, intended: 19000 });
-    expect(result.cases.every((item) => item.reasons.some((reason) => reason.code === "different"))).toBe(true);
+    expect(fullRefund.diff).toContainEqual({ kind: "changed", classification: "outcome", path: "/0/input/amount/amountMinor", historical: 38000, intended: 19000 });
+    expect(result.cases.every((item) => item.reasons.some((reason) => reason.code === "wording" || reason.code === "bookkeeping"))).toBe(true);
     expect(await shopSnapshot()).toEqual(before);
     expect(await tableCounts()).toEqual(counts);
   });
@@ -241,10 +241,10 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
       steps: recipe.steps.map((s) => s.id === "reply" && s.kind === "action" ? { ...s, args: { ...s.args, template: { mode: "fixed", value: "A different reply" } } } : s) });
     const result = await compareVersions.run({ baseline: recipe.id, candidate, requestType: "damaged_item" }, context);
     expect(compareBacktestOutputSchema.parse(result)).toEqual(result);
-    expect(result.baseline.summary).toMatchObject({ identical: 7, different: 3 });
-    expect(result.candidate.summary).toMatchObject({ identical: 0, different: 10 });
-    expect(result.cases.every((c) => c.changed)).toBe(true);
-    expect(result.summary).toEqual({ tokens: { input: 40, output: 20 }, totalTokens: 60, sharedRequestExtractionTokens: { input: 40, output: 20 } });
+    expect(result.baseline.summary).toMatchObject({ sameOutcome: 8, differentOutcome: 2, nonOutcomeOnly: 1 });
+    expect(result.candidate.summary).toMatchObject({ sameOutcome: 8, differentOutcome: 2, nonOutcomeOnly: 8 });
+    expect(result.cases.every((c) => !c.changed && c.nonOutcomeOnly)).toBe(true);
+    expect(result.summary).toEqual({ tokens: { input: 40, output: 20 }, totalTokens: 60, unknownUsageCases: 0, sharedRequestExtractionTokens: { input: 40, output: 20 } });
     expect(extract).toHaveBeenCalledTimes(5);
     expect(await tableCounts()).toEqual(before);
     const unchanged = await create().compare({ baseline: recipe, candidate: recipe, requestType: "damaged_item" });
@@ -257,18 +257,18 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
       ...recipe.steps,
     ] });
     const result = await create().execute({ recipe: withExtract, requestType: "damaged_item" });
-    expect(result.summary).toMatchObject({ tokens: { input: 60, output: 30 }, totalTokens: 90, recipeExtractionTokens: { input: 20, output: 10 } });
+    expect(result.summary).toMatchObject({ tokens: { input: 60, output: 30 }, totalTokens: 90, unknownUsageCases: 0, recipeExtractionTokens: { input: 20, output: 10 } });
     const comparison = await create().compare({ baseline: withExtract, candidate: withExtract, requestType: "damaged_item" });
-    expect(comparison.summary).toMatchObject({ tokens: { input: 80, output: 40 }, totalTokens: 120 });
+    expect(comparison.summary).toMatchObject({ tokens: { input: 80, output: 40 }, totalTokens: 120, unknownUsageCases: 0 });
     const invalid = parseRecipeVersion({ ...withExtract, id: "ver_invalid_extract", steps: withExtract.steps.map((s) => s.kind === "extract" ? { ...s, fields: { fraction: { type: "string", required: true } } } : s) });
     const failed = await create().execute({ recipe: invalid, requestType: "damaged_item" });
-    expect(failed.summary).toMatchObject({ notHandled: 10, totalTokens: 90 });
+    expect(failed.summary).toMatchObject({ notHandled: 10, nonOutcomeOnly: 0, totalTokens: 90, unknownUsageCases: 0 });
   });
 
   it("reports mutation-output dependencies as not_handled and never invents their results", async () => {
     const counts = await tableCounts();
     const result = await create().execute({ recipe: blockedRecipe, requestType: "damaged_item" });
-    expect(result.summary).toMatchObject({ total: 10, identical: 0, different: 0, notHandled: 10 });
+    expect(result.summary).toMatchObject({ total: 10, sameOutcome: 0, differentOutcome: 0, notHandled: 10, nonOutcomeOnly: 0 });
     expect(result.cases.every((c) => c.reasons.some((r) => r.code === "blocked"))).toBe(true);
     expect(await tableCounts()).toEqual(counts);
   });
@@ -282,15 +282,34 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     await expect(source().listCases({ event: "other.event", requestType: "damaged_item" })).rejects.toThrow();
     expect(actionSchema(backtestRecipe).safeParse({ recipe, requestType: "unknown" }).success).toBe(false);
     extract.mockResolvedValueOnce({ output: { type: "damaged_item" }, tokens: { input: 8, output: 4 } });
-    await expect(backtestRecipe.run({ recipe, requestType: "damaged_item" }, context)).rejects.toMatchObject({ errorCode: "BACKTEST_FAILED",
-      message: "Request req_0040 could not be reconstructed: free-text fields missing or invalid.",
-    });
-    expect(log).toHaveBeenLastCalledWith("[recipe-backtest]", expect.objectContaining({ requestId: "req_0040", name: "HistoricalReconstructionError" }));
+    const partial = await backtestRecipe.run({ recipe, requestType: "damaged_item" }, context);
+    expect(backtestOutputSchema.parse(partial)).toEqual(partial);
+    expect(partial.summary).toMatchObject({ total: 10, sameOutcome: 7, differentOutcome: 2, notHandled: 1,
+      nonOutcomeOnly: 0, unknownUsageCases: 1, totalTokens: null, requestExtractionTokens: { input: 32, output: 16 } });
+    expect(partial.cases.find((item) => item.caseId === "req_0040")).toMatchObject({ status: "not_handled", run: null,
+      reasons: [{ code: "reconstruction-failed", message: expect.stringContaining("missing productMention") }] });
+    expect(partial.cases).toHaveLength(10);
+    expect(log.mock.calls.filter((call) => JSON.stringify(call).includes("reconstruct"))).toHaveLength(0);
     expect(await tableCounts()).toEqual(before);
     expect(backtestRecipe.readOnly).toBe(true);
     expect(compareVersions.readOnly).toBe(true);
     expect(backtestRecipe.http).toEqual({ method: "GET" });
     expect(compareVersions.http).toEqual({ method: "GET" });
+  });
+
+  it.each(["provider", "output", "usage"] as const)("keeps a %s extraction failure per-case and comparison usage unknown once", async (code) => {
+    vi.spyOn(composition, "getRecipeBacktests").mockImplementation(() => create());
+    extract.mockRejectedValueOnce(new ExtractionError(code, "Extraction attempt failed safely"));
+    const before = await shopSnapshot();
+    const result = await compareVersions.run({ baseline: recipe, candidate: recipe, requestType: "damaged_item" }, context);
+    expect(compareBacktestOutputSchema.parse(result)).toEqual(result);
+    expect(result.baseline.summary).toMatchObject({ total: 10, sameOutcome: 7, differentOutcome: 2, notHandled: 1, unknownUsageCases: 1, totalTokens: null });
+    expect(result.candidate.summary).toEqual(result.baseline.summary);
+    expect(result.summary).toEqual({ tokens: { input: 32, output: 16 }, totalTokens: null, unknownUsageCases: 1,
+      sharedRequestExtractionTokens: { input: 32, output: 16 } });
+    expect(result.cases.find((item) => item.caseId === "req_0040")).toMatchObject({ baselineStatus: "not_handled", candidateStatus: "not_handled", changed: false });
+    expect(extract).toHaveBeenCalledTimes(5);
+    expect(await shopSnapshot()).toEqual(before);
   });
 
   it("preserves the actual extraction configuration failure through historical matching", async () => {
@@ -303,6 +322,17 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     });
     expect(complete).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledExactlyOnceWith("[recipe-backtest]", expect.objectContaining({ requestId: "req_0040", causeName: "ExtractionError" }));
+  });
+
+  it("fails the whole report for a database infrastructure failure with a safe specific message", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const failedDb = { transaction: vi.fn().mockRejectedValueOnce(new Error("Private SQL parameters")) } as unknown as ShopDb;
+    const failedSource = new ShopHistoricalCaseSource(failedDb, () => { throw new Error("Extractor must never run"); });
+    await expect(backtestOperation(() => failedSource.listCases({ event: "request.created", requestType: "damaged_item" }))).rejects.toMatchObject({
+      errorCode: "BACKTEST_FAILED", message: "Couldn't read historical requests from the database.",
+    });
+    expect(extract).not.toHaveBeenCalled();
+    expect(JSON.stringify(log.mock.calls)).not.toContain("Private SQL");
   });
 
   it("keeps unknown historical extraction failures generic while logging the request without private details", async () => {
@@ -324,7 +354,7 @@ describe("read-only historical recipe backtests on seeded PGlite", () => {
     await db.update(tables.orders).set({ items: order.items.map((item, index) => index === 0 ? { ...item, unitPrice: { ...item.unitPrice, amountMinor: item.unitPrice.amountMinor + 200 } } : item) }).where(eq(tables.orders.id, order.id));
     const before = await shopSnapshot();
     const result = await create().execute({ recipe, requestType: "damaged_item" });
-    expect(result.summary).toMatchObject({ identical: 6, different: 4 });
+    expect(result.summary).toMatchObject({ sameOutcome: 7, differentOutcome: 3 });
     expect(result.cases.find((c) => c.caseId === request.id)?.diff.some((d) => d.path.includes("amountMinor"))).toBe(true);
     expect(await shopSnapshot()).toEqual(before);
   });

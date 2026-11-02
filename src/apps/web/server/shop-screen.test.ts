@@ -138,7 +138,7 @@ describe("agent workspace context", () => {
     state.navigation = { view: "recipe", recipeId: "recipe_care" };
     const context = { caller: "tool" as const };
     expect(await viewScreen.run({}, context)).toHaveProperty("backtest", null);
-    const summary = { total: 10, identical: 7, different: 3, notHandled: 0, totalTokens: 60 };
+    const summary = { total: 10, sameOutcome: 7, differentOutcome: 3, notHandled: 0, nonOutcomeOnly: 0, totalTokens: 60, unknownUsageCases: 0 };
     state["recipe-backtest"] = {
       recipeId: "recipe_care", source: "backtest", requestType: "damaged_item", totalTokens: 60,
       reports: [{ recipeVersionId: "ver_care", version: 1, summary }],
@@ -146,7 +146,7 @@ describe("agent workspace context", () => {
     expect(await viewScreen.run({}, context)).toHaveProperty("backtest", state["recipe-backtest"]);
     state["recipe-backtest"] = { ...state["recipe-backtest"], source: "comparison", reports: [
       { recipeVersionId: "ver_care", version: 1, summary },
-      { recipeVersionId: "ver_care2", version: 2, summary: { ...summary, identical: 8, different: 2 } },
+      { recipeVersionId: "ver_care2", version: 2, summary: { ...summary, sameOutcome: 8, differentOutcome: 2 } },
     ] };
     expect(await viewScreen.run({}, context)).toHaveProperty("backtest", state["recipe-backtest"]);
     state["recipe-backtest"].recipeId = "recipe_elsewhere";

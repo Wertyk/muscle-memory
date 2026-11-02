@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { actionLabel, candidateLabel, fieldLabel, moneyLabel, mutationSummary, presentationContext, resolvedCurrency, valueSummary } from "./recipe-presentation";
+import { actionLabel, backtestComparisonLabel, backtestSummary, candidateLabel, fieldLabel, moneyLabel, mutationSummary, presentationContext, resolvedCurrency, valueSummary } from "./recipe-presentation";
+import { recipeMessages } from "../i18n/recipes-en";
 
 describe("shared recipe presentation", () => {
+  it("formats outcome counts and wording-only comparison labels with the shared catalog", () => {
+    const t = (key: string, values: Record<string, number> = {}) => {
+      const message = recipeMessages.backtests[key.replace("recipes.backtests.", "") as keyof typeof recipeMessages.backtests];
+      if (typeof message !== "string") throw new Error("Expected a message");
+      return message.replace(/\{\{(\w+)\}\}/g, (_match, field: string) => String(values[field]));
+    };
+    expect(backtestSummary({ total: 10, sameOutcome: 8, differentOutcome: 2, notHandled: 0, nonOutcomeOnly: 8 }, t))
+      .toBe("8 same outcome · 2 different outcome · 0 not handled — 8 differ only in wording or tags · 10 requests");
+    expect(backtestComparisonLabel({ changed: false, nonOutcomeOnly: true }, t)).toBe("Only wording or tags changed");
+    expect(backtestComparisonLabel({ changed: true, nonOutcomeOnly: false }, t)).toBe("Outcome changed");
+    expect(backtestComparisonLabel({ changed: false, nonOutcomeOnly: false }, t)).toBe("Unchanged");
+  });
+
   it.each([
     ["orderId", "Order ID"], ["productId", "Product ID"], ["requestId", "Request ID"],
     ["unitPrice", "Unit price"], ["trackingURL", "Tracking URL"], ["URLValue", "URL value"],

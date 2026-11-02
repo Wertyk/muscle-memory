@@ -48,6 +48,7 @@ export class RequestIntake {
       const [saved] = await this.db.select().from(requestProcessing).where(eq(requestProcessing.requestId, requestId));
       const runId = saved?.runId ?? this.deps.nextRunId();
       let match: RequestMatch;
+      let matchDurationMs = saved?.matchDurationMs ?? null;
       const context = buildRequestTrigger({}, { requestId: request.id, customerId: request.customerId, subject: request.subject });
       if (saved?.match) {
         match = saved.match;
@@ -57,15 +58,17 @@ export class RequestIntake {
         match = { recipe: null, trigger: context, tokens: { input: 0, output: 0 }, reason: "extraction_failed" };
       } else {
         await this.db.insert(requestProcessing).values({ requestId, runId });
+        const matchStartedAt = Date.now();
         match = await this.deps.matcher(request).execute({
           event: "request.created", context,
           content: request.content.source === "structured"
             ? { source: "structured", fields: request.content.fields as unknown as JsonObject }
             : { source: "free_text", text: request.content.text },
         });
+        matchDurationMs = Math.max(0, Date.now() - matchStartedAt);
       }
       assertRunLockActive();
-      await this.db.update(requestProcessing).set({ match }).where(eq(requestProcessing.requestId, requestId));
+      await this.db.update(requestProcessing).set({ match, matchDurationMs }).where(eq(requestProcessing.requestId, requestId));
       const type = REQUEST_TYPES.find((value) => value === match.trigger.type);
       if (request.content.source === "free_text" && match.reason !== "extraction_failed" && type) {
         // Match is durable first. A crash here can retry classification from the

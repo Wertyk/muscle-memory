@@ -1,6 +1,8 @@
 import { shopMessages } from "./shop-en";
+import { dashboardMessages } from "./dashboard-en";
 
 const messages = {
+  dashboard: dashboardMessages,
   shop: shopMessages,
   composer: {
     removeAttachment: "Remove {{name}}",

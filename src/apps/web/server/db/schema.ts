@@ -115,7 +115,18 @@ export const requestProcessing = pgTable("request_processing", {
   // Reserved before execution; the checkpoint can survive a crash before run creation.
   runId: varchar("run_id", { length: 31 }).notNull().unique(),
   match: jsonb("match").$type<RequestMatch>(),
+  matchDurationMs: bigint("match_duration_ms", { mode: "number" }),
 });
+
+export const requestAgentRuns = pgTable("request_agent_runs", {
+  requestId: varchar("request_id", { length: 31 }).$type<Request["id"]>().notNull().references(() => requests.id, { onDelete: "cascade" }),
+  runId: text("run_id").notNull(),
+  threadId: text("thread_id").notNull(),
+  userEmail: text("owner_email").notNull(),
+  workspaceId: text("workspace_id").notNull(),
+  observedAt: bigint("observed_at", { mode: "number" }).notNull(),
+  resolvedAt: bigint("resolved_at", { mode: "number" }),
+}, table => [primaryKey({ columns: [table.requestId, table.runId] }), index("request_agent_runs_run_idx").on(table.runId)]);
 
 export const recipeRuns = pgTable("recipe_runs", {
   id: varchar("id", { length: 31 }).primaryKey(),

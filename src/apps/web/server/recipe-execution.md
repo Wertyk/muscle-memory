@@ -1,5 +1,86 @@
 # Recipe framework adapters (TASK-14 Phase 2)
 
+## Measured AI dependency dashboard (TASK-21)
+
+`get-handling-stats({})` is a read-only GET action over shop-domain's pure
+`GetHandlingStats` application query and its `HandlingStatsSource` port.
+`DrizzleHandlingStats` does bounded SQL projection/aggregation without returning
+prompts, step outputs, message bodies or entire checkpoints to the browser.
+`/dashboard` uses `useActionQuery`, the existing shared sync transport, and a
+manual refresh for observability writes that may finish after agent resolution.
+
+The cohort is the latest 100 distinct requests with a completed **execute-mode
+intake run** or an explicitly attributed agent resolution. Seeded status snapshots,
+unlinked/manual resolutions, queued handoffs, paused/failed/interrupted executions
+without agent resolution, and dry runs are excluded. The extra queried row detects
+truncation. Same-type means, coverage and zero-token share all use this cohort;
+pending approvals and active catalog pointers are current shop-wide counts.
+
+Recipe tokens sum saved intake match and executor input/output usage. Active time
+sums `request_processing.match_duration_ms` and all recorded step durations,
+including retries/extraction and excluding approval waiting. The additive named
+TASK-21 migration leaves historical matching times null. Matching measures once
+around MatchRequest, persists with its result, and is reused on redelivery.
+Failed/interrupted extraction is conservatively unknown, not a free model call.
+
+Installed Core 0.222.2 docs (`docs-search --slug observability`) and packaged
+`observability/traces.js`, `store.d.ts`, `action.d.ts` and the SQL schema snapshot
+confirm per-run tokens/duration in `agent_trace_summaries`. `source-search` for
+`agent_runs` and `total_input_tokens` distinguishes lifecycle rows from usage.
+The supported `ActionRunContext.runId/threadId` seam links successful
+request-specific actions to the exact framework run in `request_agent_runs`.
+This success observer composes with `traced()` in composition; telemetry failures
+never retry or fail an already-successful shop action. Recipe tool-call keys are
+explicitly excluded. Successful `set-request-status(resolved)` attributes agent
+handling; reopening or human status changes invalidate prior resolutions.
+Read-only request lookups record attribution too: a turn that reads the request
+and asks a question is intentionally charged even if it makes no shop mutation.
+The request becomes a handled outcome only after a recorded resolution.
+
+Agent usage joins run/thread **and** authenticated owner/workspace. It sums all recorded
+turns between the first explicit request anchor and resolution in each thread,
+including intervening chat/order-only work, plus prior intake/recipe work.
+Duplicate run IDs count once. Shared turns or overlapping request windows have
+unknown cost because no honest allocation exists; unrelated earlier/later turns
+are excluded. All intervening chat work is charged conservatively to the request. Missing/retained-away summaries,
+foreign identity/thread, and zero-token agent placeholders remain unknown; timing
+can be known independently. External agents without local framework usage cannot
+be measured. No public API for manually submitting costs, prompt parsing, provider
+call, new model loop, or synthetic historical backfill is added. Attribution starts
+with this release. A completed recipe touched by an agent is conservatively
+unmeasured until an attributed resolution provides a complete agent cohort.
+
+The headline compares Agent and Recipe means across all measured outcomes in the
+bounded cohort, with token/time sample counts separated only when they differ.
+`intakeTokens`, `runTokens` and `agentTokens` expose the existing stored components without
+changing total tokens or zero-token eligibility. Paired component means use known
+total/intake/run samples together, with their own breakdown sample count. The
+headline, per-request tooltips and Inspect list distinguish intake extraction from
+recipe steps; agent outcomes also name their measured agent-turn component.
+`agentTokens` is null for recipe outcomes and for unknown agent usage; it is never
+inferred as zero. Intake-only per-type recipe cells repeat the short extraction
+note. Zero recipe-step usage never hides intake or agent cost.
+
+The evidence plot uses positive logarithmic token/time axes and a separately
+labelled exact-zero lane. No epsilon or fabricated value makes log(0) plot. The
+rolling mean was removed. Compact ticks have a reserved gutter; Intl formats whole
+tokens (compact from 10K), ms/seconds, and same-day time-only axis labels. Agent is
+warm orange/amber and Recipe stays green, with different shapes; numerical theme
+contrast tests enforce at least 4.5:1 against the card for both. All five type rows
+remain visible, with one muted line for a side without measured samples. Same-type
+means are observed cohorts, not paired counterfactuals or dollar estimates. Request
+associations clear through the existing reset registry; framework telemetry stays.
+
+Opt-in authenticated HTTP proof: from apps/web, run `pnpm exec tsx
+scripts/dashboard-http-smoke.ts http://localhost:5192` with that port free. It
+creates an isolated temporary PGlite, installs test-only hand-written recipes,
+executes three real structured requests (two completions and an approval), then
+checks the authenticated dashboard route, GET action results and unchanged repeat
+reads. No model or agent usage fixtures are used. It closes the server and removes
+the database. Rendered component tests cover chart gaps, handlers, units, loading,
+empty/error states and comparisons; a native browser smoke additionally needs
+computer/browser access.
+
 `composition.ts` wires `RunRecipe` to `DrizzleRunRepository`,
 `RecipeActionInvoker` over `RegistryActionInvoker`, `CompleteTextExtractor`, and
 `DrizzleAgentHandoff`. `run-recipe`, `resume-recipe-run`, and `get-recipe-run`

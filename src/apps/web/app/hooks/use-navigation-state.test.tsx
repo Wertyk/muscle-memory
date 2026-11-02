@@ -43,6 +43,8 @@ describe("shop route state", () => {
       "/requests/req_0007",
     );
     expect(pathForCommand({ view: "inbox" })).toBe("/inbox");
+    expect(navigationStateForPath("/dashboard")).toMatchObject({ view: "dashboard", path: "/dashboard" });
+    expect(pathForCommand({ view: "dashboard" })).toBe("/dashboard");
     expect(commandPathForNavigation({ path: "/inbox?status=pending" })).toBe(
       "/inbox?status=pending",
     );

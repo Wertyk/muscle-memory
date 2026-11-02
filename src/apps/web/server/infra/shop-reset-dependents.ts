@@ -1,7 +1,7 @@
 import { getTableName, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { ShopDb } from "../db/index.js";
-import { demoSteps, demonstrations, recipeDrafts, recipeHandoffs, recipeRuns, recipes, recipeVersions, requestProcessing } from "../db/schema.js";
+import { demoSteps, demonstrations, recipeDrafts, recipeHandoffs, recipeRuns, recipes, recipeVersions, requestProcessing, requestAgentRuns } from "../db/schema.js";
 import { lockShopWrites } from "./shop-repository.js";
 
 export type ShopResetTransaction = Parameters<Parameters<ShopDb["transaction"]>[0]>[0];
@@ -24,6 +24,7 @@ interface ResetDependent {
  * Missing tables are skipped for databases with only the shop migration applied.
  * No framework tables or CASCADE/TRUNCATE are included. */
 export const shopResetDependents: readonly ResetDependent[] = [
+  { table: requestAgentRuns },
   { table: demoSteps },
   { table: demonstrations },
   { table: requestProcessing },

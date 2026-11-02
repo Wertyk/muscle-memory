@@ -3,10 +3,12 @@ import "../db/index.js";
 import { migrateShop } from "../db/migrations.js";
 import { migrateRecipes } from "../db/recipe-migrations.js";
 import { migrateTeach } from "../db/teach-migrations.js";
+import { migrateDashboard } from "../db/dashboard-migrations.js";
 
 const migrateApp: typeof migrateShop = async (app) => {
   await migrateShop(app);
   await migrateRecipes(app);
-  return migrateTeach(app);
+  await migrateTeach(app);
+  return migrateDashboard(app);
 };
 export default migrateApp;

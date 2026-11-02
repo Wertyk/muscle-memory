@@ -2,7 +2,7 @@ import {
   readAppStateForCurrentTab,
   writeAppStateForCurrentTab,
 } from "@agent-native/core/application-state";
-import { success } from "@muscle-memory/shop-domain";
+import { GetHandlingStats, success } from "@muscle-memory/shop-domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import navigate from "../actions/navigate";
@@ -61,6 +61,14 @@ afterEach(() => {
 });
 
 describe("agent workspace context", () => {
+  it("reads the dashboard through the same scoped stats query as the UI action", async () => {
+    state.navigation = { view: "dashboard", path: "/dashboard" };
+    const query = new GetHandlingStats({ read: async () => ({ samples: [], pendingApprovals: 0, activeRecipes: 0 }) });
+    vi.spyOn(composition, "getHandlingStats").mockReturnValue(query);
+    const context = { caller: "tool" as const, userEmail: "operator@example.test", orgId: "shop" };
+    expect(await viewScreen.run({}, context)).toMatchObject({ navigation: state.navigation, handlingStats: await query.execute() });
+    expect(composition.getHandlingStats).toHaveBeenCalledExactlyOnceWith(context);
+  });
   it("exposes processing and Teach context together for the current request", async () => {
     state.navigation = { view: "request", requestId: request.id };
     const context = { caller: "frontend" as const, userEmail: "operator@example.test" };

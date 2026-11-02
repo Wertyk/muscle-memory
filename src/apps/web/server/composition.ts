@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { ActionRunContext } from "@agent-native/core/action";
 import { BacktestRecipe, Demonstrations, DraftRecipeFromDemonstration, MatchRequest, RunRecipe, type RunRecipeDependencies, type TextExtractor } from "@muscle-memory/recipe-engine";
 import {
-  ClassifyRequest, CreateRequest, ValidateRequestFields, CreateReplacementOrder, Escalate, GenerateReturnLabel, GetCustomer, GetOrder,
+  ClassifyRequest, CreateRequest, ValidateRequestFields, CreateReplacementOrder, Escalate, GenerateReturnLabel, GetCustomer, GetOrder, GetHandlingStats,
   GetRequest, GetRequestActivity, GetShipmentStatus, ID_PREFIXES, IssueRefund, ListRequests, SendReply,
   SetRequestStatus, TagRequest, UpdateShippingAddress, type ShopDependencies,
 } from "@muscle-memory/shop-domain";
@@ -26,6 +26,9 @@ import { shopResult } from "./shop-action-contracts.js";
 import { ShopHistoricalCaseSource } from "./infra/shop-historical-cases.js";
 import { ShopMutationNormalizer } from "./infra/shop-mutation-normalizer.js";
 import { ShopRecipeBacktests } from "./infra/shop-recipe-backtests.js";
+import { AgentRequestUsage } from "./infra/agent-request-usage.js";
+import { DrizzleHandlingStats } from "./infra/handling-stats.js";
+import { demonstrationOwner } from "./infra/teach-session.js";
 
 export function createTeachUseCases(db: ShopDb) {
   const demonstrations = new Demonstrations(
@@ -54,6 +57,13 @@ export function getDraftRecipeUseCases() { return createDraftRecipeUseCases(getD
 export const shopTraceCapture = createShopTraceCapture(
   () => getTeachUseCases().demonstrations,
 );
+shopTraceCapture.succeeded = (action, context) => new AgentRequestUsage(getDb()).succeeded(action, context);
+
+export function getHandlingStats(context?: ActionRunContext) {
+  const owner = demonstrationOwner(context);
+  if (!owner) throw new Error("Sign in to read handling measurements.");
+  return new GetHandlingStats(new DrizzleHandlingStats(getDb(), owner));
+}
 
 export function createShopUseCases(deps: ShopDependencies) {
   return {

@@ -1208,6 +1208,7 @@ describe("shop workspace with real framework action hooks and an offline action 
 
   it("handles a request manually: saves reply, tags and resolves, refreshing the visible status", async () => {
     await mount();
+    expect(container.querySelector(".shop-request-actions .shop-action-result-slot")?.childElementCount).toBe(0);
     expect(container.textContent).toContain(request.subject);
     const product = container.querySelector(".shop-form-fields dd");
     expect(product).not.toBeNull();
@@ -1221,6 +1222,7 @@ describe("shop workspace with real framework action hooks and an offline action 
     );
     await submit("Save reply");
     await settle(() => expect(container.textContent).toContain("Reply saved"));
+    expect(container.querySelector(".shop-request-actions .shop-saved-result")?.textContent).toContain("Reply saved");
     await settle(() =>
       expect(container.querySelector(".shop-timeline")?.textContent).toContain(
         "We have refunded the chipped piece.",

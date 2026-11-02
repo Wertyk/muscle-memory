@@ -7,9 +7,6 @@ import {
 import { useT } from "@agent-native/core/client/i18n";
 import type {
   Demonstration,
-  DemonstrationStep,
-  JsonObject,
-  JsonValue,
   RecipeDraft,
 } from "@muscle-memory/recipe-engine";
 import type {
@@ -17,16 +14,16 @@ import type {
   Request,
   StructuredRequestFields,
 } from "@muscle-memory/shop-domain";
+import { requestType } from "@muscle-memory/shop-domain";
 import { isShopLookup } from "@shared/shop-action-kinds";
 import {
   IconCheck,
   IconPlayerRecord,
   IconPlayerStop,
-  IconX,
   IconArrowRight,
 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -37,60 +34,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { moneyText } from "@/lib/shop-workspace";
 import { recipePath } from "@/lib/recipe-studio";
 
 import { TeachRequestFields } from "./TeachRequestFields";
+import { TeachFilmstrip, useRecorderMotion } from "./TeachFilmstrip";
+import { elapsedTime } from "./teach-recorder";
 import { PendingMark } from "./WorkspaceParts";
+import "./teach-recorder.css";
 
-/** Short labels from actual captured inputs/results, never invented outcomes. */
-export function stepArgument(step: DemonstrationStep): string {
-  const a = step.input;
-  const target = [a.requestId, a.orderId, a.customerId].find(
-    (v) => typeof v === "string",
-  );
-  const object = (value: JsonValue | undefined): JsonObject =>
-    value && typeof value === "object" && !Array.isArray(value)
-      ? (value as JsonObject)
-      : {};
-  const output = object(step.output);
-  if (step.action === "send-reply" && typeof output.body === "string")
-    return output.body;
-  if (step.action === "update-shipping-address") {
-    const address = object(a.address);
-    return [address.line1, address.city]
-      .filter((value) => typeof value === "string")
-      .join(", ");
-  }
-  if (step.action === "create-replacement-order" && Array.isArray(output.items))
-    return output.items
-      .map((item) => {
-        const line = object(item);
-        return `${line.quantity} × ${line.name ?? line.productId}`;
-      })
-      .join(", ");
-  const amount = object(
-    a.amount ?? (step.action === "issue-refund" ? output.amount : undefined),
-  );
-  if (
-    typeof amount.amountMinor === "number" &&
-    typeof amount.currency === "string"
-  )
-    return `${moneyText({ amountMinor: amount.amountMinor, currency: amount.currency })} · ${target ?? ""}`;
-  const value = a.tag ?? a.status ?? a.reason ?? a.template;
-  if (typeof value === "string") return value;
-  return typeof target === "string"
-    ? target
-    : Object.entries(a)
-        .map(([key, value]) => `${key}: ${String(value)}`)
-        .join(" · ");
-}
+export { stepArgument } from "./teach-recorder";
+
 export function TeachBar({
   request,
   order,
+  onRecordingChange,
 }: {
   request: Request;
   order?: Order | undefined;
+  onRecordingChange?: (recording: boolean) => void;
 }) {
   const t = useT();
   const navigate = useNavigate();
@@ -101,11 +62,15 @@ export function TeachBar({
     { resources: ["demonstrations"], batchRefetches: false },
   );
   const [demo, setDemo] = useState<Demonstration | null>(null);
+  const [dismissedId, setDismissedId] = useState<string | null>(null);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmFields, setConfirmFields] = useState(false);
+  const [now, setNow] = useState(Date.now);
+  const motion = useRecorderMotion();
   const inFlight = useRef(false);
-  const strip = useRef<HTMLOListElement>(null);
+  const recorder = useRef<HTMLElement>(null);
+  const tiles = useRef<{ id: string; rect: DOMRect; element: HTMLElement }[]>([]);
   const start = useActionMutation<
     Demonstration,
     { requestId: string; fields?: StructuredRequestFields }
@@ -139,10 +104,53 @@ export function TeachBar({
       { count: lookups.length },
     ),
   });
-  useEffect(() => {
-    if (strip.current) strip.current.scrollLeft = strip.current.scrollWidth;
-  }, [actions.length]);
   const recording = demo?.status === "recording";
+  useEffect(() => {
+    onRecordingChange?.(recording);
+    return () => onRecordingChange?.(false);
+  }, [recording, onRecordingChange]);
+  useEffect(() => {
+    if (!recording) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [recording]);
+  useLayoutEffect(() => {
+    if (demo?.status !== "completed") return;
+    const first = tiles.current;
+    tiles.current = [];
+    const section = recorder.current;
+    if (!motion || !section || !first.length) return;
+    const origin = section.getBoundingClientRect();
+    const layer = document.createElement("div");
+    layer.className = "shop-teach-flight-layer";
+    layer.style.height = `${Math.max(origin.height, ...first.map((tile) => tile.rect.bottom - origin.top))}px`;
+    layer.setAttribute("aria-hidden", "true");
+    layer.inert = true;
+    const animations: Animation[] = [];
+    for (const tile of first) {
+      const target = [...section.querySelectorAll<HTMLElement>(".shop-teach-mini [data-step-id]")]
+        .find((element) => element.dataset.stepId === tile.id);
+      if (!target || !tile.rect.width || !tile.rect.height) continue;
+      const last = target.getBoundingClientRect();
+      const clone = tile.element;
+      clone.classList.remove("shop-teach-snap");
+      clone.classList.add("shop-teach-flight");
+      clone.style.cssText = `left:${tile.rect.left - origin.left}px;top:${tile.rect.top - origin.top}px;width:${tile.rect.width}px;height:${tile.rect.height}px`;
+      layer.append(clone);
+      section.append(layer);
+      // FLIP the measured full tiles into their corresponding saved-card icons.
+      animations.push(clone.animate([
+        { transform: "none", opacity: 1 },
+        { transform: `translate(${last.left - tile.rect.left}px, ${last.top - tile.rect.top}px) scale(${last.width / tile.rect.width}, ${last.height / tile.rect.height})`, opacity: 0 },
+      ], { duration: 400, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" }));
+    }
+    void Promise.all(animations.map((animation) => animation.finished)).catch(() => {}).finally(() => layer.remove());
+    return () => {
+      animations.forEach((animation) => animation.cancel());
+      layer.remove();
+    };
+  }, [demo?.status, motion]);
   const canDraft = demo?.status === "completed" &&
     demo.incompleteReason === null && demo.stoppedAt !== null &&
     demo.pending.length === 0 && demo.steps.length > 0;
@@ -164,7 +172,20 @@ export function TeachBar({
     confirmed?: StructuredRequestFields,
   ) {
     if (inFlight.current || (kind === "draft" && !canDraft)) return;
+    // Completed traces are immutable. Discard here dismisses the saved card;
+    // active recordings still use the shared cancellation action below.
+    if (kind === "cancel" && demo?.status === "completed") {
+      setDismissedId(demo.id);
+      setError(null);
+      return;
+    }
     inFlight.current = true;
+    if (kind === "stop" && motion && typeof Element.prototype.animate === "function") {
+      const viewport = recorder.current?.querySelector(".shop-teach-timeline")?.getBoundingClientRect();
+      tiles.current = [...(recorder.current?.querySelectorAll<HTMLElement>(".shop-teach-tile") ?? [])].map((element) => ({
+        id: element.dataset.stepId!, rect: element.getBoundingClientRect(), element: element.cloneNode(true) as HTMLElement,
+      })).filter((tile) => viewport && tile.rect.right > viewport.left && tile.rect.left < viewport.right);
+    }
     setWorking(kind);
     setError(null);
     try {
@@ -182,8 +203,9 @@ export function TeachBar({
           : await (kind === "stop" ? stop : cancel).mutateAsync({
               demonstrationId: demo!.id,
             });
-      setDemo(result);
+      if (kind === "start") setDismissedId(null);
       setConfirmFields(false);
+      if (kind !== "stop") setDemo(result);
       await query.refetch(); // Re-read the persisted trace before claiming it saved.
     } catch (cause) {
       setError(actionErrorMessage(cause) ?? t(kind === "draft" ? "shop.teachDraftFailed" : "shop.teachFailed"));
@@ -192,10 +214,10 @@ export function TeachBar({
       setWorking(null);
     }
   }
-  const state = recording ? "recording" : (demo?.status ?? "ready");
-  const title = recording
-    ? "shop.teachRecording"
-    : demo?.status === "completed"
+  const dismissed = demo?.id === dismissedId;
+  const saved = demo?.status === "completed" && !dismissed;
+  const state = dismissed ? "ready" : (demo?.status ?? "ready");
+  const title = saved
       ? "shop.teachSaved"
       : demo?.status === "incomplete"
         ? "shop.teachIncomplete"
@@ -203,24 +225,41 @@ export function TeachBar({
   return (
     <section
       className="shop-teach-bar"
+      ref={recorder}
       data-state={state}
+      data-motion={motion ? "allowed" : "reduced"}
       aria-label={t("shop.teach")}
       aria-busy={Boolean(working)}
     >
       <div className="shop-teach-topline">
-        <span className="shop-teach-emblem" aria-hidden="true">
-          {demo?.status === "completed" ? <IconCheck /> : <IconPlayerRecord />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="shop-teach-title">{t(title)}</p>
-          <p className="shop-teach-caption">
-            {recording
-              ? t("shop.teachScope")
-              : demo?.status === "completed"
-                ? `${demo.id} · ${counts}`
-                : t("shop.teachHint")}
-          </p>
-        </div>
+        {recording ? (
+          <div className="shop-teach-identity">
+            <div className="shop-teach-clock">
+              <span className={`shop-teach-dot${motion ? " shop-teach-pulse" : ""}`} aria-hidden="true" />
+              <span className="shop-teach-title">Recording</span>
+              <span className="shop-teach-elapsed" role="timer" aria-live="off" aria-label="Recording elapsed time">{elapsedTime(demo.startedAt, now)}</span>
+            </div>
+            <p className="shop-teach-scope" title={`Teaching ${request.id} · ${t(`shop.types.${requestType(request) ?? "unknown"}`)}`}>
+              Teaching <span>{request.id}</span> · {t(`shop.types.${requestType(request) ?? "unknown"}`)}
+            </p>
+          </div>
+        ) : (
+          <div className="shop-teach-identity">
+            <span className="shop-teach-emblem" aria-hidden="true">
+              {saved ? <IconCheck /> : <IconPlayerRecord />}
+            </span>
+            <div className="min-w-0">
+              <p className="shop-teach-title">{t(title)}</p>
+              <p className={saved ? "shop-teach-count" : "shop-teach-caption"}>
+                {saved
+                  ? `${counts} · ${elapsedTime(demo.startedAt, demo.stoppedAt ?? demo.startedAt)}`
+                  : t("shop.teachHint")}
+              </p>
+              {saved && <TeachFilmstrip demo={demo} compact />}
+            </div>
+          </div>
+        )}
+        <div className="shop-teach-controls">
         {recording ? (
           <>
             <span className="shop-teach-count" role="status">
@@ -228,13 +267,12 @@ export function TeachBar({
             </span>
             <Button
               variant="ghost"
-              size="icon"
               disabled={Boolean(working)}
               aria-label={t("shop.teachDiscard")}
               title={t("shop.teachDiscard")}
               onClick={() => void perform("cancel")}
             >
-              <IconX />
+              Discard
             </Button>
             <Button
               disabled={Boolean(working)}
@@ -246,7 +284,7 @@ export function TeachBar({
           </>
         ) : (
           <>
-            {demo?.status === "completed" && (
+            {saved && (
               <Button
                 disabled={!canDraft || Boolean(working) || query.isPending || query.isError}
                 onClick={() => void perform("draft")}
@@ -255,8 +293,11 @@ export function TeachBar({
                 {t(working === "draft" ? "shop.teachDrafting" : "shop.teachCreateDraft")}
               </Button>
             )}
-            <Button
-              variant={demo?.status === "completed" ? "outline" : "default"}
+            {saved ? (
+              <Button variant="ghost" disabled={Boolean(working)} aria-label={t("shop.teachDiscard")} title="Dismiss saved demonstration; shop changes remain saved" onClick={() => void perform("cancel")}>
+                Discard
+              </Button>
+            ) : <Button
               disabled={Boolean(working) || query.isPending || query.isError}
               onClick={() =>
                 request.content.source === "free_text"
@@ -266,65 +307,12 @@ export function TeachBar({
             >
               {working === "start" ? <PendingMark /> : <IconPlayerRecord />}
               {t(working === "start" ? "shop.teachStarting" : "shop.teach")}
-            </Button>
+            </Button>}
           </>
         )}
-      </div>
-      {recording && !actions.length && (
-        <p className="shop-teach-wait" role="status">
-          <span className="shop-teach-dot" />
-          {t("shop.teachWaiting")}
-          <IconArrowRight className="size-4" aria-hidden="true" />
-        </p>
-      )}
-      {demo && demo.status !== "cancelled" && actions.length > 0 && (
-        <ol
-          className="shop-teach-strip"
-          tabIndex={0}
-          ref={strip}
-          aria-label={t("shop.teachCapturedActions")}
-          aria-live="polite"
-          aria-relevant="additions"
-        >
-          {actions.map((step, index) => (
-            <li key={step.id}>
-              <span className="shop-teach-step-number">{index + 1}</span>
-              <div className="min-w-0">
-                <p className="shop-teach-step-action" title={step.action}>
-                  {t(`shop.teachActions.${step.action}`)}
-                </p>
-                <p className="shop-teach-step-args" title={stepArgument(step)}>
-                  {stepArgument(step) || t("shop.teachNoArguments")}
-                </p>
-              </div>
-              <IconCheck
-                className="size-3.5 shrink-0"
-                aria-label={t("shop.teachCaptured")}
-              />
-            </li>
-          ))}
-        </ol>
-      )}
-      {demo && demo.status !== "cancelled" && lookups.length > 0 && (
-        <div
-          className="shop-teach-lookups"
-          role="group"
-          aria-label={t("shop.teachLookups")}
-          aria-live="polite"
-        >
-          <span>{t("shop.teachLookedUp")}</span>
-          {lookups.map((step) => (
-            <span
-              className="shop-teach-lookup"
-              key={step.id}
-              title={stepArgument(step)}
-              data-action={step.action}
-            >
-              {t(`shop.teachLookupLabels.${step.action}`)}
-            </span>
-          ))}
         </div>
-      )}
+      </div>
+      {demo && (recording || demo.status === "incomplete") && <TeachFilmstrip demo={demo} motion={motion} />}
       {demo?.status === "incomplete" && (
         <p className="shop-teach-error" role="alert">
           {demo.incompleteReason} {t("shop.teachIncompleteHint")}
@@ -344,7 +332,7 @@ export function TeachBar({
           )}
         </div>
       )}
-      {demo && demo.status !== "cancelled" && (
+      {demo && !dismissed && demo.status !== "cancelled" && (
         <details className="shop-teach-inspect">
           <summary>{t("shop.teachInspect")}</summary>
           <pre>

@@ -1,0 +1,163 @@
+{
+  "origin": "http://localhost:8095",
+  "auth": "Framework loopback local-dev; no bearer credentials; server-configured owner dev@local.test",
+  "jsonrpc": [
+    {
+      "call": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-03-26",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "muscle-memory-registry-smoke",
+            "version": "1.0"
+          }
+        }
+      },
+      "httpStatus": 200
+    },
+    {
+      "call": {
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized"
+      },
+      "httpStatus": 202
+    },
+    {
+      "call": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {}
+      },
+      "httpStatus": 200
+    },
+    {
+      "call": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+          "name": "list-recipes",
+          "arguments": {
+            "status": "active"
+          }
+        }
+      },
+      "httpStatus": 200
+    },
+    {
+      "call": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "tools/call",
+        "params": {
+          "name": "run-recipe",
+          "arguments": {
+            "recipe": {
+              "id": "ver_registry_smoke1",
+              "recipeId": "recipe_registry_smoke",
+              "version": 1,
+              "name": "Delivery request review",
+              "trigger": {
+                "event": "request.created",
+                "match": {
+                  "==": [
+                    {
+                      "var": "trigger.type"
+                    },
+                    "where_is_my_order"
+                  ]
+                }
+              },
+              "steps": [
+                {
+                  "id": "request",
+                  "kind": "action",
+                  "action": "get-request",
+                  "args": {
+                    "requestId": {
+                      "mode": "path",
+                      "path": "trigger.requestId"
+                    }
+                  }
+                },
+                {
+                  "id": "tag",
+                  "kind": "action",
+                  "action": "tag-request",
+                  "args": {
+                    "requestId": {
+                      "mode": "path",
+                      "path": "trigger.requestId"
+                    },
+                    "tag": {
+                      "mode": "fixed",
+                      "value": "registry-reviewed"
+                    }
+                  }
+                }
+              ]
+            },
+            "trigger": {
+              "requestId": "req_0043",
+              "type": "where_is_my_order",
+              "orderId": "ord_1043"
+            },
+            "dryRun": true
+          }
+        }
+      },
+      "httpStatus": 200
+    }
+  ],
+  "mcp": {
+    "runId": "run_b591ca2e730376b7",
+    "status": "completed",
+    "mode": "dry-run",
+    "shopUnchanged": true
+  },
+  "cli": {
+    "list": "pnpm action list-recipes '{\"status\":\"active\"}'",
+    "run": "pnpm action run-recipe '{\"recipe\":{\"id\":\"ver_registry_smoke1\",\"recipeId\":\"recipe_registry_smoke\",\"version\":1,\"name\":\"Delivery request review\",\"trigger\":{\"event\":\"request.created\",\"match\":{\"==\":[{\"var\":\"trigger.type\"},\"where_is_my_order\"]}},\"steps\":[{\"id\":\"request\",\"kind\":\"action\",\"action\":\"get-request\",\"args\":{\"requestId\":{\"mode\":\"path\",\"path\":\"trigger.requestId\"}}},{\"id\":\"tag\",\"kind\":\"action\",\"action\":\"tag-request\",\"args\":{\"requestId\":{\"mode\":\"path\",\"path\":\"trigger.requestId\"},\"tag\":{\"mode\":\"fixed\",\"value\":\"registry-reviewed\"}}}]},\"trigger\":{\"requestId\":\"req_0043\",\"type\":\"where_is_my_order\",\"orderId\":\"ord_1043\"},\"dryRun\":true}'",
+    "dryRunCompleted": true,
+    "shopUnchanged": true
+  },
+  "agent": {
+    "model": "deepseek-v4-pro:0813",
+    "threadId": "thread-1793590242510-mp0tsc",
+    "discovery": "There's one active runtime recipe skill available to me.\n\n**Delivery request review** (`recipe_registry_smoke`, active version 2)\n- **Trigger:** fires on `request.created` when the request type is `where_is_my_order`\n- **Steps:** reads the request with `get-request`, then tags it `registry-reviewed`\n- **Status:** skill is published and healthy; 12 runs so far, last result `completed`\n\nThat's the only active recipe in the catalog right now.",
+    "reply": "The Delivery request review dry-run simulated cleanly, then the full run completed and applied the `registry-reviewed` tag to the request. Both runs finished with no blocked steps.",
+    "toolNames": [
+      "resources",
+      "get-request",
+      "get-recipe",
+      "run-recipe",
+      "run-recipe"
+    ],
+    "runCardCount": 2,
+    "renderedCards": 2,
+    "persistedTag": true,
+    "runModes": [
+      "dry-run",
+      "execute"
+    ]
+  },
+  "claude": {
+    "verified": true,
+    "toolNames": [
+      "ToolSearch",
+      "mcp__muscle_memory__list-recipes",
+      "mcp__muscle_memory__run-recipe"
+    ],
+    "reply": "I ran **Delivery request review** as a **dry run**, and it finished with status **completed**."
+  },
+  "lifecycle": {
+    "published": true,
+    "updated": true,
+    "removed": true,
+    "sameServerProcess": true
+  }
+}

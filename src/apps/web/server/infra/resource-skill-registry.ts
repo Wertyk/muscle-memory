@@ -29,7 +29,8 @@ export class ResourceSkillRegistry {
       throw new Error("Runtime skills require a description and instructions.");
     }
     const content = `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\nscope: runtime\n---\n\n${instructions}\n`;
-    await resourcePut(this.owner, path, content, "text/markdown");
+    if ((await resourceGetByPath(this.owner, path))?.content !== content)
+      await resourcePut(this.owner, path, content, "text/markdown");
   }
 
   async read(name: string): Promise<string | null> {

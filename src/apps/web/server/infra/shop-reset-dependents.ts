@@ -13,6 +13,7 @@ import {
   demoSteps,
   demonstrations,
   recipeDrafts,
+  recipeSkillPublications,
   recipeHandoffs,
   recipeRuns,
   recipes,
@@ -64,6 +65,7 @@ export const shopResetDependents: readonly ResetDependent[] = [
       scope.all ? undefined : inArray(recipeRuns.id, [...scope.requestRunIds]),
   },
   { table: recipeDrafts, allOnly: true },
+  { table: recipeSkillPublications, allOnly: true },
   { table: recipes, allOnly: true },
   { table: recipeVersions, allOnly: true },
 ];

@@ -1,5 +1,8 @@
 export const recipeMessages = {
   title: "Recipes",
+  skillSyncFailed: "Recipe state saved. Agent recipe discovery needs to sync.",
+  retrySkillSync: "Retry discovery sync",
+  skillSyncRetried: "Discovery sync retried. Check its status before continuing.",
   crystallize: "Crystallize with agent",
   crystallizePrompt: "Crystallize this draft into a named, reusable recipe. Follow the crystallize skill: read the draft and source demonstration, resolve the listed ambiguities, ask at most two questions if needed, then update and save through Recipe Studio with proposal notes. Dry-run a different request of the same type and report its arguments and tokens. Keep activation for my review.",
   proposal: "Recipe proposal",

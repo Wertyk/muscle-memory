@@ -14,7 +14,7 @@ UI-owned navigation key. `view-screen.backtest` is the latest backtest/compariso
 summary actually shown in this Studio tab, or null. It is session evidence,
 scoped to immutable saved versions; leaving Studio clears it.
 
-1. `list-recipes({})` returns status, latest saved version, runs and last result.
+1. `list-recipes({status:"active"})` discovers runnable recipes and their `activeVersion` snapshots. Omit status for the complete catalog, latest saved version, runs and last result.
    `get-recipe({recipeId})` returns metadata and immutable history/diffs.
 2. `get-recipe-draft({recipeId})` returns editable `content: {name,trigger,steps}`,
    `revision`, `baseVersionId`, original scoped ambiguity entries and `issues`.
@@ -50,6 +50,12 @@ scoped to immutable saved versions; leaving Studio clears it.
    nudge to run one), then `activate-recipe({recipeId,versionId})` explicitly
    selects that saved version for future intake. Invalid snapshots cannot activate.
    `deactivate-recipe({recipeId})` clears the active pointer, retaining history/runs.
+   Activation publishes an app-shared runtime skill immediately; deactivation removes
+   it. Another activated version replaces the same skill. Read `skillPublication`
+   in the result or `get-recipe`: failures never undo the catalog change. For
+   `retryable:true`, use `retry-recipe-skill({recipeId})` (or Studio's Retry discovery
+   sync control). It reconciles the current pointer without changing activation.
+   Never reactivate an older version just to retry publication.
 
 Draft edits never execute shop actions or invoke a model. Money uses integer
 minor units; USD 100 is 10000. References may use only earlier unconditional

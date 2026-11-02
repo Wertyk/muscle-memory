@@ -40,6 +40,7 @@ import { CompleteTextExtractor } from "./infra/complete-text-extraction.js";
 import { DemoIntake } from "./infra/demo-intake.js";
 import { RecipeActionInvoker } from "./infra/recipe-action-invoker.js";
 import { DrizzleRecipeCatalog } from "./infra/recipe-catalog.js";
+import { RecipeSkillRegistry } from "./infra/recipe-skill-registry.js";
 import { DrizzleRecipeStudioStore } from "./infra/recipe-studio-store.js";
 import { RegistryActionInvoker } from "./infra/registry-action-invoker.js";
 import { RequestIntake } from "./infra/request-intake.js";
@@ -65,6 +66,7 @@ export function createRecipeStudio(db: ShopDb, context?: ActionRunContext) {
   return new RecipeStudio(
     new DrizzleRecipeStudioStore(db, demonstrationOwner(context)),
     () => `ver_${randomBytes(8).toString("hex")}`,
+    new RecipeSkillRegistry(db),
   );
 }
 export function getRecipeStudio(context?: ActionRunContext) {

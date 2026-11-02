@@ -8,6 +8,7 @@ import type {
   RequestMatch,
   Run,
   StudioDraft,
+  SkillPublication,
 } from "@muscle-memory/recipe-engine";
 import type {
   Customer,
@@ -305,3 +306,9 @@ export const demoSteps = pgTable(
   },
   (table) => [primaryKey({ columns: [table.demonstrationId, table.sequence] })],
 );
+
+// Publication is independently retryable; it never controls the active pointer.
+export const recipeSkillPublications = pgTable("recipe_skill_publications", {
+  recipeId: varchar("recipe_id", { length: 31 }).primaryKey().references(() => recipes.id, { onDelete: "cascade" }),
+  publication: jsonb("publication").$type<SkillPublication>().notNull(),
+});

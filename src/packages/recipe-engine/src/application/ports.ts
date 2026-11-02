@@ -106,3 +106,25 @@ export interface DemonstrationRecords {
   /** Atomically replace the entire snapshot, including removal of superseded steps. */
   save(demonstration: Demonstration): Promise<void>;
 }
+
+export interface RuntimeSkill {
+  readonly name: string;
+  readonly description: string;
+  readonly instructions: string;
+}
+export interface SkillPublication {
+  readonly status: "pending" | "published" | "removed" | "failed";
+  readonly versionId: string | null;
+  readonly retryable: boolean;
+  /** Safe operator guidance, never a provider/storage error. */
+  readonly message: string | null;
+}
+/** Runtime resource store plus durable publication receipts. The lock serializes
+ * reconciliation across workers; resolve the current catalog pointer inside it. */
+export interface SkillRegistry {
+  withLock<T>(recipeId: string, work: () => Promise<T>): Promise<T>;
+  put(name: string, description: string, instructions: string): Promise<void>;
+  remove(name: string): Promise<void>;
+  record(recipeId: string, publication: SkillPublication): Promise<void>;
+  publication(recipeId: string): Promise<SkillPublication | null>;
+}

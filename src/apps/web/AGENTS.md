@@ -268,13 +268,14 @@ from the selected trigger. Save draft edits before testing them.
 
 | Action | Input | Result / use |
 | --- | --- | --- |
-| `list-recipes` | `{}` | Name, draft/active, latest version, run count, last result |
+| `list-recipes` | Optional `status:"active"|"draft"` | Catalog plus active immutable snapshot, trigger and skill publication receipt |
 | `get-recipe` | `recipeId` | Catalog metadata and immutable history with content diffs |
 | `get-recipe-draft` | `recipeId` (Studio) or `versionId` (TASK-11 original) | Studio content/revision/base/ambiguities/issues; original reads retain owner/workspace scope |
 | `update-recipe-draft` | `recipeId`, `expectedRevision`, `content: {name,trigger,steps}` | Editable draft and inline validation issues; preserves original ambiguity evidence |
 | `save-recipe-version` | `recipeId`, `expectedRevision` | New immutable version; never activates implicitly |
 | `activate-recipe` | `recipeId`, `versionId` | Select valid saved version for future intake |
-| `deactivate-recipe` | `recipeId` | Clear active pointer; retain versions and pinned runs |
+| `deactivate-recipe` | `recipeId` | Clear active pointer and runtime skill; retain versions and pinned runs |
+| `retry-recipe-skill` | `recipeId` | Retry publication/removal for the current active pointer without changing it |
 
 `navigate` supports `view=recipes` and `view=recipe, recipeId`. Navigation and
 selection carry the recipe ID; `view-screen` includes current history/draft.
@@ -290,3 +291,12 @@ Studio approvals use Never / Always / When controls plus Advanced JSON. Prefer
 accepts money thresholds in dollars; action JSON uses integer minor units.
 Message previews show text with symbolic source chips, without evaluating or
 calling a model. Minor ambiguity entries are still preserved as review evidence.
+
+Activating a version publishes its runtime recipe skill without deploy/restart.
+The app-wide catalog uses app-shared skill resources, so every app operator sees
+it on the next turn. `skillPublication` is durable pending/published/removed/failed
+state in activation results and catalog reads. A publication failure preserves
+activation; use `retry-recipe-skill` or Studio's Retry discovery sync control.
+Retry reads the current pointer, never the old failed version. Read a recipe's
+runtime skill, verify the current active version/trigger, and dry-run before
+executing. MCP/CLI parity and local auth: `server/recipe-execution.md` TASK-20.

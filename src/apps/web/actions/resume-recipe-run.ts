@@ -15,6 +15,7 @@ export default defineAction({
     retry: booleanFlagSchema.default(false).describe("Default false; true retries only safe failed reads/extraction/evaluation, never uncertain mutations"),
   }).refine((input) => !(input.approval && input.retry), "Choose approval or retry, not both"),
   outputSchema: runOutputSchema,
+  mcpApp: { structuredContent: true },
   chatUI: { renderer: APPROVAL_CARD_RENDERER, title: "Recipe approval" },
   errors: recipeErrors,
   run: async (input, context) => {

@@ -10,7 +10,7 @@ import {
 } from "../server/studio-action-contracts.js";
 export default defineAction({
   description:
-    "Activate an explicitly selected valid saved version belonging to recipeId. Intake uses this immutable pointer for future requests. Draft edits never run.",
+    "Activate an explicitly selected valid saved version belonging to recipeId. Intake uses this immutable pointer for future requests. Draft edits never run. Publishes a runtime recipe skill without restart; skillPublication reports retryable failures without rolling back activation.",
   schema: z.object({ recipeId: studioId, versionId: studioId }),
   errors: studioErrors,
   link: ({ result }) => studioLink(result),

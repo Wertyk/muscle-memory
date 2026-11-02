@@ -55,6 +55,13 @@ export const recipeMigrations: MigrationEntry[] = [{
     version_id VARCHAR(31) PRIMARY KEY REFERENCES recipe_versions(id),
     owner_email TEXT NOT NULL, workspace_id TEXT NOT NULL, evidence JSONB NOT NULL
   );`,
+}, {
+  version: 4,
+  name: "task20-recipe-skill-publications",
+  sql: `CREATE TABLE IF NOT EXISTS recipe_skill_publications (
+    recipe_id VARCHAR(31) PRIMARY KEY REFERENCES recipes(id) ON DELETE CASCADE,
+    publication JSONB NOT NULL
+  );`,
 }];
 
 export const migrateRecipes = runMigrations(recipeMigrations, { table: "_muscle_memory_recipe_migrations" });

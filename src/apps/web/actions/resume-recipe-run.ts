@@ -5,7 +5,7 @@ import { getRecipeUseCases } from "../server/composition.js";
 import { booleanFlagSchema, recipeErrors, recipeOperation, runIdSchema, runOutputSchema } from "../server/recipe-action-contracts.js";
 
 export default defineAction({
-  description: "Resume a saved recipe run: approve/reject its exact awaiting step, explicitly retry a safe failed step, or retry pending handoff delivery. Completed mutations are never replayed.",
+  description: "Resume a saved recipe run: approve/reject its exact awaiting step, explicitly retry a safe failed step, or retry pending handoff delivery. Completed mutations are never replayed. Automatically displays a run/approval card. Keep the entire text reply to one or two sentences total for all runs: status and next step; no tables, step details or raw IDs.",
   schema: z.object({
     runId: runIdSchema.describe("Saved recipe run ID"),
     approval: z.object({

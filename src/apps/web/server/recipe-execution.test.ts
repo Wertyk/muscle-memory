@@ -630,6 +630,10 @@ describe("recipe execution against REAL seeded shop actions on PGlite", () => {
     expect(runRecipe.chatUI?.renderer).toBe(RUN_CARD_RENDERER);
     expect(getRecipeRun.chatUI?.renderer).toBe(RUN_CARD_RENDERER);
     expect(resumeRecipeRun.chatUI?.renderer).toBe(APPROVAL_CARD_RENDERER);
+    for (const cardAction of [runRecipe, getRecipeRun, resumeRecipeRun]) {
+      expect(cardAction.tool.description).toContain("one or two sentences total for all runs");
+      expect(cardAction.tool.description).toContain("no tables, step details or raw IDs");
+    }
     const done = await resumeRecipeRun.run({ runId: paused.id, approval: { stepId: "reply", decision: "approve" }, retry: false }, context);
     expect(done.status).toBe("completed");
     expect(await refunds()).toHaveLength(1);

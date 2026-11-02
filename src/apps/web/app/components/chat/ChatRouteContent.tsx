@@ -38,6 +38,7 @@ import {
   McpAgentKitConnectionResume,
 } from "@agent-native/toolkit/app/chat/agentkit-chat/connections";
 import { CoreAgentKitRoot } from "@agent-native/toolkit/app/chat/agentkit-chat/index";
+import { recipeCardOrder } from "@/lib/chat-card-order";
 import {
   GuidedQuestionFlow,
   useGuidedQuestionFlow,
@@ -348,6 +349,7 @@ function ChatThreadRouteContent({
         <CoreComposerRuntimeProvider>
           <CoreAgentKitRoot
             transport={transport}
+            resolveMessageContentOrder={recipeCardOrder}
             clientOptions={{
               transportOwnership: "owned",
               retainActiveRunsOnThreadRelease: true,

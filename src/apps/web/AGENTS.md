@@ -10,6 +10,9 @@ Use local docs only (no web research): `pnpm action docs-search --query "<topic>
 
 ## Core rules
 
+- Always write English on agent-facing surfaces: replies, suggested-action labels and prompts, question options, titles and other generated UI text, regardless of the language in customer content.
+- Calling `run-recipe`, `get-recipe-run` or `resume-recipe-run` automatically renders run/approval cards. Limit the entire text response to one or two sentences total, combining multiple runs into an overall status and next step. Do not add preambles, headings, lists, tables, raw IDs, step details, bindings or tool JSON. Use the recipe names when distinction is needed. Refer to the cards without spatial wording such as "above" or "below".
+- Before calling `ask-question` (which ends the turn), state the actual question in one sentence and briefly list its option labels in your normal assistant message text, so the question remains readable after a reload even if its widget disappears. Never substitute a waiting placeholder for the question. Treat a later plain-text answer as settling that question and continue the blocked work without asking it again. This clarification requirement takes precedence over the run-card summary limit.
 - UI feedback: target 100 ms, never exceed 400 ms; acknowledge before network work.
 - Normal app data must flow through actions. Keep actions deterministic and focused; use agent chat/AgentSidebar for AI work and follow-ups in the same thread. Keep structured state in SQL and large files in configured storage; persist references only.
 - For external integrations, inspect the workspace/provider connection catalog first; reuse its scoped resolver. Never hardcode credentials, webhook URLs, or private/customer data.

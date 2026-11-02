@@ -6,6 +6,7 @@ import type {
 } from "@agent-native/agentkit/protocol";
 import { AgentKitChat } from "@agent-native/toolkit/app/agentkit";
 import { CoreAgentKitRoot } from "@agent-native/toolkit/app/chat/agentkit-chat";
+import { recipeCardOrder } from "@/lib/chat-card-order";
 import type { Run } from "@muscle-memory/recipe-engine";
 import {
   APPROVAL_CARD_RENDERER,
@@ -437,7 +438,7 @@ describe("run detail and list", () => {
   });
 });
 
-async function transcript(action: string, renderer: string) {
+async function transcript(action: string, renderer: string, closingText = false) {
   const tool: AgentToolCall = {
     id: "tool_run",
     name: action,
@@ -467,7 +468,7 @@ async function transcript(action: string, renderer: string) {
               id: "message_run",
               role: "assistant",
               status: "complete",
-              parts: [{ type: "widget", widget }],
+              parts: closingText ? [{ type: "text", text: "Review the approval card to continue." }] : [{ type: "widget", widget }],
             },
           ],
           toolCalls: [tool],
@@ -478,13 +479,22 @@ async function transcript(action: string, renderer: string) {
   });
   await chat.loadThread("thread_runs");
   await mount(
-    <CoreAgentKitRoot controller={chat} threadId="thread_runs" load="manual">
+    <CoreAgentKitRoot controller={chat} threadId="thread_runs" load="manual" resolveMessageContentOrder={recipeCardOrder}>
       <AgentKitChat composer={false} />
     </CoreAgentKitRoot>,
   );
 }
 
 describe("registered renderers inside the mounted AgentKit chat transcript", () => {
+  it("places a restored approval card before the brief closing text", async () => {
+    await transcript("get-recipe-run", RUN_CARD_RENDERER, true);
+    await settle(() => expect(element.querySelector("[data-run-card]")).not.toBeNull());
+    const card = element.querySelector("[data-run-card]")!;
+    const closing = [...element.querySelectorAll("p")].find((node) => node.textContent === "Review the approval card to continue.")!;
+    expect(closing).toBeDefined();
+    expect(card.compareDocumentPosition(closing) & 4).toBe(4);
+    expect(element.querySelectorAll("[data-run-card]")).toHaveLength(1);
+  });
   it.each([
     ["run-recipe", RUN_CARD_RENDERER],
     ["get-recipe-run", RUN_CARD_RENDERER],

@@ -1,0 +1,17 @@
+{
+  "model": "deepseek-v4-pro:0813",
+  "engine": "ai-sdk:openai",
+  "origin": "http://localhost:8080",
+  "threadId": "thread-1793587015062-xpahk6",
+  "prompt": "Help me decide a refund recipe policy: should every refund require human approval or only refunds above $100? Use the question widget to ask me once, with options 'Every refund' and 'Only above $100'. Wait for my answer, then explain the chosen policy in one sentence. Do not change any recipes or shop data.",
+  "question": "Should every refund require human approval, or only refunds above $100?",
+  "options": [
+    "Every refund",
+    "Only above $100"
+  ],
+  "beforeReload": "Should refunds require human approval for every amount, or only when they exceed $100? Options: **Every refund** or **Only above $100**.Waiting for your answer before continuing.",
+  "afterReload": "Should refunds require human approval for every amount, or only when they exceed $100? Options: **Every refund** or **Only above $100**.Waiting for your answer before continuing.",
+  "typedAnswer": "Every refund.",
+  "continuation": "Under the chosen policy, every refund requires human approval regardless of amount, so no refund is ever auto-approved.",
+  "limitation": "Browser access host unavailable; native Chrome access rejected by computer-use approval. Verified using the same AgentKit client/transport as the UI, with a new client and transport loading the saved thread before the typed answer."
+}

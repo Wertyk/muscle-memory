@@ -5,7 +5,7 @@ import { getRecipeUseCases } from "../server/composition.js";
 import { booleanFlagSchema, recipeErrors, recipeJsonInputSchema, recipeVersionInputSchema, recipeOperation, runOutputSchema } from "../server/recipe-action-contracts.js";
 
 export default defineAction({
-  description: "Start an immutable recipe version with a trigger. dryRun simulates reads/extraction and reports planned mutations; recipe gates control execution approval.",
+  description: "Start an immutable recipe version with a trigger. dryRun simulates reads/extraction and reports planned mutations; recipe gates control execution approval. Automatically displays a run/approval card. Keep the entire text reply to one or two sentences total for all runs: status and next step; no tables, step details or raw IDs.",
   schema: z.object({
     recipe: recipeVersionInputSchema.describe("Complete validated recipe version snapshot; existing version identities cannot be edited"),
     trigger: recipeJsonInputSchema.describe("Trigger payload including requestId for request handoffs"),

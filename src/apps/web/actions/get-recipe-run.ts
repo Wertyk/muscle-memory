@@ -5,7 +5,7 @@ import { getRecipeUseCases } from "../server/composition.js";
 import { recipeErrors, runIdSchema, runOutputSchema } from "../server/recipe-action-contracts.js";
 
 export default defineAction({
-  description: "Read a durable recipe run with its immutable version, step attempts, resolved inputs/results, metrics, approval gate and handoff context.",
+  description: "Read a durable recipe run with its immutable version, step attempts, resolved inputs/results, metrics, approval gate and handoff context. Automatically displays a run/approval card. Keep the entire text reply to one or two sentences total for all runs: status and next step; no tables, step details or raw IDs.",
   schema: z.object({ runId: runIdSchema.describe("Saved recipe run ID") }),
   outputSchema: runOutputSchema,
   chatUI: { renderer: RUN_CARD_RENDERER, title: "Recipe run" },

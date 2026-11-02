@@ -1,0 +1,112 @@
+{
+  "model": "deepseek-v4-pro:0813",
+  "engine": "ai-sdk:openai",
+  "origin": "http://localhost:8080",
+  "wholesale": {
+    "threadId": "thread-1793585152318-frkz28",
+    "message": "Review the wholesale handoff for req_0065. Read its request and processing context, then explain what the operator needs to decide before replying. Do not change the request or send a reply yet.",
+    "title": "Wholesale Handoff Decision Review",
+    "reply": "Here's what I found on the wholesale handoff for **req_0065**.\n\n**The request** — Noura Velden (cus_0005) is writing on behalf of **Juniper Table Cafe** (a new neighborhood cafe), asking for a quote on **24 mugs** plus lead time. It's a pre-sales wholesale inquiry with no linked order.\n\n**Why it's sitting with you** — Intake classified it as `wholesale_inquiry` but **no active recipe matched**, so the run handoff escalated it to an agent (reason: \"No active recipe matches this request\"). There are only draft recipes in the catalog (`Wholesale enquiry review` among them), none activated for intake.\n\n**What you need to decide before replying** — the quote itself is a business decision, not something the shop data can compute:\n\n1. **Price / quote amount.** There's no wholesale pricing or catalog source exposed in the shop actions, so you'll need to supply the per-mug price (or total for 24) from your own pricing knowledge. There's no customer order or product record to pull a figure from.\n2. **Lead time.** The customer explicitly asked for lead time; this is also a policy number you must provide — nothing in the system derives it.\n3. **Whether to treat this as a real wholesale/B2B opportunity** vs. a standard retail reply (the customer is a normal retail contact representing a company), and whether to route it to a human sales owner rather than send an agent reply.\n\nNothing has been changed — the request is still `escalated` with no reply sent and no tags. Once you settle the quote and lead time, I can draft the reply and resolve it.",
+    "suggestions": [
+      {
+        "label": "Draft the wholesale quote reply",
+        "prompt": "Draft a reply to req_0065 with a quote for 24 mugs and a lead time, then let me review it before sending.",
+        "id": "run-1793585152465-5s8sul:follow-up:1",
+        "runId": "run-1793585152465-5s8sul",
+        "updatedAt": "2026-11-02T02:06:00.522Z"
+      },
+      {
+        "label": "Activate a wholesale recipe",
+        "prompt": "Review the 'Wholesale enquiry review' draft recipe and help me activate it so future wholesale inquiries don't escalate.",
+        "id": "run-1793585152465-5s8sul:follow-up:2",
+        "runId": "run-1793585152465-5s8sul",
+        "updatedAt": "2026-11-02T02:06:00.522Z"
+      },
+      {
+        "label": "Escalate to a human sales owner",
+        "prompt": "Escalate req_0065 to a human sales owner for a wholesale quote decision.",
+        "id": "run-1793585152465-5s8sul:follow-up:3",
+        "runId": "run-1793585152465-5s8sul",
+        "updatedAt": "2026-11-02T02:06:00.522Z"
+      }
+    ],
+    "toolNames": [
+      "list-request-processing",
+      "get-request",
+      "get-customer",
+      "list-recipes"
+    ]
+  },
+  "runs": {
+    "threadId": "thread-1793585162431-koefiy",
+    "message": "Inspect these two saved runs with get-recipe-run: run_e164d59b274eba53 and run_d3a0189328537294. What is their status and next step? Do not approve or change either run.",
+    "title": "Inspect two recipe run statuses",
+    "reply": "The \"Wholesale request lookup\" run completed; the \"Wholesale review approval\" run is awaiting approval. Review the approval card to continue — no changes made.",
+    "suggestions": [
+      {
+        "label": "Show the approval run details",
+        "prompt": "Show the full details and current step for run_d3a0189328537294, the Wholesale review approval run.",
+        "id": "run-1793585162512-c3ply0:follow-up:1",
+        "runId": "run-1793585162512-c3ply0",
+        "updatedAt": "2026-11-02T02:06:07.284Z"
+      },
+      {
+        "label": "Explain what the completed run did",
+        "prompt": "Summarize the actions and results of the completed Wholesale request lookup run (run_e164d59b274eba53).",
+        "id": "run-1793585162512-c3ply0:follow-up:2",
+        "runId": "run-1793585162512-c3ply0",
+        "updatedAt": "2026-11-02T02:06:07.284Z"
+      },
+      {
+        "label": "What is blocking the approval run",
+        "prompt": "Explain what is pending or blocking the Wholesale review approval run from progressing.",
+        "id": "run-1793585162512-c3ply0:follow-up:3",
+        "runId": "run-1793585162512-c3ply0",
+        "updatedAt": "2026-11-02T02:06:07.284Z"
+      }
+    ],
+    "toolNames": [
+      "tool-search",
+      "get-recipe-run",
+      "get-recipe-run"
+    ]
+  },
+  "liveContentOrder": [
+    "run-card",
+    "run-card",
+    "text"
+  ],
+  "reload": {
+    "runCardCount": 2,
+    "title": "Inspect two recipe run statuses",
+    "contentOrder": [
+      "run-card",
+      "run-card",
+      "text"
+    ],
+    "cardMessageIds": [
+      "server-run-1793585162512-c3ply0",
+      "server-run-1793585162512-c3ply0"
+    ],
+    "messageParts": [
+      {
+        "role": "user",
+        "id": "server-user-run-1793585162512-c3ply0",
+        "parts": [
+          "text"
+        ]
+      },
+      {
+        "role": "assistant",
+        "id": "server-run-1793585162512-c3ply0",
+        "parts": [
+          "data",
+          "data",
+          "data",
+          "text"
+        ]
+      }
+    ]
+  },
+  "limitation": "Browser automation host unavailable. Live model, stream order and reloaded snapshot checked over authenticated HTTP with the public Toolkit ordering helper; mounted Toolkit rendering/order checked by offline regressions."
+}

@@ -90,6 +90,8 @@ export function CrystallizeControl({
           }),
           submit: true,
           openSidebar: true,
+          newTab: true,
+          reuseEmptyTab: true,
         })
       }
     >

@@ -112,7 +112,7 @@ export function valueSummary(value: JsonValue, context: PresentationContext = {}
     if (Array.isArray(value)) return value.slice(0, 3).map((item) => render(item, depth + 1)).join(" · ") + (value.length > 3 ? ` · +${value.length - 3}` : "");
     const preferred = ["body", "amount", "orderId", "requestId", "productId", "tag", "reason", "status", "orderStatus", "note", "id"];
     const rank = (key: string) => preferred.includes(key) ? preferred.indexOf(key) : preferred.length;
-    const entries = Object.entries(value).sort(([a], [b]) => rank(a) - rank(b));
+    const entries = Object.entries(value).filter(([, child]) => !(child !== null && typeof child === "object" && Object.keys(child).length === 0)).sort(([a], [b]) => rank(a) - rank(b));
     return entries.slice(0, 4).map(([key, child]) => `${fieldLabel(key)}: ${render(child, depth + 1)}`).join(" · ") + (entries.length > 4 ? ` · +${entries.length - 4} fields` : "");
   };
   return bounded(render(value, 0), typeof value === "string" ? 220 : 350);

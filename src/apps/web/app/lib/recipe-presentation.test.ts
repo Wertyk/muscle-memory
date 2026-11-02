@@ -44,6 +44,15 @@ describe("shared recipe presentation", () => {
     expect(valueSummary({ body: "a".repeat(500), note: "b".repeat(500) })).toMatch(/…$/);
   });
 
+  it("omits empty collection fields from summaries without dropping meaningful falsy values", () => {
+    expect(valueSummary({ requestId: "req_0033", template: "Hi Hana, welcome to Kiln & Co.", variables: {}, attachments: [] }))
+      .toBe("Request ID: req_0033 · Template: Hi Hana, welcome to Kiln & Co.");
+    expect(valueSummary({ values: { variables: {}, items: [], zero: 0, enabled: false, text: "", missing: null } }))
+      .toBe("Values: Zero: 0 · Enabled: false · Text:  · Missing: —");
+    expect(valueSummary({ a: {}, b: [], c: {}, d: [], first: 0, second: false, third: "", fourth: "kept", fifth: 5 }))
+      .toBe("First: 0 · Second: false · Third:  · Fourth: kept · +1 fields");
+  });
+
   it("uses the newest run's resolved currency before the demonstration and shop fallback", () => {
     const demonstration = { trigger: {}, steps: [{ id: "refund", input: { amount: { amountMinor: 14000, currency: "GBP" } }, output: null }] };
     const run = { trigger: {}, steps: [

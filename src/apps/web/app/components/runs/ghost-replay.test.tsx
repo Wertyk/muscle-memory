@@ -9,6 +9,7 @@ import enUS from "@/i18n/en-US";
 import { canReplay, initialReplayState, replayPhases, replaySteps, replayWorkspace, savedReply, transitionReplay, type ReplayState } from "@/lib/ghost-replay";
 
 import { ReplayButton } from "./GhostReplay";
+import { ReplayWorkspace } from "./ReplayWorkspace";
 
 const actions = vi.hoisted(() => ({ mutationHook: vi.fn(), queryHook: vi.fn(), call: vi.fn() }));
 vi.mock("@agent-native/core/client/hooks", () => ({
@@ -165,6 +166,35 @@ afterEach(async () => {
 });
 
 describe("read-only ghost playback", () => {
+  it("shows ordered template values with formatted money, text and IDs in the reply phase", async () => {
+    const base = checkpoint();
+    const input = { variables: { customerName: "Hana", refundAmount: { amountMinor: 1900, currency: "USD" }, orderId: "ord_1042" } };
+    const run = { ...base, steps: base.steps.map((step) => step.stepId === "reply" ? { ...step, input } : step) };
+    const reply = replaySteps(run, translate)[2]!;
+    await act(async () => root.render(<ReplayWorkspace run={run} step={reply} phase={reply.phases[0]!} />));
+    const caption = [...host.querySelectorAll("p")].find((item) => item.textContent?.startsWith("Template values"))!;
+    expect(caption).toBeDefined();
+    expect(caption.textContent).toBe("Template valuescustomerName HanarefundAmount $19.00orderId ord_1042");
+    expect([...caption.querySelectorAll(".kiln-data")].map((value) => value.textContent)).toEqual(["Hana", "$19.00", "ord_1042"]);
+    expect([...caption.querySelectorAll(".text-muted-foreground")].map((name) => name.textContent)).toEqual(["Template values", "customerName", "refundAmount", "orderId"]);
+    expect(caption.classList.contains("flex-wrap")).toBe(true);
+    expect([...caption.querySelectorAll(".kiln-data")].every((value) => value.parentElement?.classList.contains("[overflow-wrap:anywhere]"))).toBe(true);
+    expect(host.textContent).not.toContain("Variables as JSON");
+    await act(async () => root.render(<ReplayWorkspace run={run} step={reply} phase={{ target: null, view: "workspace" }} />));
+    expect(host.textContent).not.toContain("Template values");
+  });
+
+  it.each([{}, undefined])("omits the template caption for empty or missing variables (%j)", async (variables) => {
+    const base = checkpoint();
+    const input = variables === undefined ? {} : { variables };
+    const run = { ...base, steps: base.steps.map((step) => step.stepId === "reply" ? { ...step, input } : step) };
+    const reply = replaySteps(run, translate)[2]!;
+    await act(async () => root.render(<ReplayWorkspace run={run} step={reply} phase={reply.phases[0]!} />));
+    expect(host.textContent).not.toContain("Template values");
+    expect(host.textContent).not.toContain("Variables as JSON");
+    expect(host.querySelector('[data-replay-target="reply-composer"] .kiln-data')).toBeNull();
+  });
+
   it("plays the menu and refund preview, pauses, and steps through saved reply/tag values without actions", async () => {
     await open();
     expect(document.body.textContent).toContain("Looked up order ord_1006");

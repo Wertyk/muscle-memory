@@ -60,6 +60,8 @@ new draft; do not repeat an uncertain create without checking the catalog.
 4. Name the recipe clearly. `update-recipe-draft({recipeId,expectedRevision,content})`
    replaces the COMPLETE `{name,trigger,steps}`. Fix returned `issues` until empty;
    unknown operators/paths are errors, not reasons to guess another save path.
+   Preserve existing step IDs; only new steps get new IDs. Never renumber or rename
+   existing IDs: ambiguity evidence and demonstration values are keyed by step ID.
    Re-read after conflicts. `save-recipe-version({recipeId,expectedRevision,proposal})`
    saves using the returned revision. `proposal` is chat presentation only:
    `{description,trigger:"human terms",resolutions:[{ambiguity,resolution}]}`.

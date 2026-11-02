@@ -22,6 +22,8 @@ scoped to immutable saved versions; leaving Studio clears it.
    read (null for absent/unowned review evidence). Preserve its version ID.
 3. Edit a detached copy of content, then call
    `update-recipe-draft({recipeId,expectedRevision:revision,content})`.
+   Preserve existing step IDs; only new steps get new IDs. Never renumber or rename
+   existing IDs: ambiguity evidence and demonstration values are keyed by step ID.
    Bindings: `fixed.value`, `path.path`, `expr.expr` (safe JSONLogic),
    `template.template` with `{{trigger.field}}` / `{{steps.id.output.field}}`.
    Steps: action/extract/branch/handoff; each may have an `approval` expression.

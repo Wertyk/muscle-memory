@@ -3,7 +3,7 @@ import type { JsonValue } from "@muscle-memory/recipe-engine";
 import { describe, expect, it } from "vitest";
 
 import {
-  circuitLanes, circuitRoundedPath, circuitHighlightReducer, circuitPaths, circuitSelection, circuitSourceExample,
+  circuitLanes, circuitRoundedPath, circuitHighlightReducer, circuitPaths, circuitSelection, circuitSourceExample, circuitExampleContext,
   circuitTargetId, emptyCircuitHighlight, recipeCircuit,
 } from "./recipe-circuit";
 import { formulaLabel, presentationContext } from "./recipe-presentation";
@@ -68,11 +68,11 @@ describe("recipe circuit sources", () => {
   });
   it("reads demonstration examples from already loaded evidence, preserving false/zero/null and no invented outputs", () => {
     const model = recipeCircuit(content);
-    const context = presentationContext({ trigger: { orderId: "ord_new" }, steps: [] }, {
+    const context = circuitExampleContext(model.sources, presentationContext({ trigger: { orderId: "ord_new" }, steps: [] }, {
       trigger: { orderId: "ord_1042", quantity: 0, customerName: null }, steps: [
         { id: "order", input: {}, output: { items: [{ name: "Platter" }], total: { currency: "EUR" } } },
       ],
-    });
+    }));
     const example = (key: string) => circuitSourceExample(model.sources.find((source) => source.path === key)!, context);
     expect(example("trigger.orderId")).toBe("ord_1042");
     expect(example("trigger.quantity")).toBe("0");
@@ -80,6 +80,41 @@ describe("recipe circuit sources", () => {
     expect(example("steps.order.output.items.0.name")).toBe("Platter");
     expect(example("steps.refund.output.amount")).toBeUndefined();
     expect(circuitSourceExample({ id: "false", group: "Constants", label: "Flag", mode: "constant", value: false }, {})).toBe("false");
+  });
+  it("uses one request's examples after step IDs change, preferring the demonstration on coverage ties", () => {
+    const model = recipeCircuit({ steps: [
+      { id: "step_1", kind: "action", action: "get-order", args: { orderId: path("trigger.orderId") } },
+      { id: "reply", kind: "action", action: "send-reply", args: {
+        requestId: path("trigger.requestId"), variables: { items: path("steps.step_1.output.items"), name: path("steps.step_2.output.name"),
+          subject: path("trigger.subject"), original: path("trigger.demonstrationOnly") },
+      } },
+    ] });
+    const evidence = presentationContext({
+      trigger: { orderId: "ord_0033", requestId: "req_0033", subject: "Hana's request" }, steps: [
+        { stepId: "step_1", input: {}, output: { items: [{ productId: "prd_0033", name: "Ocean Bowl", quantity: 4 }] } },
+        { stepId: "step_2", input: {}, output: { name: "Hana Wycliffe" } },
+      ],
+    }, {
+      trigger: { orderId: "ord_1001", requestId: "req_0001", subject: "Maya's request", demonstrationOnly: "Original detail" }, steps: [
+        { id: "step_2", input: {}, output: { items: [{ productId: "prd_0001", name: "Platter", quantity: 1 }] } },
+        { id: "step_4", input: {}, output: { name: "Maya" } },
+      ],
+    });
+    const selected = circuitExampleContext(model.sources, evidence);
+    const example = (key: string, context = selected) => circuitSourceExample(model.sources.find((source) => source.path === key)!, context);
+    expect(selected.snapshots).toHaveLength(1);
+    expect(example("trigger.orderId")).toBe("ord_0033");
+    expect(example("trigger.requestId")).toBe("req_0033");
+    expect(example("trigger.subject")).toBe("Hana's request");
+    expect(example("steps.step_1.output.items")).toBe("Ocean Bowl × 4");
+    expect(example("steps.step_2.output.name")).toBe("Hana Wycliffe");
+    expect(example("trigger.demonstrationOnly")).toBeUndefined();
+    expect(selected.productNames).not.toHaveProperty("prd_0001");
+    const tied = circuitExampleContext(model.sources.filter((source) => source.path !== "steps.step_2.output.name"), evidence);
+    expect(example("trigger.orderId", tied)).toBe("ord_1001");
+    expect(example("trigger.demonstrationOnly", tied)).toBe("Original detail");
+    expect(example("steps.step_1.output.items", tied)).toBeUndefined();
+    expect(tied.productNames).not.toHaveProperty("prd_0033");
   });
   it("tolerates empty/invalid editable drafts and keeps a reference-free expression as a formula node", () => {
     expect(recipeCircuit(null)).toEqual({ sources: [], targets: [], edges: [] });

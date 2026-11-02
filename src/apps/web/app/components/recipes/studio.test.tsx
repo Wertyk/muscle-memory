@@ -2,11 +2,14 @@ import {
   setClientAppState,
 } from "@agent-native/core/client/hooks";
 import {
+  DraftRecipeFromDemonstration,
   parseRecipeVersion,
   RecipeStudio,
   type RecipeStudioStore,
   type StudioRecord,
   type JsonObject,
+  type JsonValue,
+  type Demonstration,
 } from "@muscle-memory/recipe-engine";
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -21,6 +24,7 @@ import { backtestRequestType } from "@/lib/recipe-backtests";
 import type { ShopBacktestResult, ShopBacktestComparison } from "@shared/recipe-backtests";
 
 import brokenPlatterDraft from "../../../server/fixtures/broken-platter-draft.json";
+import brokenPlatterDemonstration from "../../../server/fixtures/broken-platter-demonstration.json";
 import { damagedItemFixture } from "../../../server/fixtures/intake-recipes";
 import { RecipePage } from "./RecipePage";
 import { RecipesPage } from "./RecipesPage";
@@ -306,7 +310,7 @@ describe("Recipe Studio UI", () => {
     await click(button("Crystallize with agent"));
     expect(agent.send).toHaveBeenCalledTimes(1);
     const sent = agent.send.mock.calls[0]![0];
-    expect(sent).toMatchObject({ submit: true, openSidebar: true, message: expect.stringContaining("at most two questions") });
+    expect(sent).toMatchObject({ submit: true, openSidebar: true, newTab: true, reuseEmptyTab: true, message: expect.stringContaining("at most two questions") });
     expect(sent.message).not.toMatch(/productId|refund|get-customer|shipping recipient/);
     expect(JSON.parse(sent.context)).toMatchObject({
       workflow: "crystallize", recipeId: record.recipe.id, draftId: record.versions[0]!.id,
@@ -648,6 +652,44 @@ describe("Recipe Studio UI", () => {
     );
     expect(record.draft!.ambiguities).toEqual(entries);
     expect(calls.some((call) => call.method === "POST")).toBe(false);
+  });
+  it("keeps the Teach draft at six questions and retains rewritten-step evidence without growing the review count", async () => {
+    const version = parseRecipeVersion(brokenPlatterDraft);
+    const demonstration = brokenPlatterDemonstration as unknown as Demonstration;
+    const source = await new DraftRecipeFromDemonstration({
+      traces: { transaction: async (work) => work({ get: async () => demonstration, active: async () => null, latest: async () => null, save: async () => {} }) },
+      recipes: { createDraft: async () => {}, getDraft: async () => null },
+      actions: { describe: async (action) => ({ effect: action.startsWith("get-") ? "read" : "mutation" }) },
+      nextId: (kind) => kind === "recipe" ? version.recipeId : version.id,
+    }).execute({ owner: demonstration.scope, demonstrationId: demonstration.id });
+    record = { ...record, recipe: source.recipe, versions: [version] };
+    const base = await studio.getDraft(version.recipeId);
+    const entries = source.ambiguities as unknown as JsonValue[];
+    record = { ...record, draft: { ...base, ambiguities: entries } };
+    await mount(`/recipes/${version.recipeId}`);
+    expect(node.querySelector(".recipe-circuit-ambiguity-notice")?.textContent).toContain("6 ambiguities to review");
+    expect(node.querySelector("#recipe-ambiguities .recipe-count")?.textContent).toBe("6");
+    expect(node.querySelector(".recipe-minor summary")?.textContent).toBe("Minor (2)");
+    expect(entries).toHaveLength(8);
+    const ids: Record<string, string> = { step_2: "step_1", step_6: "step_2", step_7: "step_3", step_8: "step_4" };
+    const content = JSON.parse(JSON.stringify(base.content).replace(/step_(?:2|6|7|8)\b/g, (id) => ids[id]!)) as JsonObject;
+    const updated = await studio.update({ recipeId: version.recipeId, expectedRevision: base.revision, content });
+    await studio.save({ recipeId: version.recipeId, expectedRevision: updated.revision });
+    await act(async () => { await client.invalidateQueries({ queryKey: ["action"] }); });
+    await settle(() => expect(node.textContent).toContain("8 notes from the original demonstration"));
+    expect(node.querySelector(".recipe-circuit-ambiguity-notice")).toBeNull();
+    expect(node.textContent).not.toContain("ambiguities to review");
+    const panel = node.querySelector<HTMLElement>("#recipe-ambiguities")!;
+    expect(panel.querySelector(".recipe-count")?.textContent).toBe("0");
+    expect(panel.querySelector("h3")?.textContent).toBe("From the original demonstration · steps since rewritten");
+    expect([...panel.querySelectorAll("pre")].map((item) => JSON.parse(item.textContent!))).toEqual(entries);
+    expect(panel.querySelectorAll(".recipe-ambiguities > li")).toHaveLength(8);
+    panel.scrollIntoView = vi.fn();
+    await click(button("8 notes from the original demonstration"));
+    expect(panel.scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+    expect(document.activeElement).toBe(panel);
+    expect(record.draft?.baseVersionId).toBe("ver_ui2");
+    expect(record.draft?.ambiguities).toEqual(entries);
   });
   it("authors dollar approval conditions with structured controls and preserves an Advanced fallback", async () => {
     const version = parseRecipeVersion(brokenPlatterDraft);

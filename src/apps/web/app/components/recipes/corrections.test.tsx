@@ -48,7 +48,7 @@ describe("visible operational corrections", () => {
     const buttons = [...node.querySelectorAll("button")].filter(button => button.textContent === "Propose recipe update");
     expect(buttons).toHaveLength(2);
     await act(async () => buttons[0]!.click());
-    expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ submit: true, openSidebar: true }));
+    expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ submit: true, openSidebar: true, newTab: true, reuseEmptyTab: true }));
     expect(JSON.parse(mocks.send.mock.calls[0]![0].context)).toMatchObject({ workflow: "correct-recipe", correction: { id: "cor_ui", runId: "run_ui", stepId: "reply", input: correction.input } });
     expect(node.textContent).toContain("Correction recorded");
   });

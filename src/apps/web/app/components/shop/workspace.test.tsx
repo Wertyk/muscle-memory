@@ -580,14 +580,14 @@ describe("shop workspace with real framework action hooks and an offline action 
   it("keeps the approval banner available while Teach starts and saves on the same request", async () => {
     processing = [processingRow("awaiting_approval")];
     await mount();
-    await settle(() => expect(container.textContent).toContain("Step refund · issue-refund"));
+    await settle(() => expect(container.textContent).toContain(`Issue refund · ${recipeRun.recipe.name} · v${recipeRun.recipe.version}`));
     expect(byText("Approve")).toBeDefined();
     await click(byText("Teach"));
     await settle(() => expect(demonstration?.status).toBe("recording"));
     expect(container.querySelector('[data-processing="awaiting_approval"]')).not.toBeNull();
     await click(byText("Stop & save"));
     await settle(() => expect(demonstration?.status).toBe("completed"));
-    expect(container.textContent).toContain("Step refund · issue-refund");
+    expect(container.textContent).toContain(`Issue refund · ${recipeRun.recipe.name} · v${recipeRun.recipe.version}`);
     expect(byText("Approve")).toBeDefined();
     expect(writes("resume-recipe-run")).toHaveLength(0);
   });
@@ -698,7 +698,7 @@ describe("shop workspace with real framework action hooks and an offline action 
     await mount();
     await settle(() => expect(container.textContent).toContain("Handoff queued for agent review"));
     await click(byText("Open handoff in agent"));
-    expect(agent.send).toHaveBeenCalledWith(expect.objectContaining({ submit: true, openSidebar: true, message: expect.stringContaining("get-recipe-run") }));
+    expect(agent.send).toHaveBeenCalledWith(expect.objectContaining({ submit: true, openSidebar: true, newTab: true, reuseEmptyTab: true, message: expect.stringContaining("get-recipe-run") }));
     const context = agent.send.mock.calls[0]![0].context;
     expect(JSON.parse(context)).toMatchObject({ requestId: request.id, runId: "run_ui", handoffStepId: "handoff" });
     expect(context).not.toContain("privateOriginal");
@@ -722,9 +722,12 @@ describe("shop workspace with real framework action hooks and an offline action 
 
   it.each(["approve", "reject"] as const)("shows the saved step and amount and sends exact %s decision, refreshing the banner", async (decision) => {
     processing = [processingRow("awaiting_approval")];
+    recipeRun = { ...recipeRun, recipe: { ...recipeRun.recipe, name: "Refund half of damaged item price", version: 3 } };
     await mount();
-    await settle(() => expect(container.textContent).toContain("Step refund · issue-refund"));
-    expect(container.textContent).toContain("125.00");
+    await settle(() => expect(container.textContent).toContain("Issue refund · Refund half of damaged item price · v3"));
+    expect(container.querySelector(".kiln-processing-banner")?.textContent).not.toContain("issue-refund");
+    expect(container.querySelector(".kiln-processing-banner")?.textContent).not.toContain("Step refund");
+    expect(container.textContent).toContain("Amount: $125.00");
     let release!: () => void;
     holdWrite = () => new Promise<void>((resolve) => { release = resolve; });
     await click(byText(decision === "approve" ? "Approve" : "Reject"));
@@ -742,7 +745,7 @@ describe("shop workspace with real framework action hooks and an offline action 
   it("keeps approval errors visible, rereads the checkpoint and disables decisions on failed refresh", async () => {
     processing = [processingRow("awaiting_approval")];
     await mount();
-    await settle(() => expect(container.textContent).toContain("Step refund"));
+    await settle(() => expect(container.textContent).toContain(`Issue refund · ${recipeRun.recipe.name} · v${recipeRun.recipe.version}`));
     failure = "resume-recipe-run";
     await click(byText("Approve"));
     await settle(() => expect(container.textContent).toContain("Review its state before deciding again"));
@@ -1349,6 +1352,8 @@ describe("shop workspace with real framework action hooks and an offline action 
         context: expect.stringContaining(request.customerId),
       }),
     );
+    expect(agent.send.mock.calls[0]![0]).not.toHaveProperty("newTab");
+    expect(agent.send.mock.calls[0]![0]).not.toHaveProperty("reuseEmptyTab");
     expect(writes()).toHaveLength(0);
   });
 

@@ -1,7 +1,7 @@
 import type { Binding, JsonValue } from "@muscle-memory/recipe-engine";
 
 import {
-  argumentLabel, atPath, bindingLabel, formulaLabel, isObject, stepLabel, valueSummary, wireSource, words,
+  argumentLabel, atPath, bindingLabel, formulaLabel, isObject, presentationContext, stepLabel, valueSummary, wireSource, words,
   type PresentationContext, type WireSource,
 } from "./recipe-presentation";
 
@@ -139,6 +139,18 @@ export function recipeCircuit(content: JsonValue, labels: Readonly<Record<string
   }), targets, edges };
 }
 
+/** Select once for the whole circuit; snapshots end with the demonstration, which wins ties. */
+export function circuitExampleContext(sources: readonly CircuitSource[], context: PresentationContext): PresentationContext {
+  let selected = context, best = -1;
+  for (const snapshot of [...(context.snapshots ?? [])].reverse()) {
+    const values: JsonValue = { trigger: snapshot.trigger,
+      steps: Object.fromEntries(snapshot.steps.map((step) => [step.id, { output: step.output }])) };
+    const count = sources.filter((source) => source.path && atPath(values, normalizePath(source.path).split(".")) !== undefined).length;
+    if (count > best) { best = count; selected = presentationContext(undefined, snapshot); }
+  }
+  return selected;
+}
+
 export function circuitSourceExample(source: CircuitSource, context: PresentationContext): string | undefined {
   if (source.value !== undefined) {
     const summary = valueSummary(source.value, context);
@@ -146,13 +158,12 @@ export function circuitSourceExample(source: CircuitSource, context: Presentatio
     const variables = new Set(typeof source.value === "string" ? [...source.value.matchAll(/\{\{([^{}]+)\}\}/g)].map((match) => match[1]!.trim()) : []);
     return variables.size ? `Message template · ${variables.size} variable${variables.size === 1 ? "" : "s"}` : "Message template";
   }
-  // The last snapshot is the demonstration when loaded; do not replace its history with a live read.
-  for (const snapshot of [...(context.snapshots ?? [])].reverse()) {
-    const values: JsonValue = { trigger: snapshot.trigger,
-      steps: Object.fromEntries(snapshot.steps.map((step) => [step.id, { output: step.output }])) };
-    const value = source.path ? atPath(values, normalizePath(source.path).split(".")) : undefined;
-    if (value !== undefined) return valueSummary(value, context);
-  }
+  const snapshot = context.snapshots?.[0];
+  if (!snapshot) return;
+  const values: JsonValue = { trigger: snapshot.trigger,
+    steps: Object.fromEntries(snapshot.steps.map((step) => [step.id, { output: step.output }])) };
+  const value = source.path ? atPath(values, normalizePath(source.path).split(".")) : undefined;
+  if (value !== undefined) return valueSummary(value, context);
 }
 
 export interface CircuitPoint { x: number; y: number }

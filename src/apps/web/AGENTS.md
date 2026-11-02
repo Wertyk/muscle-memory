@@ -169,6 +169,28 @@ Before building common workspace or agent UI, read `agent-native-toolkit`; for s
 
 ## Teach mode (TASK-9)
 
+Browser regression (TASK-22): run `pnpm -C src e2e` from the repository root.
+Port **8098 must be free**. The command copies app sources without `.env` files
+into a disposable directory, reuses installed packages with separate runtime
+caches, seeds a fresh temporary PGlite, and starts the app on 8098. Subprocesses
+receive only OS essentials and test configuration; no provider keys are inherited
+or loaded. A cookie-less HTML readiness probe primes the framework's one-time
+local dev account; Playwright then clicks **Continue as local dev** through
+normal authentication with a fresh browser context. The test uses real
+Playwright pointer clicks for Teach → refund/reply/tag → draft → save/activate →
+run inspection → dashboard, with state-based waits and no model calls. Arrival
+uses the shared `create-request` action with structured fields: the inbox demo
+batch also contains free text and would attempt extraction.
+
+Installed Google Chrome (`channel: "chrome"`) is preferred. If it cannot launch,
+the command runs `playwright install chromium` and uses Chromium; browser startup
+still requires an environment that permits native browser processes. On success,
+failure, SIGINT or SIGTERM, it stops its process groups and removes the temporary
+app/database. Failure screenshots/traces remain in
+`src/apps/web/node_modules/.cache/e2e-results/`. E2E is separate from `pnpm test`;
+no retries hide failures. Run the command three times for the stability check;
+each invocation prints its total duration and starts from a new database.
+
 `start-demonstration({requestId, fields?})` starts on the request open in the current tab.
 `stop-demonstration({demonstrationId})` retains a completed trace; `cancel-demonstration`
 with the same ID discards the recording and frees the slot (shop effects remain).

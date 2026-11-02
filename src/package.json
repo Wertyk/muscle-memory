@@ -9,6 +9,7 @@
   "scripts": {
     "seed:shop": "pnpm --filter @muscle-memory/web seed:shop",
     "reset:shop": "pnpm --filter @muscle-memory/web reset:shop",
+    "e2e": "pnpm --filter @muscle-memory/web e2e",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test && node --test scripts/architecture.test.mjs",
     "lint": "oxlint --deny-warnings .",

@@ -14,6 +14,7 @@ export default defineConfig({
     fsModuleCachePath: new URL("./node_modules/.vitest-cache", import.meta.url)
       .pathname,
     exclude: [
+      "e2e/**",
       "**/node_modules/**",
       "**/.git/**",
       "**/dist/**",

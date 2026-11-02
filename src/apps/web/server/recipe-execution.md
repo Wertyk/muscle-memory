@@ -507,6 +507,45 @@ them, and results after Stop cannot turn an incomplete trace back into completed
 Raw persistence/provider errors are never returned in capture-failure reasons.
 
 
+## Browser teach-to-auto-handle regression (TASK-22)
+
+From the repository root, run **`pnpm -C src e2e`** with port **8098** free.
+No API key or `.env` file is needed. The runner copies only app sources/config
+without environment files into a disposable directory, shares installed packages
+but isolates Vite/Nitro caches, seeds a temporary PGlite with the real shop seed,
+and starts the app on 8098 with a restricted subprocess environment. A cookie-less
+HTML readiness probe primes the framework's one-time local dev account; a fresh
+Playwright context then clicks **Continue as local dev**.
+Authentication and all UI mutations use the normal framework handlers/actions.
+
+The spec teaches `req_0001`: refund $140 with a reason, save a reply, tag
+`damaged`, stop and verify **3 actions**. It drafts a recipe, checks visible
+binding wires and ambiguities, saves v2 without an agent, opens its history and
+activates it. A structured `create-request` call through the real frontend client
+introduces a damaged Sand Bowl on another seeded order. This deliberately avoids
+the demo batch's free-text request and extraction. The inbox must show that new
+request as **Auto-handled**. Its completed live run must pin v2, show a computed
+$22 refund (50% of $44, rather than the taught $140) in saved input/output, and
+report **0 LLM tokens**. Dashboard must include the same request as a measured
+zero-token recipe outcome, including zero intake/execution tokens.
+
+All UI interaction uses Playwright pointer clicks, including the refund dialog
+handoff and subsequent Stop click. Only the explicitly structured arrival uses
+`page.evaluate` to call the shared action; no DOM click is synthesized. Waits
+assert UI states without fixed sleeps. Browser external/model requests are
+blocked and fail the test; no provider credentials or extraction model are
+configured. No fixture recipes, saved sessions or precomputed outcomes are used.
+
+The runner prefers installed Google Chrome (`channel: "chrome"`), falling back
+to `playwright install chromium` if Chrome cannot launch. Native browser process
+launch must be permitted by the host. It stops its owned process groups and
+removes the disposable app/database after success/failure or SIGINT/SIGTERM.
+Failure screenshots and Playwright traces remain under
+`src/apps/web/node_modules/.cache/e2e-results/` (gitignored). The suite has one
+worker, no retries, and is excluded from `pnpm test`; config/spec are typechecked.
+For stability verification run the same command three consecutive times and
+record the reported durations; every invocation reseeds a fresh database.
+
 ## Drafting demonstrations (TASK-11)
 
 `draft-recipe-from-demonstration({demonstrationId})` calls the pure engine

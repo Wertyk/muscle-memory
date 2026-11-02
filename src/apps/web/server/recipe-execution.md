@@ -61,15 +61,23 @@ recipe steps; agent outcomes also name their measured agent-turn component.
 inferred as zero. Intake-only per-type recipe cells repeat the short extraction
 note. Zero recipe-step usage never hides intake or agent cost.
 
-The evidence plot uses positive logarithmic token/time axes and a separately
-labelled exact-zero lane. No epsilon or fabricated value makes log(0) plot. The
-rolling mean was removed. Compact ticks have a reserved gutter; Intl formats whole
-tokens (compact from 10K), ms/seconds, and same-day time-only axis labels. Agent is
-warm orange/amber and Recipe stays green, with different shapes; numerical theme
+The hero's finite speed ratio divides those same measured mean active times;
+avoided tokens subtract those same token means. Missing samples hide the relevant
+ratio; zero recipe tokens stay plainly zero. Numerals count up once using Kiln motion
+tokens, with final-only accessible text and immediate values under reduced motion.
+The two aligned evidence plots show positive logarithmic tokens with a separately
+labelled exact-zero lane, then the running zero-token recipe share (unknowns remain
+in the denominator). Both use completion order. No epsilon or fabricated value makes
+log(0) plot. Compact ticks have a reserved gutter; Intl formats whole
+tokens (compact from 10K) and ms/seconds. Agent uses ember and Recipe uses celadon,
+with different shapes; numerical theme
 contrast tests enforce at least 4.5:1 against the card for both. All five type rows
 remain visible, with one muted line for a side without measured samples. Same-type
 means are observed cohorts, not paired counterfactuals or dollar estimates. Request
 associations clear through the existing reset registry; framework telemetry stays.
+Focusable token points expose request IDs, saved recipe name/version, token split and
+active time in tooltips. View as table retains the same rows, including unknowns.
+Recipe identity comes only from the run's immutable checkpoint; attribution is unchanged.
 
 Opt-in authenticated HTTP proof: from apps/web, run `pnpm exec tsx
 scripts/dashboard-http-smoke.ts http://localhost:5192` with that port free. It

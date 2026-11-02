@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   axisDates,
   formatDuration,
+  formatRatio,
   formatTimeTick,
   formatTokens,
   formatTokenTick,
@@ -10,6 +11,11 @@ import {
 import { costScale, COST_PLOT } from "./dashboard-scale";
 
 describe("human-readable handling measurements", () => {
+  it.each([[443.2, "443×"], [443.8, "444×"], [10, "10×"], [9.94, "9.9×"], [2, "2.0×"], [1.25, "1.3×"]])(
+    "formats ratio %s with a trailing multiplier and appropriate precision", (value, expected) => {
+      expect(formatRatio(Number(value))).toBe(expected);
+    },
+  );
   it("rounds tokens to integers and uses compact notation only from 10K", () => {
     expect(formatTokens(1307.5, "en-US")).toBe("1,308");
     expect(formatTokens(9999, "en-US")).toBe("9,999");

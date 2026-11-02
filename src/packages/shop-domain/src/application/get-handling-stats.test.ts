@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { GetHandlingStats, type HandlingSample } from "./get-handling-stats.js";
 
 const sample = (n: number, values: Partial<HandlingSample> = {}): HandlingSample => ({
-  requestId: `req_${n}`, requestType: "damaged_item", handler: "recipe", completedAt: n,
+  requestId: `req_${n}`, requestType: "damaged_item", handler: "recipe", recipe: null, completedAt: n,
   tokens: 0, durationMs: n, intakeTokens: 0, runTokens: 0, agentTokens: null, ...values,
 });
 describe("GetHandlingStats", () => {

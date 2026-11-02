@@ -54,6 +54,8 @@ export class DrizzleHandlingStats implements HandlingStatsSource {
           sample: sql<HandlingSample>`jsonb_build_object(
         'requestId', d.id, 'requestType', d.category, 'handler', d.handler,
         'completedAt', d.completed_at,
+        'recipe', CASE WHEN d.handler = 'recipe' THEN jsonb_build_object(
+          'name', d.checkpoint->'recipe'->>'name', 'version', (d.checkpoint->'recipe'->>'version')::int) ELSE NULL END,
         'agentTokens', CASE WHEN d.handler = 'agent' THEN d.agent_tokens ELSE NULL END,
         'intakeTokens', CASE WHEN d.has_intake AND (d.match IS NULL OR d.match->>'reason' = 'extraction_failed') THEN NULL ELSE d.intake_tokens END,
         'runTokens', CASE WHEN EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(d.checkpoint->'steps', '[]'::jsonb)) step

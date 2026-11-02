@@ -10,6 +10,7 @@ const globalCss = readFileSync(
   new URL("../../global.css", import.meta.url),
   "utf8",
 );
+const kilnCss = readFileSync(new URL("../../kiln.css", import.meta.url), "utf8");
 function colors(css: string, name: string) {
   return [
     ...css.matchAll(
@@ -44,8 +45,8 @@ function luminance([h = 0, s = 0, l = 0]: number[]) {
 }
 
 describe("dashboard handler contrast", () => {
-  const agent = colors(dashboardCss, "dashboard-agent");
-  const recipe = colors(globalCss, "shop-resolved");
+  const agent = colors(kilnCss, "ember");
+  const recipe = colors(kilnCss, "celadon");
   const cards = colors(globalCss, "card");
   it.each([0, 1])(
     "uses distinct warm/green hues with readable text and points against theme %i",
@@ -62,4 +63,17 @@ describe("dashboard handler contrast", () => {
       }
     },
   );
+  it("uses theme ink, a surface ring and a shared scroll area at 390px", () => {
+    expect(dashboardCss).toContain("color: hsl(var(--ember))");
+    expect(dashboardCss).toContain("color: hsl(var(--celadon))");
+    expect(dashboardCss).toContain("stroke: hsl(var(--card))");
+    expect(dashboardCss).toContain("stroke-width: 2");
+    expect(dashboardCss).toContain("vector-effect: non-scaling-stroke");
+    expect(dashboardCss).toContain("min-width: 38rem");
+    expect(dashboardCss).toContain("grid-template-columns: 1fr;");
+    expect(dashboardCss).toContain("font-family: var(--font-data)");
+    expect(dashboardCss).toContain("font-family: var(--font-display)");
+    // A 14-unit mark is still >8px at the minimum chart width.
+    expect(14 * 608 / 980).toBeGreaterThanOrEqual(8);
+  });
 });

@@ -5,6 +5,8 @@ export interface HandlingSample {
   readonly requestId: RequestId;
   readonly requestType: RequestType | null;
   readonly handler: RequestHandler;
+  /** Immutable completed recipe identity; null for other handlers. */
+  readonly recipe: { readonly name: string; readonly version: number } | null;
   readonly completedAt: number;
   /** Null is unmeasured, never an assumed zero. */
   readonly tokens: number | null;

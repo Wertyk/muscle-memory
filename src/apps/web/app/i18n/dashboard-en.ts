@@ -34,6 +34,14 @@ export const dashboardMessages = {
   allIntake: "All intake extraction · recipe steps {{run}} tokens",
   perRequest: "per request",
   trend: "Measured cost per handled request",
+  memory: "The memory curve",
+  tokensPerRequest: "Tokens per handled request",
+  runningShare: "Running share of zero-token handling",
+  chartScroll: "Handling charts · scroll horizontally for the full sequence",
+  faster: "faster",
+  ratioCohort: "agent {{agent}} vs recipe {{recipe}} · different requests",
+  avoided: "tokens avoided per request",
+  viewTable: "View as table",
   recipe: "Recipe",
   agent: "Agent",
   unattributed: "Unattributed",
@@ -64,5 +72,5 @@ export const dashboardMessages = {
   methodTime:
     "Recipe time is saved matching duration plus the sum of active step durations, including extraction and retries; it excludes approval waiting and orchestration overhead. Matching duration is recorded from this release onward; older totals remain unmeasured. Agent time adds linked framework run durations and prior intake/recipe work; it excludes time between turns. It is active processing time, not end-to-end customer wait time.",
   methodChart:
-    "Points are individual completions, distinguished by color and shape. Positive tokens and active times use a logarithmic scale; exact zeroes occupy their own labelled lane below it. No value is shifted to make log(0) plot. The horizontal axis follows completion order; same-day labels show the time only. There is no smoothed or rolling-mean curve. Unknown values are omitted, never plotted as zero. Agent trace writes may finish after resolution: refresh after the turn ends.",
+    "Points are individual completions, distinguished by color and shape. Positive tokens use a logarithmic scale; exact zeroes occupy their own labelled lane below it. No value is shifted to make log(0) plot. Both charts follow the same completion order. The lower line is the running share of completed recipe outcomes with exactly zero tokens; unknowns stay in its denominator. Unknown tokens are gaps, never plotted as zero. Hover or focus a point for its saved measurements; open it to inspect the request. Agent trace writes may finish after resolution: refresh after the turn ends.",
 } as const;

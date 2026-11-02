@@ -118,13 +118,14 @@ shows session evidence before activation without blocking it. Details: `server/r
 
 `/dashboard` reads `get-handling-stats({})` through the same action available to
 the agent/MCP/CLI. Navigate with `view=dashboard`; `view-screen` returns the same
-stats projection. It shows the latest 100 recorded handling outcomes, token/time
-series, zero-token recipe share, same-type mean costs with separate sample counts,
+stats projection. It shows the latest 100 recorded handling outcomes, a measured
+agent/recipe mean-cost hero, aligned token and running zero-token-share charts, same-type mean costs with separate sample counts,
 and live pending approval/active recipe counts. Null means unmeasured, never zero.
 Seed history, unlinked/manual resolutions, queued handoffs and dry runs are
 excluded. Agent outcomes require an explicit recorded resolution; exact action
 run/thread links join framework observability totals for the signed-in actor and
-workspace. Multi-request turns have unknown cost. Attribution and matching
+workspace. Per-request rows include the saved recipe name/version when handled by a recipe.
+Multi-request turns have unknown cost. Attribution and matching
 duration start with TASK-21, without invented backfill. Read the dashboard method
 disclosure or `server/recipe-execution.md` before reporting savings; preserve
 coverage and sample counts. A falling curve is an observation, not a guarantee.

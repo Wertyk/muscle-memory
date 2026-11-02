@@ -23,6 +23,7 @@ export function ReplayWorkspace({ run, step, phase }: { run: Run; step: ReplaySt
   const context = presentationContext(run);
   const target = phase.target;
   const input = isObject(step.saved.input) ? step.saved.input : {};
+  const templateValues = isObject(input.variables) ? Object.entries(input.variables) : [];
   const orderId = savedText(snapshot.order?.id) || savedText(input.orderId) || savedText(atPath(run.trigger, ["orderId"]));
   const requestId = runRequestId(run.trigger);
   const subject = savedText(snapshot.request?.subject) || savedText(atPath(run.trigger, ["subject"])) || requestId || t("runs.request");
@@ -87,7 +88,12 @@ export function ReplayWorkspace({ run, step, phase }: { run: Run; step: ReplaySt
             <section className="shop-panel">
               <h2>{t("shop.reply")}</h2>
               <Textarea aria-label={t("shop.reply")} value={phase.view === "reply" ? savedReply(step.saved) : ""} readOnly disabled rows={5} />
-              {phase.view === "reply" && isObject(input.variables) && <p className="mt-3 break-words text-sm text-muted-foreground">{t("shop.variables")}: {valueSummary(input.variables, context)}</p>}
+              {phase.view === "reply" && templateValues.length > 0 && <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+                <span className="text-muted-foreground">{t("runs.replay.templateValues")}</span>
+                {templateValues.map(([name, value]) => <span key={name} className="min-w-0 max-w-full [overflow-wrap:anywhere]">
+                  <span className="text-muted-foreground">{name}</span>{" "}<span className="kiln-data">{valueSummary(value, context)}</span>
+                </span>)}
+              </p>}
               <p className="my-3 text-xs text-muted-foreground">{t("shop.replyDemo")}</p>
               <Button type="button" disabled>{t("shop.sendReply")}</Button>
             </section>

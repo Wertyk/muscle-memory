@@ -14,6 +14,7 @@ import { AgentCostTag } from "../kiln/AgentCostTag";
 import { inboxOutcome } from "@/lib/kiln";
 import { ReplayButton } from "../runs/GhostReplay";
 import { moneyText } from "@/lib/shop-workspace";
+import { stepLabel } from "@/lib/recipe-presentation";
 import { ProcessingChip } from "./ProcessingChip";
 import { PendingMark, QueryError } from "./WorkspaceParts";
 
@@ -85,7 +86,7 @@ function ProcessingAttention({ row }: { row: RequestProcessing }) {
               <div className="min-w-0 flex-1 text-sm">
                 {current.status === "awaiting_approval" && step ? (
                   <>
-                    <p className="break-words font-medium">{t("shop.pendingStep", { step: step.stepId, action: step.action ?? step.kind })}</p>
+                    <p className="break-words font-medium">{t("shop.pendingStep", { action: stepLabel(step, t), recipe: current.recipe.name, version: current.recipe.version })}</p>
                     {amount ? <p className="mt-1 tabular-nums">{t("shop.pendingAmount", { amount })}</p> : step.action === "issue-refund" && <p className="mt-1">{t("shop.pendingRemainingRefund")}</p>}
                   </>
                 ) : <p>{t("shop.approvalChanged")}</p>}
@@ -108,6 +109,8 @@ function ProcessingAttention({ row }: { row: RequestProcessing }) {
                 context: JSON.stringify({ requestId: row.requestId, runId: row.runId, handoffStepId: current.handoff?.context.stepId, target: current.handoff?.context.to }),
                 submit: true,
                 openSidebar: true,
+                newTab: true,
+                reuseEmptyTab: true,
               })}>{t("shop.openHandoff")}</Button>
             </>
           ) : null

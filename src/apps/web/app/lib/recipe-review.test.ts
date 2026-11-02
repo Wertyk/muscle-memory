@@ -21,6 +21,18 @@ const step = {
   },
 };
 describe("human approval and ambiguity presentation", () => {
+  it("keeps evidence for removed steps and arguments historical while current bindings remain reviewable", () => {
+    const entries = [
+      { stepId: "old_refund", argumentPath: "orderId", kind: "multiple-candidates", candidates: [] },
+      { stepId: "refund", argumentPath: "variables.name", kind: "constant-or-variable", candidates: [] },
+      { stepId: "refund", argumentPath: "amount.amountMinor", kind: "constant-or-variable", candidates: [] },
+    ];
+    const questions = reviewQuestions(entries, { steps: [step] }, { refund: "Issue refund" });
+    expect(questions.map((item) => item.historical)).toEqual([true, true, false]);
+    expect(questions.filter((item) => !item.historical && !item.minor)).toHaveLength(1);
+    expect(questions.map((item) => item.entry)).toEqual(entries);
+  });
+
   it("converts dollar thresholds exactly and rejects fractional cents/unsafe amounts", () => {
     const args = approvalArguments(step);
     expect(readApproval(undefined, args)).toMatchObject({

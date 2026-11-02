@@ -62,6 +62,7 @@ export const runMessages = {
     title: "Ghost replay",
     readOnly: "Saved run checkpoint · Read-only replay",
     workspace: "Recorded request workspace",
+    templateValues: "Template values",
     play: "Play",
     pause: "Pause",
     restart: "Play again",

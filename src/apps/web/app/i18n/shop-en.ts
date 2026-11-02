@@ -26,7 +26,7 @@ export const shopMessages = {
   queuedForHuman: "Handoff queued for human review",
   openHandoff: "Open handoff in agent",
   handoffPrompt: "Review the queued handoff for customer request {{id}}. Read get-recipe-run with runId {{runId}} for the saved handoff context and completed steps, then get-request for the current request. Continue from that context without repeating completed mutations. Respect shop policies and approval gates; ask me if human review or missing information is needed.",
-  pendingStep: "Step {{step}} · {{action}}",
+  pendingStep: "{{action}} · {{recipe}} · v{{version}}",
   pendingAmount: "Amount: {{amount}}",
   pendingRemainingRefund: "Amount: remaining refundable balance, checked by the shop when approved.",
   approvalChanged: "This approval has changed. Refreshing the saved run…",

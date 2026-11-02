@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import type { JsonObject } from "@muscle-memory/recipe-engine";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -32,6 +33,10 @@ let fontsReady: () => void;
 let draft: RecipeDraft;
 let loadKey: string;
 const labels = { order: "Look up order", refund: "Issue refund", reply: "Send reply" };
+const circuitCss = readFileSync(`${import.meta.dirname}/recipe-circuit.css`, "utf8");
+const formulaStyle = circuitCss.match(/\.recipe-circuit-formula \{([^}]+)\}/)![1]!;
+const formulaMaxWidth = Number.parseFloat(formulaStyle.match(/max-width: ([\d.]+)px/)![1]!);
+const formulaPadding = Number.parseFloat(formulaStyle.match(/padding: [\d.]+rem ([\d.]+)px/)![1]!);
 const onChange = vi.fn(async () => {});
 const rect = (left: number, top: number, width: number, height: number) =>
   ({ x: left, y: top, left, top, right: left + width, bottom: top + height, width, height, toJSON: () => ({}) }) as DOMRect;
@@ -54,7 +59,7 @@ function bounds(this: Element): DOMRect {
   }
   if (this.hasAttribute("data-circuit-formula")) {
     const pill = this as HTMLElement;
-    const size = Math.min(68, 12 + (pill.textContent?.length ?? 0) * 6);
+    const size = Math.min(formulaMaxWidth, 2 + formulaPadding * 2 + (pill.textContent?.length ?? 0) * 6.4);
     return rect(40 + (Number.parseFloat(pill.style.left) || 0) - size / 2, top + (Number.parseFloat(pill.style.top) || 0) - 12, size, 24);
   }
   if (this.hasAttribute("data-formula-input") || this.hasAttribute("data-formula-output")) {
@@ -114,6 +119,38 @@ afterEach(async () => {
 });
 
 describe("Recipe Studio circuit DOM", () => {
+  it("keeps formula text clear of both port radii with room for typical labels in both themes", () => {
+    const portStyle = circuitCss.match(/\.recipe-circuit-port \{([^}]+)\}/)![1]!;
+    const radius = Number.parseFloat(portStyle.match(/width: ([\d.]+)px/)![1]!) / 2;
+    expect(formulaPadding - radius).toBeGreaterThanOrEqual(3);
+    expect(circuitCss).toContain(`[data-formula-input] { left: -${radius}px; }`);
+    expect(circuitCss).toContain(`[data-formula-output] { right: -${radius}px; }`);
+    for (const label of ["× 0.5", "+ 4.00", "× 0.5 · round"]) {
+      expect(label.length * 6.4 + formulaPadding * 2 + 2).toBeLessThanOrEqual(formulaMaxWidth);
+    }
+    expect(formulaStyle).toContain("background: hsl(var(--wire-bg))");
+    expect(formulaStyle).toContain("color: hsl(var(--wire))");
+  });
+
+  it("centres wider formula pills on their wire and meets measured ports at 920px", async () => {
+    width = CIRCUIT_MIN_WIDTH;
+    await render();
+    const circuit = node.querySelector(".recipe-circuit")!.getBoundingClientRect();
+    const paths = [...node.querySelectorAll<SVGPathElement>("[data-circuit-path]")];
+    for (const pill of node.querySelectorAll<HTMLElement>("[data-circuit-formula]")) {
+      const bounds = pill.getBoundingClientRect();
+      expect(bounds.left).toBeGreaterThan(node.querySelector(".recipe-circuit-sources")!.getBoundingClientRect().right);
+      expect(bounds.right).toBeCloseTo(node.querySelector(".recipe-circuit-steps")!.getBoundingClientRect().left - 4);
+      expect(bounds.left + bounds.width / 2 - circuit.left).toBeCloseTo(Number.parseFloat(pill.style.left));
+      const outgoing = paths.find((path) => path.dataset.circuitPath === `formula:${pill.dataset.circuitFormula}`)!;
+      expect(outgoing.getAttribute("d")).toMatch(new RegExp(`^M ${bounds.right - circuit.left} ${Number.parseFloat(pill.style.top)} L `));
+      for (const edge of recipeCircuit(draft.content).edges.filter((edge) => edge.targetId === pill.dataset.circuitFormula)) {
+        expect(paths.find((path) => path.dataset.circuitPath === edge.id)?.getAttribute("d"))
+          .toContain(`L ${bounds.left - circuit.left} ${Number.parseFloat(pill.style.top)}`);
+      }
+    }
+  });
+
   it("uses the 920px container breakpoint, fits the recording width, and preserves chip accessible text", async () => {
     expect(CIRCUIT_MIN_WIDTH).toBe(920);
     width = CIRCUIT_MIN_WIDTH - 1;

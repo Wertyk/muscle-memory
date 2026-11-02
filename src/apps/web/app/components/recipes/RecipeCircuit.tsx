@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type
 
 import { useRecipePresentation } from "@/hooks/use-recipe-presentation";
 import {
-  CIRCUIT_MIN_WIDTH, circuitHighlightReducer, circuitPaths, circuitSelection,
+  CIRCUIT_MIN_WIDTH, circuitExampleContext, circuitHighlightReducer, circuitPaths, circuitSelection,
   circuitSourceExample, emptyCircuitHighlight, recipeCircuit, type CircuitPoint, type CircuitSource,
 } from "@/lib/recipe-circuit";
 import type { RecipeDraft } from "@/lib/recipe-studio";
@@ -28,6 +28,7 @@ export function RecipeCircuit({ draft, labels, loadKey, children }: {
   const [highlight, dispatch] = useReducer(circuitHighlightReducer, emptyCircuitHighlight);
   const presentation = useRecipePresentation();
   const model = useMemo(() => recipeCircuit(draft.content, labels), [draft.content, labels]);
+  const examples = useMemo(() => circuitExampleContext(model.sources, presentation), [model, presentation]);
   const selection = circuitSelection(model, highlight);
   const targets = useMemo(() => new Map(model.targets.map((target) => [target.id, target])), [model]);
   const sourceOrder = useMemo(() => {
@@ -143,7 +144,7 @@ export function RecipeCircuit({ draft, labels, loadKey, children }: {
     return () => document.removeEventListener("keydown", clear);
   }, [highlight.pinned]);
   const renderSources = (rows: readonly CircuitSource[]) => rows.map((source) => {
-    const example = circuitSourceExample(source, presentation);
+    const example = circuitSourceExample(source, examples);
     const active = selection.nodes.has(source.id);
     const mode = active ? targets.get(selection.id ?? "")?.mode ?? source.mode : source.mode;
     return <button key={`${loadKey}:${source.id}`} type="button" className="recipe-circuit-source" data-source={mode}

@@ -104,6 +104,7 @@ export interface ReviewQuestion {
   step: string;
   question: string;
   minor: boolean;
+  historical: boolean;
   candidates?: readonly string[] | undefined;
 }
 export function reviewQuestions(
@@ -121,10 +122,12 @@ export function reviewQuestions(
         step: "",
         question: String(entry),
         minor: false,
+        historical: false,
       };
     const step = steps.find((step) => step.id === entry.stepId);
     const argument = String(entry.argumentPath ?? "");
     const chosen = currentBinding(step, argument);
+    const historical = !step || chosen === undefined;
     const title =
       argumentLabel(argument, String(step?.action ?? "")) || "Recipe";
     let question = "Which source should supply this value?";
@@ -161,7 +164,7 @@ export function reviewQuestions(
         "Should this follow the matching item when order lines change?";
     else if (entry.kind === "candidate-limit")
       question = "There are more possible sources. Which one should this use?";
-    const minor = duplicateIdentity(entry, chosen, steps);
+    const minor = !historical && duplicateIdentity(entry, chosen, steps);
     if (minor)
       question =
         "These sources identify the same record. The trigger field is selected.";
@@ -171,6 +174,7 @@ export function reviewQuestions(
       step: labels[String(entry.stepId)] ?? "Original demonstration",
       question,
       minor,
+      historical,
       candidates: minor ? undefined : candidates,
     };
   });

@@ -19,6 +19,13 @@ const INITIAL_TOOL_NAMES = [
   "send-reply",
   "tag-request",
   "set-request-status",
+  "list-recipes",
+  "get-recipe",
+  "get-recipe-draft",
+  "update-recipe-draft",
+  "save-recipe-version",
+  "activate-recipe",
+  "deactivate-recipe",
   "ask-question",
 ];
 

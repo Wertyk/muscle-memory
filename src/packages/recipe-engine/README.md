@@ -264,7 +264,8 @@ const version = parseRecipeVersion({
 ```
 
 Steps have globally unique short identifiers (at most 31 characters). All step kinds may
-have an `approval` condition, evaluated before the step, when its own output is unavailable:
+have an `approval` condition, evaluated after resolving input and before any step effect,
+when its own output is unavailable:
 
 - `action`: `action` name and `args`, an object of binding trees. Nested objects and arrays
   retain their shape; a binding can also supply an entire object or array.
@@ -279,7 +280,14 @@ or `{mode:"template", template}`. Templates use `{{trigger.name}}` or
 is allowed. Missing paths fail explicitly. Interpolation accepts only scalars (null becomes
 an empty string), and never recursively expands a source value as another template.
 
-All paths are rooted at `trigger` or `steps.<id>.output`; array indices accept `[0]` or `.0`.
+Binding and condition paths are rooted at `trigger` or `steps.<id>.output`; array indices accept `[0]` or `.0`.
+Only approvals additionally accept `input.<path>` into this step’s resolved input.
+For example `{">": [{var:"input.amount.amountMinor"}, 10000]}` gates a refund above
+USD 100. `input` is rejected in triggers, bindings, templates and branch conditions,
+as are unknown input argument roots and unsafe keys. Extract inputs expose `text`
+and `fields`; handoffs expose `to` and `note`; branches expose `condition`.
+`evaluateApprovalCondition(expr, context, input)` is the dedicated evaluation entry.
+Dry-runs report `approvalRequired` without pausing; unresolved inputs stay blocked.
 Only own properties can be read. Prototype-related keys and arbitrary root names are rejected.
 Validation checks references in expressions, templates, approvals, and nested argument trees.
 A step can reference earlier unconditional action/extract outputs and ancestor outputs.
@@ -425,4 +433,25 @@ truncation sets `exhaustive:false` and emits `candidate-limit`. Exhaustiveness r
 the documented heuristics, not all possible mathematical or textual interpretations.
 The first candidate is a deterministic suggestion, not a confidence claim. Argument
 paths identify review locations, rather than executable source paths.
+
 Every candidate, including derived text, is re-evaluated against the demonstration.
+
+## Recipe Studio (TASK-13)
+
+`RecipeStudio` takes a `RecipeStudioStore` and a short version-ID generator. Its
+`list`/`get` methods expose catalog summaries and history with content-only diffs.
+`getDraft` returns `{recipeId,revision,baseVersionId,content,ambiguities,issues}`;
+content is `{name,trigger,steps}`. `update({recipeId,expectedRevision,content})`
+preserves invalid but bounded finite JSON for correction and returns field issues.
+`save({recipeId,expectedRevision})` validates the DSL, allocates the next number
+and NEW identity, and atomically advances the draft revision. Even identical
+content creates a new version; stale edit/save retries fail with `CONFLICT`.
+
+`activate({recipeId,versionId})` validates a stored snapshot and changes only its
+catalog pointer; `deactivate(recipeId)` clears that pointer. Saving never activates.
+Existing versions/runs remain unchanged. The store serializes mutation callbacks,
+commits their DB writes atomically and never retries callbacks automatically.
+No executor, action invoker, extractor or model is used by this editing workflow.
+The web adapter uses TASK-11's canonical owner/workspace-scoped recipe_drafts
+store. Editable content/revision/base identity live in an optional studio property
+of its evidence JSON. Original version reads and provenance remain unchanged.

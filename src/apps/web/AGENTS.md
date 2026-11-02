@@ -243,3 +243,36 @@ modality. Rejected submissions retain an interactive dialog until retry/cancel.
 The pointer-event workspace regressions cover all four order dialogs and Escalate
 with submit/cancel/rejected-submit→cancel, body lock restoration, and a subsequent
 Stop & save click, plus the filmed refund→reply→tag→Stop continuation.
+
+## Recipe Studio
+
+`/recipes` lists the catalog; `/recipes/:recipeId` inspects editable bindings,
+trigger, approvals, ambiguities and immutable history. Read
+`.agents/skills/recipe-studio/SKILL.md` for the editing sequence. All UI edits use
+these shared actions; no Studio operation calls a model. The TASK-18 Backtest
+panel is a reserved slot only.
+
+| Action | Input | Result / use |
+| --- | --- | --- |
+| `list-recipes` | `{}` | Name, draft/active, latest version, run count, last result |
+| `get-recipe` | `recipeId` | Catalog metadata and immutable history with content diffs |
+| `get-recipe-draft` | `recipeId` (Studio) or `versionId` (TASK-11 original) | Studio content/revision/base/ambiguities/issues; original reads retain owner/workspace scope |
+| `update-recipe-draft` | `recipeId`, `expectedRevision`, `content: {name,trigger,steps}` | Editable draft and inline validation issues; preserves original ambiguity evidence |
+| `save-recipe-version` | `recipeId`, `expectedRevision` | New immutable version; never activates implicitly |
+| `activate-recipe` | `recipeId`, `versionId` | Select valid saved version for future intake |
+| `deactivate-recipe` | `recipeId` | Clear active pointer; retain versions and pinned runs |
+
+`navigate` supports `view=recipes` and `view=recipe, recipeId`. Navigation and
+selection carry the recipe ID; `view-screen` includes current history/draft.
+A stale draft revision is a conflict, requiring readback before retrying. Draft
+validation failures stay editable but cannot become executable versions. Saving
+also increments the revision; repeated uncertain saves must read back first.
+Original ambiguity evidence and editable Studio state share TASK-11’s canonical owner/workspace-scoped recipe_drafts row; original version reads preserve their output.
+
+Studio approvals use Never / Always / When controls plus Advanced JSON. Prefer
+`input.amount.amountMinor` for the refund being issued, e.g.
+`{">": [{"var":"input.amount.amountMinor"},10000]}` for amounts above $100.
+`input.*` exists only inside approvals, after this step's input resolves. The UI
+accepts money thresholds in dollars; action JSON uses integer minor units.
+Message previews show text with symbolic source chips, without evaluating or
+calling a model. Minor ambiguity entries are still preserved as review evidence.

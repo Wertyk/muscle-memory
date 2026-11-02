@@ -1,3 +1,4 @@
+import { recipeMessages } from "./recipes-en";
 import { shopMessages } from "./shop-en";
 import { runMessages } from "./runs-en";
 import { dashboardMessages } from "./dashboard-en";
@@ -6,6 +7,7 @@ const messages = {
   dashboard: dashboardMessages,
   shop: shopMessages,
   runs: runMessages,
+  recipes: recipeMessages,
   composer: {
     removeAttachment: "Remove {{name}}",
     removeReference: "Remove {{name}} reference",

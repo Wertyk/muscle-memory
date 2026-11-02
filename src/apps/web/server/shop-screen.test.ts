@@ -84,30 +84,123 @@ describe("agent workspace context", () => {
     expect(await viewScreen.run({}, context)).toMatchObject({ navigation: state.navigation, handlingStats: await query.execute() });
     expect(composition.getHandlingStats).toHaveBeenCalledExactlyOnceWith(context);
   });
+  it("exposes fresh Recipe Studio data and preserves semantic recipe navigation", async () => {
+    const list = vi.fn(async () => [{ id: "recipe_care", status: "draft" }]);
+    const get = vi.fn(async () => ({
+      recipe: { id: "recipe_care" },
+      history: [],
+    }));
+    const getDraft = vi.fn(async () => ({
+      recipeId: "recipe_care",
+      revision: 3,
+      content: {},
+      ambiguities: [],
+      issues: [],
+    }));
+    vi.spyOn(composition, "getRecipeStudio").mockReturnValue({
+      list,
+      get,
+      getDraft,
+    } as unknown as ReturnType<typeof composition.getRecipeStudio>);
+    const context = {
+      caller: "tool" as const,
+      userEmail: "operator@example.test",
+    };
+    state.navigation = { view: "recipes", path: "/recipes" };
+    expect(await viewScreen.run({}, context)).toMatchObject({
+      recipes: [{ id: "recipe_care" }],
+    });
+    state.navigation = {
+      view: "recipe",
+      recipeId: "recipe_care",
+      path: "/recipes/recipe_care",
+    };
+    expect(await viewScreen.run({}, context)).toMatchObject({
+      recipe: { recipe: { id: "recipe_care" } },
+      draft: { revision: 3 },
+    });
+    expect(getDraft).toHaveBeenCalledWith("recipe_care");
+    expect(composition.getRecipeStudio).toHaveBeenCalledWith(context);
+    await navigate.run({ view: "recipe", recipeId: "recipe_care" }, context);
+    expect(writeAppStateForCurrentTab).toHaveBeenCalledWith(
+      "navigate",
+      expect.objectContaining({ view: "recipe", recipeId: "recipe_care" }),
+    );
+  });
   it("exposes processing and Teach context together for the current request", async () => {
     state.navigation = { view: "request", requestId: request.id };
-    const context = { caller: "frontend" as const, userEmail: "operator@example.test" };
-    const processing = { requestId: request.id, runId: "run_pending", state: "awaiting_approval" as const, matchReason: "matched" as const, tokens: { input: 0, output: 0 } };
-    vi.mocked(composition.getRequestIntake().processing.list).mockResolvedValue([processing]);
+    const context = {
+      caller: "frontend" as const,
+      userEmail: "operator@example.test",
+    };
+    const processing = {
+      requestId: request.id,
+      runId: "run_pending",
+      state: "awaiting_approval" as const,
+      matchReason: "matched" as const,
+      tokens: { input: 0, output: 0 },
+    };
+    vi.mocked(composition.getRequestIntake().processing.list).mockResolvedValue(
+      [processing],
+    );
     vi.mocked(composition.getCurrentDemonstration).mockResolvedValue({
-      id: "demo_context", subjectId: request.id, scope: { userId: context.userEmail, workspaceId: "shop", sessionId: "tab" },
-      references: {}, trigger: {}, status: "recording", startedAt: 1, stoppedAt: null, incompleteReason: null, nextSequence: 1, pending: [], steps: [],
+      id: "demo_context",
+      subjectId: request.id,
+      scope: {
+        userId: context.userEmail,
+        workspaceId: "shop",
+        sessionId: "tab",
+      },
+      references: {},
+      trigger: {},
+      status: "recording",
+      startedAt: 1,
+      stoppedAt: null,
+      incompleteReason: null,
+      nextSequence: 1,
+      pending: [],
+      steps: [],
     });
     expect(await viewScreen.run({}, context)).toMatchObject({
-      request, processing, demonstration: { id: "demo_context", status: "recording", stepCount: 0, incompleteReason: null },
+      request,
+      processing,
+      demonstration: {
+        id: "demo_context",
+        status: "recording",
+        stepCount: 0,
+        incompleteReason: null,
+      },
     });
-    expect(composition.getCurrentDemonstration).toHaveBeenCalledWith(request.id, context);
+    expect(composition.getCurrentDemonstration).toHaveBeenCalledWith(
+      request.id,
+      context,
+    );
   });
   it("mirrors the processing filter and fresh processing records visible in the inbox", async () => {
     state.navigation = { view: "inbox", path: "/inbox" };
-    state.__url__ = { searchParams: { status: "open", processing: "with_agent" } };
-    const row = { requestId: request.id, runId: "run_test", state: "with_agent" as const, matchReason: "no_match" as const, tokens: { input: 0, output: 0 } };
-    vi.mocked(composition.getRequestIntake().processing.list).mockResolvedValue([row]);
+    state.__url__ = {
+      searchParams: { status: "open", processing: "with_agent" },
+    };
+    const row = {
+      requestId: request.id,
+      runId: "run_test",
+      state: "with_agent" as const,
+      matchReason: "no_match" as const,
+      tokens: { input: 0, output: 0 },
+    };
+    vi.mocked(composition.getRequestIntake().processing.list).mockResolvedValue(
+      [row],
+    );
     expect(await viewScreen.run({}, { caller: "tool" })).toMatchObject({
-      activeFilters: { status: "open", processing: "with_agent" }, requests: [request], processing: [row],
+      activeFilters: { status: "open", processing: "with_agent" },
+      requests: [request],
+      processing: [row],
     });
     state.__url__.searchParams = { processing: "done" };
-    expect(await viewScreen.run({}, { caller: "tool" })).toMatchObject({ requests: [], processing: [] });
+    expect(await viewScreen.run({}, { caller: "tool" })).toMatchObject({
+      requests: [],
+      processing: [],
+    });
   });
   it("reads fresh selected-request details through the existing shop use-cases", async () => {
     state.navigation = {

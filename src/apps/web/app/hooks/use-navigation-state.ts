@@ -15,6 +15,11 @@ import {
   threadIdFromPath,
 } from "@/lib/chat-paths";
 import {
+  RECIPES_PATH,
+  recipeIdFromPath,
+  recipePath,
+} from "@/lib/recipe-studio";
+import {
   INBOX_PATH,
   requestIdFromPath,
   requestPath,
@@ -29,15 +34,21 @@ export interface NavigationState {
   threadId?: string;
   requestId?: string;
   runId?: string;
+  recipeId?: string;
 }
 
 export function useNavigationState() {
   const { pathname } = useLocation();
   useEffect(() => {
     const requestId = requestIdFromPath(pathname);
+    const recipeId = recipeIdFromPath(pathname);
     void setClientAppState(
       `selection:${TAB_ID}`,
-      requestId ? { kind: "request", id: requestId, requestId } : null,
+      requestId
+        ? { kind: "request", id: requestId, requestId }
+        : recipeId
+          ? { kind: "recipe", id: recipeId, recipeId }
+          : null,
       { requestSource: TAB_ID },
     ).catch(() => {
       // Semantic navigation still carries the request id if this optional write fails.
@@ -88,6 +99,7 @@ export function navigationStateForPath(pathname: string): NavigationState {
   const threadId = threadIdFromPath(pathname);
   const requestId = requestIdFromPath(pathname);
   const runId = runIdFromPath(pathname);
+  const recipeId = recipeIdFromPath(pathname);
   return {
     view: viewForPath(pathname),
     path: pathname,
@@ -95,11 +107,14 @@ export function navigationStateForPath(pathname: string): NavigationState {
     ...(threadId ? { threadId } : {}),
     ...(requestId ? { requestId } : {}),
     ...(runId ? { runId } : {}),
+    ...(recipeId ? { recipeId } : {}),
   };
 }
 
 function viewForPath(pathname: string): string {
   if (pathname === "/dashboard") return "dashboard";
+  if (pathname === RECIPES_PATH) return "recipes";
+  if (recipeIdFromPath(pathname)) return "recipe";
   if (pathname === INBOX_PATH) return "inbox";
   if (requestIdFromPath(pathname)) return "request";
   if (runIdFromPath(pathname)) return "run";
@@ -124,6 +139,9 @@ function pathForView(view?: string): string {
       return "/runs";
     case "dashboard":
       return "/dashboard";
+    case "recipes":
+    case "recipe":
+      return RECIPES_PATH;
     case "inbox":
     case "request":
       return INBOX_PATH;
@@ -151,6 +169,12 @@ function pathForView(view?: string): string {
 
 export function pathForCommand(command: any): string {
   if (command?.view === "run" && typeof command.runId === "string" && command.runId.trim()) return runPath(command.runId.trim());
+  if (
+    command?.view === "recipe" &&
+    typeof command.recipeId === "string" &&
+    command.recipeId.trim()
+  )
+    return recipePath(command.recipeId.trim());
   if (
     command?.view === "request" &&
     typeof command.requestId === "string" &&

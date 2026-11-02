@@ -603,3 +603,57 @@ and JSON Schema discovery. The live smoke passed with all three real agent tools
 Visual camera/narrow-browser and actual sidebar verification remains a reviewer
 check: this session's browser host was unavailable and native Chrome control was
 not approved. DOM tests and the HTTP smoke are not screenshot evidence.
+
+## Recipe Studio (TASK-13)
+
+RecipeStudio in recipe-engine/application owns draft revision checks, DSL
+validation, immutable version numbering, content diffs and explicit catalog
+activation/deactivation. DrizzleRecipeStudioStore is its DB port adapter;
+composition.ts is the only wiring site. Existing catalog/intake APIs are unchanged.
+The Studio never calls an LLM or executes the recipe during editing.
+
+TASK-11's recipe_drafts is the single canonical draft store. Its existing schema
+and applied migrations are unchanged. The optional evidence.studio JSON property
+holds {content,revision,baseVersionId}; original demonstrationId and ambiguities
+stay intact. Catalog-only fixture edits omit demonstrationId rather than invent
+provenance; original versionId reads therefore return null for those rows.
+DrizzleRecipeCatalog owns both original and editable draft reads/writes. The
+Studio port delegates to it, under authenticated owner/workspace scope. There is
+no optional-table SQL bridge, duplicate table or additional migration.
+
+Invalid JSONLogic/references/templates remain editable with field issues; save
+validates before inserting an immutable snapshot. A non-retrying DB-only
+transaction locks versions, catalog and recipe_drafts in parent-first order,
+checks expectedRevision and allocates the next version number. Saves advance the
+revision, including identical content. Active pointers change only on explicit
+activation; runs keep their original immutable snapshot. Ordinary reseed retains
+canonical evidence and edits; --all removes draft rows before catalog/versions.
+
+get-recipe-draft has one action with exactly one of recipeId or versionId. The
+versionId path uses TASK-11's original use-case/authorization/output. recipeId
+returns Studio content, revision, ambiguity entries and issues. No model runs.
+
+Routes: /recipes, /recipes/:recipeId. Source chips distinguish trigger, earlier
+output, constant, formula and template using labels and light/dark colours.
+JSONLogic rendering supports the merged find/firstWord/money/cat operators.
+Backtest actions from TASK-18 remain wired; the Studio panel is still a reserved
+slot for its UI integration.
+
+### Approval input and Studio presentation (review refinements)
+
+The executor resolves the step input before evaluating its approval. Only the
+approval schema/evaluator accepts safe input.<path> references; normal expression
+validation still rejects them in bindings, templates, trigger/branch conditions.
+Known argument roots are checked. Existing dependency checks still block missing
+dry-run outputs before either resolution or approval evaluation. Checkpoints
+retain the exact resolved input, and dry-run logs report approvalRequired without
+executing mutations or pausing. Existing pinned-version/resume gates are unchanged.
+
+Studio approval controls author these expressions through update-recipe-draft;
+money thresholds use dollars and convert exactly to integer minor units. Advanced
+JSON remains available for custom policies. Cat/template previews are presentation
+only: static message text and dynamic source chips, without evaluating bindings or
+calling a model. Empty variables are hidden. Ambiguity questions use step/argument
+labels, retaining every original entry under expandable evidence. Only verified
+identity-source duplicates are collapsed into Minor; policy/source doubts remain
+in the main count. The shell owns the recipe routes’ single agent-panel toggle.

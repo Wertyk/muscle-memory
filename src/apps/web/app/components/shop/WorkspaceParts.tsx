@@ -32,7 +32,13 @@ export function PendingMark() {
   );
 }
 
-export function WorkspaceLoading({ detail = false }: { detail?: boolean }) {
+export function WorkspaceLoading({
+  detail = false,
+  agentToggle = true,
+}: {
+  detail?: boolean;
+  agentToggle?: boolean;
+}) {
   const t = useT();
   return (
     <div
@@ -40,7 +46,7 @@ export function WorkspaceLoading({ detail = false }: { detail?: boolean }) {
       role="status"
       aria-label={t(detail ? "shop.loadingRequest" : "shop.loading")}
     >
-      <ShopMasthead />
+      <ShopMasthead agentToggle={agentToggle} />
       <span className="sr-only">
         {t(detail ? "shop.loadingRequest" : "shop.loading")}
       </span>
@@ -100,7 +106,13 @@ export function EmptyState({
   );
 }
 
-export function ShopMasthead({ children }: { children?: ReactNode }) {
+export function ShopMasthead({
+  children,
+  agentToggle = true,
+}: {
+  children?: ReactNode;
+  agentToggle?: boolean;
+}) {
   const t = useT();
   return (
     <div className="shop-masthead">
@@ -117,7 +129,7 @@ export function ShopMasthead({ children }: { children?: ReactNode }) {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {children}
-        <AgentToggleButton />
+        {agentToggle && <AgentToggleButton />}
       </div>
     </div>
   );

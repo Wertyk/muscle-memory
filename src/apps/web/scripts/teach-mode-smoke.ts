@@ -1,13 +1,23 @@
+/* oxlint-disable unicorn/no-thenable -- Recipe branches contain non-callable then arrays. */
 // Opt-in HTTP smoke. No browser automation, real model calls, or production data.
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { buildRequestTrigger, type Demonstration, type JsonObject, type RecipeDraft, type Run } from "@muscle-memory/recipe-engine";
+import {
+  buildRequestTrigger,
+  type Demonstration,
+  type JsonObject,
+  type JsonValue,
+  type RecipeDraft,
+  type RecipeVersion,
+  type StudioDraft,
+  type Run,
+} from "@muscle-memory/recipe-engine";
 import type { Order, Refund, Request } from "@muscle-memory/shop-domain";
 import { Window } from "happy-dom";
 
@@ -45,12 +55,43 @@ async function smoke() {
     }
   };
   try {
+    const sourceFixture = JSON.parse(
+      await readFile(
+        new URL(
+          "../server/fixtures/broken-platter-demonstration.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ) as Demonstration;
+    const fixtureInput = (name: string) => {
+      const step = sourceFixture.steps.find((step) => step.action === name);
+      assert(step, `Missing stored fixture action ${name}`);
+      return step.input;
+    };
+    const fixtureText = (name: string, argument: string) => {
+      const value = fixtureInput(name)[argument];
+      assert(typeof value === "string", "Expected a text fixture argument");
+      return value;
+    };
     stage = "seed and start";
     await exec("pnpm", ["-C", workspace, "seed:shop"], {
       env,
       timeout: 60_000,
       maxBuffer: 1_000_000,
     });
+    await exec(
+      "pnpm",
+      [
+        "-C",
+        web,
+        "exec",
+        "tsx",
+        "scripts/teach-mode-smoke.ts",
+        "--seed-recipes",
+      ],
+      { env, timeout: 60_000, maxBuffer: 1_000_000 },
+    );
     server = spawn("pnpm", ["-C", workspace, "dev", "--port", "5189"], {
       cwd: web,
       env,
@@ -185,7 +226,7 @@ async function smoke() {
       {
         orderId: order.id,
         amount: { amountMinor: halfPriceMinor, currency: order.paid.currency },
-        reason: "One platter arrived chipped - refund 50% of its price",
+        reason: fixtureText("issue-refund", "reason"),
       },
       { uiOnly: true },
     );
@@ -195,7 +236,7 @@ async function smoke() {
       "send-reply",
       {
         requestId: request.id,
-        template: "Hi Maya, I am so sorry your Ember serving platter arrived chipped. We have refunded $140.00, half of its price. Warmly, Kiln & Co.",
+        template: fixtureText("send-reply", "template"),
         variables: {},
       },
       { uiOnly: true },
@@ -203,7 +244,7 @@ async function smoke() {
     await refetch();
     await callAction(
       "tag-request",
-      { requestId: request.id, tag: "damaged" },
+      { requestId: request.id, tag: fixtureText("tag-request", "tag") },
       { uiOnly: true },
     );
     await refetch();
@@ -252,31 +293,266 @@ async function smoke() {
     assert.equal(savedTrace.status, "completed");
     assert.equal(savedTrace.steps.length, 8);
     stage = "draft, persisted retrieval and dry-run on another damaged request";
-    const draft = await callAction<RecipeDraft>("draft-recipe-from-demonstration", { demonstrationId: first.id }, { uiOnly: true });
+    const draft = await callAction<RecipeDraft>(
+      "draft-recipe-from-demonstration",
+      { demonstrationId: first.id },
+      { uiOnly: true },
+    );
     assert.equal(draft.recipe.status, "draft");
     assert.equal(draft.recipe.activeVersionId, null);
-    assert.deepEqual(draft.draft.steps.map(step => step.id), ["step_2", "step_6", "step_7", "step_8"]);
-    const retrieved = await callAction<RecipeDraft>("get-recipe-draft", { versionId: draft.draft.id }, { method: "GET" });
+    assert.deepEqual(
+      draft.draft.steps.map((step) => step.id),
+      ["step_2", "step_6", "step_7", "step_8"],
+    );
+    const retrieved = await callAction<RecipeDraft>(
+      "get-recipe-draft",
+      { versionId: draft.draft.id },
+      { method: "GET" },
+    );
     assert.deepEqual(retrieved, draft);
-    const requests = await callAction<Request[]>("list-requests", { type: "damaged_item", status: "open" }, { method: "GET" });
-    const target = requests.find(item => item.id !== request.id && item.content.source === "structured")!;
+    const requests = await callAction<Request[]>(
+      "list-requests",
+      { type: "damaged_item", status: "open" },
+      { method: "GET" },
+    );
+    const target = requests.find(
+      (item) => item.id !== request.id && item.content.source === "structured",
+    )!;
     assert(target && target.content.source === "structured");
-    const targetOrder = await callAction<Order>("get-order", { orderId: target.orderId! }, { method: "GET" });
-    const before = await callAction("get-request-activity", { requestId: target.id }, { method: "GET" });
-    const dryRun = await callAction<Run>("run-recipe", { recipe: retrieved.draft,
-      trigger: buildRequestTrigger(target.content.fields as unknown as JsonObject, { requestId: target.id, customerId: target.customerId, subject: target.subject }),
-      dryRun: true,
-    }, { uiOnly: true });
+    const targetOrder = await callAction<Order>(
+      "get-order",
+      { orderId: target.orderId! },
+      { method: "GET" },
+    );
+    const before = await callAction(
+      "get-request-activity",
+      { requestId: target.id },
+      { method: "GET" },
+    );
+    const dryRun = await callAction<Run>(
+      "run-recipe",
+      {
+        recipe: retrieved.draft,
+        trigger: buildRequestTrigger(
+          target.content.fields as unknown as JsonObject,
+          {
+            requestId: target.id,
+            customerId: target.customerId,
+            subject: target.subject,
+          },
+        ),
+        dryRun: true,
+      },
+      { uiOnly: true },
+    );
     assert.equal(dryRun.status, "completed");
-    assert.deepEqual(dryRun.steps.map(step => step.status), ["completed", "planned", "planned", "planned"]);
+    assert.deepEqual(
+      dryRun.steps.map((step) => step.status),
+      ["completed", "planned", "planned", "planned"],
+    );
     const reboundAmount = targetOrder.items[0]!.unitPrice.amountMinor * 0.5;
     assert.notEqual(reboundAmount, halfPriceMinor);
-    assert.deepEqual(dryRun.steps[1]!.input, { orderId: target.orderId, amount: { amountMinor: reboundAmount, currency: "USD" }, reason: "One platter arrived chipped - refund 50% of its price" });
-    assert.deepEqual(dryRun.steps[2]!.input, { requestId: target.id, template: `Hi ${targetOrder.shippingAddress.name.split(/\s+/)[0]}, I am so sorry your Ember serving platter arrived chipped. We have refunded $${(reboundAmount / 100).toFixed(2)}, half of its price. Warmly, Kiln & Co.`, variables: {} });
-    assert(draft.ambiguities.some(item => item.kind === "request-specific-text"));
-    assert.deepEqual(dryRun.steps[3]!.input, { requestId: target.id, tag: "damaged" });
+    assert.deepEqual(dryRun.steps[1]!.input, {
+      orderId: target.orderId,
+      amount: { amountMinor: reboundAmount, currency: "USD" },
+      reason: "One platter arrived chipped - refund 50% of its price",
+    });
+    assert.deepEqual(dryRun.steps[2]!.input, {
+      requestId: target.id,
+      template: `Hi ${targetOrder.shippingAddress.name.split(/\s+/)[0]}, I am so sorry your Ember serving platter arrived chipped. We have refunded $${(reboundAmount / 100).toFixed(2)}, half of its price. Warmly, Kiln & Co.`,
+      variables: {},
+    });
+    assert(
+      draft.ambiguities.some((item) => item.kind === "request-specific-text"),
+    );
+    assert.deepEqual(dryRun.steps[3]!.input, {
+      requestId: target.id,
+      tag: "damaged",
+    });
     assert.deepEqual(dryRun.tokens, { input: 0, output: 0 });
-    assert.deepEqual(await callAction("get-request-activity", { requestId: target.id }, { method: "GET" }), before);
+    assert.deepEqual(
+      await callAction(
+        "get-request-activity",
+        { requestId: target.id },
+        { method: "GET" },
+      ),
+      before,
+    );
+    stage = "Studio fixture list, stored platter draft and immutable edits";
+    const readStudio = (recipeId: string) =>
+      callAction<StudioDraft & { issues: unknown[] }>(
+        "get-recipe-draft",
+        { recipeId },
+        { method: "GET" },
+      );
+    const recipes = await callAction<
+      { id: string; runs: number; lastResult: string | null }[]
+    >("list-recipes", {}, { method: "GET" });
+    for (const id of [
+      "recipe_fixture_damaged",
+      "recipe_fixture_shipment",
+      draft.recipe.id,
+    ])
+      assert(recipes.some((recipe) => recipe.id === id));
+    for (const path of [
+      "/recipes",
+      "/recipes/recipe_fixture_damaged",
+      `/recipes/${draft.recipe.id}`,
+    ]) {
+      const response = await globalThis.fetch(path, {
+        headers: { Accept: "text/html" },
+      });
+      assert(response.ok, "Authenticated Studio route must load");
+    }
+    await writeClientAppState(
+      "navigation",
+      {
+        view: "recipe",
+        recipeId: draft.recipe.id,
+        path: `/recipes/${draft.recipe.id}`,
+      },
+      { requestSource: getBrowserTabId() },
+    );
+    const storedPlatter = await readStudio(draft.recipe.id);
+    assert.equal(storedPlatter.issues.length, 0);
+    assert.deepEqual(storedPlatter.ambiguities, draft.ambiguities);
+    for (const operator of ["find", "firstWord", "money", "cat"])
+      assert(JSON.stringify(storedPlatter.content).includes(`"${operator}"`));
+    const fixture = await readStudio("recipe_fixture_damaged");
+    const gateRefunds = (steps: JsonValue): JsonValue =>
+      Array.isArray(steps)
+        ? steps.map((step) => {
+            if (!step || typeof step !== "object" || Array.isArray(step))
+              return step;
+            if (step.kind === "branch")
+              return {
+                ...step,
+                then: gateRefunds(step.then ?? []),
+                else: gateRefunds(step.else ?? []),
+              };
+            return step.action === "issue-refund"
+              ? {
+                  ...step,
+                  approval: {
+                    ">": [{ var: "input.amount.amountMinor" }, 10000],
+                  },
+                }
+              : step;
+          })
+        : steps;
+    const edit = await callAction<StudioDraft>(
+      "update-recipe-draft",
+      {
+        recipeId: fixture.recipeId,
+        expectedRevision: fixture.revision,
+        content: {
+          ...fixture.content,
+          name: "Studio fixture rehearsal",
+          steps: gateRefunds(fixture.content.steps ?? []),
+        },
+      },
+      { uiOnly: true },
+    );
+    const version = await callAction<RecipeVersion>(
+      "save-recipe-version",
+      { recipeId: fixture.recipeId, expectedRevision: edit.revision },
+      { uiOnly: true },
+    );
+    assert.equal(version.version, 2);
+    await callAction(
+      "activate-recipe",
+      { recipeId: fixture.recipeId, versionId: version.id },
+      { uiOnly: true },
+    );
+    const detail = await callAction<{
+      recipe: { activeVersionId: string | null };
+      history: { version: RecipeVersion; diff: unknown[] }[];
+    }>("get-recipe", { recipeId: fixture.recipeId }, { method: "GET" });
+    assert.equal(detail.recipe.activeVersionId, version.id);
+    assert.equal(detail.history[0]!.version.version, 1);
+    assert(detail.history[1]!.diff.length > 0);
+    const activityBeforeGate = await callAction(
+      "get-request-activity",
+      { requestId: request.id },
+      { method: "GET" },
+    );
+    const simulatedGate = await callAction<Run>(
+      "run-recipe",
+      { recipe: version, trigger: savedTrace.trigger, dryRun: true },
+      { uiOnly: true },
+    );
+    assert(
+      simulatedGate.steps.some(
+        (step) =>
+          step.stepId === "refund" &&
+          step.approvalRequired &&
+          step.status === "planned",
+      ),
+    );
+    const pausedGate = await callAction<Run>(
+      "run-recipe",
+      { recipe: version, trigger: savedTrace.trigger },
+      { uiOnly: true },
+    );
+    assert.equal(pausedGate.status, "awaiting_approval");
+    assert.equal(pausedGate.awaitingApprovalStepId, "refund");
+    await callAction(
+      "resume-recipe-run",
+      {
+        runId: pausedGate.id,
+        approval: { stepId: "refund", decision: "reject" },
+      },
+      { uiOnly: true },
+    );
+    assert.deepEqual(
+      await callAction(
+        "get-request-activity",
+        { requestId: request.id },
+        { method: "GET" },
+      ),
+      activityBeforeGate,
+    );
+    const current = await readStudio(fixture.recipeId);
+    const invalid = await callAction<StudioDraft & { issues: unknown[] }>(
+      "update-recipe-draft",
+      {
+        recipeId: fixture.recipeId,
+        expectedRevision: current.revision,
+        content: {
+          ...current.content,
+          trigger: { event: "request.created", match: { eval: ["invalid"] } },
+        },
+      },
+      { uiOnly: true },
+    );
+    assert(invalid.issues.length > 0);
+    await assert.rejects(() =>
+      callAction(
+        "save-recipe-version",
+        { recipeId: fixture.recipeId, expectedRevision: invalid.revision },
+        { uiOnly: true },
+      ),
+    );
+    await callAction(
+      "deactivate-recipe",
+      { recipeId: fixture.recipeId },
+      { uiOnly: true },
+    );
+    const original = await callAction<RecipeDraft>(
+      "get-recipe-draft",
+      { versionId: draft.draft.id },
+      { method: "GET" },
+    );
+    assert.deepEqual(original, draft);
+    await writeClientAppState(
+      "navigation",
+      {
+        view: "request",
+        requestId: request.id,
+        path: `/requests/${request.id}`,
+      },
+      { requestSource: getBrowserTabId() },
+    );
     stage = "cancel frees slot";
     const second = await callAction<Demonstration>(
       "start-demonstration",
@@ -301,6 +577,11 @@ async function smoke() {
     console.log(
       JSON.stringify({
         authenticatedLanding: true,
+        studioFixtureRehearsal: true,
+        storedBrokenPlatterInputsReplayed: true,
+        canonicalDraftOpenedInStudio: true,
+        immutableStudioVersionAndActivation: true,
+        resolvedInputApprovalAndDryRun: true,
         overlapRejected,
         sessionIsolation: true,
         unrelatedRequestExcluded: true,
@@ -346,6 +627,30 @@ async function smoke() {
     }
     await rm(directory, { recursive: true, force: true });
   }
+}
+if (process.argv.includes("--seed-recipes")) {
+  assert(
+    process.env.DATABASE_URL?.includes("muscle-memory-teach-smoke-"),
+    "Fixture setup is limited to the isolated smoke database",
+  );
+  const { closeDbExec } = await import("@agent-native/core/db");
+  const { getDb } = await import("../server/db/index.js");
+  const { DrizzleRecipeCatalog } =
+    await import("../server/infra/recipe-catalog.js");
+  const { damagedItemFixture, whereIsMyOrderFixture } =
+    await import("../server/fixtures/intake-recipes.js");
+  const catalog = new DrizzleRecipeCatalog(getDb());
+  for (const version of [damagedItemFixture, whereIsMyOrderFixture]) {
+    await catalog.saveVersion(version);
+    await catalog.save({
+      id: version.recipeId,
+      name: version.name,
+      status: "draft",
+      activeVersionId: null,
+    });
+  }
+  await closeDbExec();
+  process.exit(0);
 }
 try {
   await smoke();

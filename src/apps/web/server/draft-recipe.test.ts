@@ -123,7 +123,7 @@ describe("stored Teach → draft → dry-run with real app actions", () => {
       context: { requestId: target.id, customerId: target.customerId, subject: target.subject },
     });
     expect(matched.reason).toBe("no_match");
-    const run = await runRecipe.run({ recipe: retrieved!.draft, trigger: matched.trigger, dryRun: true }, context);
+    const run = await runRecipe.run({ recipe: recipeDraftSchema.parse(retrieved).draft, trigger: matched.trigger, dryRun: true }, context);
     const amount = targetOrder.items[0]!.unitPrice.amountMinor * 0.5;
     expect(run.status).toBe("completed");
     expect(run.steps.map(step => step.status)).toEqual(["completed", "planned", "planned", "planned"]);

@@ -1,6 +1,7 @@
 import { createProviderApiRuntime } from "@agent-native/core/provider-api";
 import { createProviderApiRequestAction } from "@agent-native/core/provider-api/actions/provider-api";
 import { z } from "zod";
+import { jsonContainerInput } from "../server/action-input.js";
 
 const runtime = createProviderApiRuntime({
   appId: "chat",
@@ -14,8 +15,7 @@ const schema = z.object({
     .default("GET"),
   path: z.string().min(1).describe("Slack Web API path, such as /auth.test."),
   query: z.unknown().optional().describe("Optional query parameters."),
-  headers: z
-    .record(z.string(), z.unknown())
+  headers: jsonContainerInput(z.record(z.string(), z.unknown()), "headers")
     .optional()
     .describe("Optional non-authentication headers."),
   body: z.unknown().optional().describe("Optional request body."),

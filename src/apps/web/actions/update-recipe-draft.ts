@@ -2,6 +2,7 @@ import { defineAction } from "@agent-native/core/action";
 import { z } from "zod";
 
 import { getRecipeStudio } from "../server/composition.js";
+import { jsonContainerInput } from "../server/action-input.js";
 import {
   studioContentInput,
   studioErrors,
@@ -16,7 +17,7 @@ export default defineAction({
   schema: z.object({
     recipeId: studioId,
     expectedRevision: studioRevision,
-    content: studioContentInput,
+    content: jsonContainerInput(studioContentInput, "content"),
   }),
   errors: studioErrors,
   link: ({ result }) => studioLink(result),

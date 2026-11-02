@@ -3,13 +3,16 @@ import { recipeVersionSchema, type JsonObject } from "@muscle-memory/recipe-engi
 import { REQUEST_TYPES } from "@muscle-memory/shop-domain";
 import { z } from "zod";
 import { BacktestInputError, type ShopBacktestResult, type ShopBacktestComparison } from "./infra/shop-recipe-backtests.js";
-import { recipeJsonSchema, runOutputSchema } from "./recipe-action-contracts.js";
+import { recipeJsonSchema, recipeVersionInputSchema, runOutputSchema } from "./recipe-action-contracts.js";
 import { HistoricalDataError, HistoricalReconstructionError } from "./infra/shop-historical-cases.js";
+import { jsonContainerInput } from "./action-input.js";
 
 export const backtestErrors = defineActionErrors("VERSION_NOT_FOUND", "INVALID_BACKTEST", "BACKTEST_FAILED");
-export const recipeReferenceSchema = z.union([
-  z.string().max(31).regex(/^[A-Za-z_][A-Za-z0-9_-]*$/), recipeVersionSchema,
-]);
+const versionIdSchema = z.string().max(31).regex(/^[A-Za-z_][A-Za-z0-9_-]*$/);
+export const recipeReferenceSchema = (parameter: string) => jsonContainerInput(z.union([versionIdSchema, recipeVersionSchema]), parameter, "object", true);
+// The DSL's custom JSON validators cannot emit tool metadata; runtime validation
+// above stays unchanged, while this uses the existing representable snapshot.
+export const recipeReferenceToolSchema = z.union([versionIdSchema, recipeVersionInputSchema]).nonoptional();
 export const backtestRequestTypeSchema = z.enum(REQUEST_TYPES).describe("Historical request type for the recipe trigger: damaged_item, where_is_my_order, return, address_change, wholesale_inquiry. Only resolved requests of this type are selected; other trigger conditions are evaluated per case.");
 const count = z.number().int().nonnegative();
 const tokens = z.object({ input: count, output: count });

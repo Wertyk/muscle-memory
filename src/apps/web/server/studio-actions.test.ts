@@ -199,6 +199,21 @@ describe("Recipe Studio real actions on PGlite", () => {
       ),
     ).rejects.toThrow();
   });
+  it("updates stringified draft content and saves stringified proposal notes through real action validation", async () => {
+    const next = { ...content, name: "Reusable damage care" };
+    const draft = await updateDraft.run(
+      { recipeId, expectedRevision: 0, content: JSON.stringify(next) } as never,
+      { ...context, caller: "tool" },
+    );
+    expect(draft).toMatchObject({ revision: 1, content: next, issues: [] });
+    const proposal = { description: "Half-price refund", trigger: "Damaged item", resolutions: [] };
+    const saved = await saveVersion.run(
+      { recipeId, expectedRevision: 1, proposal: JSON.stringify(proposal) } as never,
+      { ...context, caller: "tool" },
+    );
+    expect(saved).toMatchObject({ recipeId, version: 2, name: next.name });
+    expect((await editableDraft()).content).toEqual(next);
+  });
   it("retains invalid drafts with inline errors, rejects saving/activation and preserves ambiguity evidence", async () => {
     const evidence = {
       demonstrationId: "demo_test",

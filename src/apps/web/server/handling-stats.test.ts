@@ -7,6 +7,8 @@ import { loadActionsFromStaticRegistry } from "@agent-native/core/server";
 import { parseRecipeVersion } from "@muscle-memory/recipe-engine";
 import { GetHandlingStats } from "@muscle-memory/shop-domain";
 import { eq, sql } from "drizzle-orm";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   afterAll,
   beforeAll,
@@ -25,6 +27,9 @@ import issueRefund from "../actions/issue-refund.js";
 import sendReply from "../actions/send-reply.js";
 import setRequestStatus from "../actions/set-request-status.js";
 import tagRequest from "../actions/tag-request.js";
+import { DashboardHero } from "../app/components/shop/DashboardHero.js";
+import { formatDuration, formatTokens } from "../app/components/shop/dashboard-format.js";
+import { dashboardMessages } from "../app/i18n/dashboard-en.js";
 import * as composition from "./composition.js";
 import { getDb, type ShopDb } from "./db/index.js";
 import * as tables from "./db/schema.js";
@@ -45,6 +50,11 @@ const context = {
   orgId: "shop",
 };
 const owner = { userId: context.userEmail, workspaceId: "shop" };
+vi.mock("@agent-native/core/client/i18n", () => ({
+  useT: () => (key: string, values: Record<string, unknown> = {}) =>
+    String(dashboardMessages[key.replace("dashboard.", "") as keyof typeof dashboardMessages] ?? key)
+      .replace(/\{\{(\w+)\}\}/g, (_, name) => String(values[name] ?? "")),
+}));
 const agent = (runId: string) => ({
   ...context,
   caller: "tool" as const,
@@ -239,6 +249,46 @@ describe("measured handling dashboard: real intake, executor and actions on PGli
     expect(
       (await stats()).samples.some((s) => s.requestId === "req_0001"),
     ).toBe(false);
+  });
+  it("renders hero figures equal to the seeded fixture's stored trace and intake/run-step measurements", async () => {
+    const cases = await activate();
+    await cases.demo.execute();
+    await setRequestStatus.run({ requestId: "req_0001", status: "resolved" }, agent("hero_measured"));
+    await usage("hero_measured", 94_990);
+    const runsBefore = await db.select().from(tables.recipeRuns);
+    const processing = await db.select().from(tables.requestProcessing);
+    const [trace] = await db.select({
+      tokens: sql<number>`total_input_tokens + total_output_tokens`,
+      ms: sql<number>`total_duration_ms`,
+    }).from(sql`agent_trace_summaries`).where(sql`run_id = 'hero_measured'`);
+    const completed = processing.flatMap(record => {
+      const run = runsBefore.find(run => run.id === record.runId)?.checkpoint;
+      if (run?.status !== "completed" || run.mode !== "execute") return [];
+      return [{
+        requestId: record.requestId,
+        tokens: record.match!.tokens.input + record.match!.tokens.output + run.tokens.input + run.tokens.output,
+        ms: record.matchDurationMs! + run.steps.reduce((sum, step) => sum + step.durationMs, 0),
+        recipe: { name: run.recipe.name, version: run.recipe.version },
+      }];
+    });
+    expect(completed).toHaveLength(3);
+    const meanTokens = completed.reduce((sum, row) => sum + row.tokens, 0) / completed.length;
+    const meanMs = completed.reduce((sum, row) => sum + row.ms, 0) / completed.length;
+    const data = await getHandlingStats.run({}, context);
+    for (const stored of completed) expect(data.samples.find(sample => sample.requestId === stored.requestId)).toMatchObject({
+      tokens: stored.tokens, durationMs: stored.ms, recipe: stored.recipe,
+    });
+    expect(data.samples.find(sample => sample.handler === "agent")?.recipe).toBeNull();
+    const html = renderToStaticMarkup(createElement(DashboardHero, { overall: data.overall }));
+    expect([...html.matchAll(/data-measurement="([^"]+)"/g)].map(match => Number(match[1]))).toEqual([
+      Number(trace!.tokens), Number(trace!.ms), meanTokens, meanMs,
+    ]);
+    expect([...html.matchAll(/class="sr-only">([^<]+)</g)].map(match => match[1])).toEqual([
+      "95K tokens", "123 ms", `${formatTokens(meanTokens)} tokens`, formatDuration(meanMs),
+    ]);
+    expect(data.overall.recipe.tokenSamples).toBe(completed.length);
+    expect(html).toContain(`${formatTokens(Number(trace!.tokens) - meanTokens)}</strong> tokens avoided per request`);
+    expect(await db.select().from(tables.recipeRuns)).toEqual(runsBefore);
   });
   it("adds extract-step usage to intake usage and excludes real dry-run checkpoints", async () => {
     const cases = create();

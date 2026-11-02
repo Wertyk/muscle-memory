@@ -37,6 +37,11 @@ export function formatDuration(ms: number, locale?: string) {
     : unit(ms, "millisecond", locale);
 }
 
+export function formatRatio(value: number, locale = "en-US") {
+  const digits = value >= 10 ? 0 : 1;
+  return `${new Intl.NumberFormat(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)}×`;
+}
+
 export function formatTokenTick(value: number, locale?: string) {
   return new Intl.NumberFormat(locale, {
     notation: "compact",

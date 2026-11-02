@@ -1,6 +1,6 @@
 export type CostMetric = "tokens" | "durationMs";
 export const COST_PLOT = {
-  left: 140,
+  left: 180,
   right: 940,
   top: 36,
   bottom: 334,
